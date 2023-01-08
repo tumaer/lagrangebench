@@ -1,0 +1,13 @@
+# experiments
+ckp/
+rollout/
+wandb/
+*.out
+datasets/
+
+# dev
+.vscode
+__pycache__/
+*.pyc
+venv
+*.egg-info/
