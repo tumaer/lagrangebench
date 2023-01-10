@@ -172,8 +172,7 @@ def train(model, params, state, neighbors, loader_train, loader_valid, setup, ar
                     neighbors=nbrs,
                     loader_valid=loader_valid,
                     num_rollout_steps=args.num_rollout_steps + 1,  # +1 <- not training
-                    num_trajs=5,
-                    save_results=False,
+                    num_trajs=args.eval_num_trajs,
                     rollout_dir=args.rollout_dir,
                     is_write_vtk=args.write_vtk,
                 )
@@ -203,8 +202,7 @@ def infer(model, params, state, neighbors, loader_valid, setup, args):
         neighbors=neighbors,
         loader_valid=loader_valid,
         num_rollout_steps=args.num_rollout_steps + 1,  # +1 because we are not training
-        num_trajs=5,
-        save_results=True,
+        num_trajs=args.eval_num_trajs,
         rollout_dir=args.rollout_dir,
         is_write_vtk=args.write_vtk,
     )
@@ -225,6 +223,7 @@ if __name__ == "__main__":
     parser.add_argument("--input_seq_length", type=int, default=6)
     parser.add_argument("--num_mp_steps", type=int, default=10)
     parser.add_argument("--latent_dim", type=int, default=128)
+    parser.add_argument("--eval_num_trajs", type=int, default=5)
 
     parser.add_argument("--wandb", action="store_true", help="Log to wandb")
     parser.add_argument("--log_steps", type=int, default=1000)
@@ -233,7 +232,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_dir", type=str, help="To load a checkpoint")
     parser.add_argument("--data_dir", type=str, help="Path to the dataset")
     parser.add_argument("--ckp_dir", type=str, default="ckp")
-    parser.add_argument("--rollout_dir", type=str)
+    parser.add_argument("--rollout_dir", type=str, default=None)
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args()

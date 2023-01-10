@@ -430,8 +430,7 @@ def eval_rollout(
     loader_valid,
     num_rollout_steps,
     num_trajs,
-    save_results=False,
-    rollout_dir=None,
+    rollout_dir,
     is_write_vtk=False,
 ):
 
@@ -454,7 +453,7 @@ def eval_rollout(
         )
         valid_loss.append(loss)
 
-        if save_results and (rollout_dir is not None):
+        if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
             initial_positions = pos_input[:input_sequence_length]
             example_full = np.concatenate([initial_positions, example_rollout], axis=0)
