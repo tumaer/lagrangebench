@@ -4,13 +4,16 @@ import os
 import pickle
 from typing import Callable  # Dict, List, Optional, Tuple, Union
 
+import e3nn_jax as e3nn
 import jax
 import jax.numpy as jnp
+import jax.tree_util as tree
 import jraph
 import numpy as np
 import pyvista
 from jax import lax, vmap
 from jax_md import dataclasses, partition, space
+from segnn_jax import SteerableGraphsTuple
 
 # Physical setup for the GNS model.
 
@@ -23,51 +26,69 @@ class NodeType(enum.IntEnum):
     SIZE = 9
 
 
-def get_kinematic_mask(particle_type):
-    """Returns a boolean mask, set to true for all kinematic (obstacle)
-    particles"""
-    return jnp.logical_or(
-        particle_type == NodeType.SOLID_WALL, particle_type == NodeType.MOVING_WALL
-    )
+# TODO: this is not the right place for this. It's an util for segnn and not gns
+def steerable_graph_transform_builder(
+    node_features_irreps: e3nn.Irreps,
+    edge_features_irreps: e3nn.Irreps,
+    lmax_attributes: int,
+) -> Callable:
+    """
+    Convert the standard gns GraphsTuple into a SteerableGraphsTuple to use in SEGNN.
+    """
 
+    attribute_irreps = e3nn.Irreps.spherical_harmonics(lmax_attributes)
 
-def _get_random_walk_noise_for_pos_sequence(
-    key, position_sequence, noise_std_last_step
-):
-    """Returns random-walk noise in the velocity applied to the position.
-    Same functionality as above implemented in JAX."""
-    key, subkey = jax.random.split(key)
-    velocity_sequence_shape = list(position_sequence.shape)
-    velocity_sequence_shape[1] -= 1
-    num_velocities = velocity_sequence_shape[1]
+    def graph_transform(
+        graph: jraph.GraphsTuple,
+        particle_type: jnp.ndarray,
+    ) -> SteerableGraphsTuple:
+        vel = graph.nodes[..., :-3]
+        # TODO: relative displacement or closest boundary in attributes?
+        # rel_pos = graph.nodes[..., -3:]
+        rel_pos = graph.edges[..., :3]
 
-    velocity_sequence_noise = jax.random.normal(
-        subkey, shape=tuple(velocity_sequence_shape)
-    )
-    velocity_sequence_noise *= noise_std_last_step / (num_velocities**0.5)
-    velocity_sequence_noise = jnp.cumsum(velocity_sequence_noise, axis=1)
+        edge_attributes = e3nn.spherical_harmonics(
+            attribute_irreps, rel_pos, normalize=True, normalization="integral"
+        )
+        vel_embedding = e3nn.spherical_harmonics(
+            attribute_irreps, vel, normalize=True, normalization="integral"
+        )
+        # scatter edge attributes
+        sum_n_node = tree.tree_leaves(graph.nodes)[0].shape[0]
+        node_attributes = (
+            tree.tree_map(
+                lambda e: jraph.segment_mean(e, graph.receivers, sum_n_node),
+                edge_attributes,
+            )
+            + vel_embedding
+        )
 
-    position_sequence_noise = jnp.concatenate(
-        [
-            jnp.zeros_like(velocity_sequence_noise[:, 0:1]),
-            jnp.cumsum(velocity_sequence_noise, axis=1),
-        ],
-        axis=1,
-    )
+        # scalar attribute to 1 by default
+        node_attributes.array = node_attributes.array.at[:, 0].set(1.0)
 
-    return key, position_sequence_noise
+        return SteerableGraphsTuple(
+            graph=jraph.GraphsTuple(
+                nodes=e3nn.IrrepsArray(
+                    node_features_irreps,
+                    jnp.concatenate(
+                        [graph.nodes, particle_type[..., jnp.newaxis]], axis=-1
+                    ),
+                ),
+                edges=None,
+                senders=graph.senders,
+                receivers=graph.receivers,
+                n_node=graph.n_node,
+                n_edge=graph.n_edge,
+                globals=graph.globals,
+            ),
+            node_attributes=node_attributes,
+            edge_attributes=edge_attributes,
+            additional_message_features=e3nn.IrrepsArray(
+                edge_features_irreps, graph.edges
+            ),
+        )
 
-
-def _add_gns_noise(key, pos_input, particle_type, pos_target, noise_std):
-    # add noise to the input and adjust the target accordingly
-    key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
-        key, pos_input, noise_std_last_step=noise_std
-    )
-    kinematic_mask = get_kinematic_mask(particle_type)
-    pos_input_noise = jnp.where(kinematic_mask[:, None, None], 0.0, pos_input_noise)
-    pos_input_noisy = pos_input + pos_input_noise
-    pos_target_adjusted = pos_target + pos_input_noise[:, -1]
-    return key, pos_input_noisy, pos_target_adjusted
+    return graph_transform
 
 
 def graph_transform_builder(
@@ -146,6 +167,53 @@ def graph_transform_builder(
     return graph_transform
 
 
+def get_kinematic_mask(particle_type):
+    """Returns a boolean mask, set to true for all kinematic (obstacle)
+    particles"""
+    return jnp.logical_or(
+        particle_type == NodeType.SOLID_WALL, particle_type == NodeType.MOVING_WALL
+    )
+
+
+def _get_random_walk_noise_for_pos_sequence(
+    key, position_sequence, noise_std_last_step
+):
+    """Returns random-walk noise in the velocity applied to the position.
+    Same functionality as above implemented in JAX."""
+    key, subkey = jax.random.split(key)
+    velocity_sequence_shape = list(position_sequence.shape)
+    velocity_sequence_shape[1] -= 1
+    num_velocities = velocity_sequence_shape[1]
+
+    velocity_sequence_noise = jax.random.normal(
+        subkey, shape=tuple(velocity_sequence_shape)
+    )
+    velocity_sequence_noise *= noise_std_last_step / (num_velocities**0.5)
+    velocity_sequence_noise = jnp.cumsum(velocity_sequence_noise, axis=1)
+
+    position_sequence_noise = jnp.concatenate(
+        [
+            jnp.zeros_like(velocity_sequence_noise[:, 0:1]),
+            jnp.cumsum(velocity_sequence_noise, axis=1),
+        ],
+        axis=1,
+    )
+
+    return key, position_sequence_noise
+
+
+def _add_gns_noise(key, pos_input, particle_type, pos_target, noise_std):
+    # add noise to the input and adjust the target accordingly
+    key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
+        key, pos_input, noise_std_last_step=noise_std
+    )
+    kinematic_mask = get_kinematic_mask(particle_type)
+    pos_input_noise = jnp.where(kinematic_mask[:, None, None], 0.0, pos_input_noise)
+    pos_input_noisy = pos_input + pos_input_noise
+    pos_target_adjusted = pos_target + pos_input_noise[:, -1]
+    return key, pos_input_noisy, pos_target_adjusted
+
+
 @dataclasses.dataclass
 class SetupFn:
     allocate: Callable = dataclasses.static_field()
@@ -210,12 +278,13 @@ def setup_builder(args: argparse.Namespace):
     ):
 
         if mode == "train":
-            key, noise_std = kwargs["key"], kwargs["noise_std"]
             pos_input, particle_type, pos_target = sample
-
-            key, pos_input, pos_target_adjusted = _add_gns_noise(
-                key, pos_input, particle_type, pos_target, noise_std
-            )
+            pos_input, pos_target = jnp.array(pos_input), jnp.array(pos_target)
+            key, noise_std = kwargs["key"], kwargs["noise_std"]
+            if pos_input.shape[1] > 1:
+                key, pos_input, pos_target = _add_gns_noise(
+                    key, pos_input, particle_type, pos_target, noise_std
+                )
         elif mode == "eval":
             pos_input, particle_type = sample
 
@@ -231,8 +300,7 @@ def setup_builder(args: argparse.Namespace):
 
         if mode == "train":
             # compute target acceleration. Inverse of postprocessing step.
-            normalized_acceleration = _compute_target(pos_input, pos_target_adjusted)
-
+            normalized_acceleration = _compute_target(pos_input, pos_target)
             return key, graph, normalized_acceleration, neighbors
         elif mode == "eval":
             return graph, neighbors
@@ -368,6 +436,7 @@ def eval_single_rollout(
     traj_i,
     num_rollout_steps,
     input_sequence_length,
+    graph_postprocess=None,
 ):
     pos_input, particle_type = traj_i
 
@@ -392,9 +461,12 @@ def eval_single_rollout(
 
             continue
 
-        normalized_acceleration, state = model_apply(
-            params, state, (graph, particle_type)
-        )
+        if graph_postprocess:
+            graph_tuple = graph_postprocess(graph, particle_type)
+        else:
+            graph_tuple = (graph, particle_type)
+
+        normalized_acceleration, state = model_apply(params, state, graph_tuple)
 
         next_position = setup.integrate(normalized_acceleration, current_positions)
 
@@ -432,6 +504,7 @@ def eval_rollout(
     num_trajs,
     rollout_dir,
     is_write_vtk=False,
+    graph_postprocess=None,
 ):
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
@@ -450,6 +523,7 @@ def eval_rollout(
             traj_i=traj_i,
             num_rollout_steps=num_rollout_steps,
             input_sequence_length=input_sequence_length,
+            graph_postprocess=graph_postprocess,
         )
         valid_loss.append(loss)
 

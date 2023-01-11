@@ -20,6 +20,8 @@ pandas
 pre-commit
 pyg-lib
 pyvista
+# segnn jax implementation
+segnn-jax
 # TF dataloader from the reference implementation
 tensorflow
 tensorflow-datasets

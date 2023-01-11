@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import warnings
 from typing import Tuple
 
 import haiku as hk
@@ -16,7 +17,6 @@ from torch.utils.data import DataLoader
 
 import wandb
 from gns_jax.data import H5Dataset, numpy_collate
-from gns_jax.gns import GNS
 from gns_jax.utils import (
     NodeType,
     broadcast_from_batch,
@@ -27,13 +27,24 @@ from gns_jax.utils import (
     load_haiku,
     save_haiku,
     setup_builder,
+    steerable_graph_transform_builder,
 )
 
 
-def train(model, params, state, neighbors, loader_train, loader_valid, setup, args):
+def train(
+    model,
+    params,
+    state,
+    neighbors,
+    loader_train,
+    loader_valid,
+    setup,
+    graph_postprocess,
+    args,
+):
 
     # checkpointing and logging
-    run_prefix = "_".join(["gns", args.dataset_name, ""])
+    run_prefix = "_".join([args.model, args.dataset_name, ""])
     i = 0
     while os.path.isdir(os.path.join(args.ckp_dir, run_prefix + str(i))):
         i += 1
@@ -71,7 +82,13 @@ def train(model, params, state, neighbors, loader_train, loader_valid, setup, ar
         target: jnp.ndarray,
         particle_type: jnp.ndarray,
     ):
-        pred, state = model.apply(params, state, (graph, particle_type))
+        # TODO: not the best place to put the O3 transform function
+        if graph_postprocess:
+            graph_in = graph_postprocess(graph, particle_type)
+        else:
+            graph_in = (graph, particle_type)
+
+        pred, state = model.apply(params, state, graph_in)
         assert target.shape == pred.shape
 
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
@@ -175,6 +192,7 @@ def train(model, params, state, neighbors, loader_train, loader_valid, setup, ar
                     num_trajs=args.eval_num_trajs,
                     rollout_dir=args.rollout_dir,
                     is_write_vtk=args.write_vtk,
+                    graph_postprocess=graph_postprocess,
                 )
                 # In the beginning of training, the dynamics ae very random and
                 # we don't want to influence the training neighbors list by
@@ -192,7 +210,9 @@ def train(model, params, state, neighbors, loader_train, loader_valid, setup, ar
                 break
 
 
-def infer(model, params, state, neighbors, loader_valid, setup, args):
+def infer(
+    model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
+):
     model_apply = jax.jit(model.apply)
     eval_loss, _ = eval_rollout(
         setup=setup,
@@ -205,6 +225,7 @@ def infer(model, params, state, neighbors, loader_valid, setup, args):
         num_trajs=args.eval_num_trajs,
         rollout_dir=args.rollout_dir,
         is_write_vtk=args.write_vtk,
+        graph_postprocess=graph_postprocess,
     )
     print(f"Rollout loss = {eval_loss}")
 
@@ -212,6 +233,7 @@ def infer(model, params, state, neighbors, loader_valid, setup, args):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default="gns", choices=["gns", "segnn"])
     parser.add_argument("--mode", type=str, default="train", choices=["train", "infer"])
     parser.add_argument("--step_max", type=int, default=2e7)
     parser.add_argument("--batch_size", type=int, default=2)
@@ -235,6 +257,11 @@ if __name__ == "__main__":
     parser.add_argument("--rollout_dir", type=str, default=None)
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
+
+    # segnn argumentslmax_hidden
+    parser.add_argument("--lmax-attributes", type=int, default=2)
+    parser.add_argument("--lmax-hidden", type=int, default=1)
+
     args = parser.parse_args()
 
     args.dataset_name = os.path.basename(args.data_dir.split("/")[-1])
@@ -301,18 +328,6 @@ if __name__ == "__main__":
     # `partition.neighbor_list`. And an integration utility with PBC.
     setup = setup_builder(args)
 
-    # transform core simulator outputting accelerations.
-    model = lambda x: GNS(
-        particle_dimension=particle_dimension,
-        latent_size=args.latent_dim,
-        num_mlp_layers=2,
-        num_message_passing_steps=args.num_mp_steps,
-        num_particle_types=NodeType.SIZE,
-        particle_type_embedding_size=16,
-    )(x)
-    # `state` is currently not used, but who knows in the future
-    model = hk.without_apply_rng(hk.transform_with_state(model))
-
     # first PRNG key
     key = jax.random.PRNGKey(args.seed)
     # get an example to initialize the setup and model
@@ -323,7 +338,60 @@ if __name__ == "__main__":
     key, graph, _, neighbors = setup.allocate(key, sample)
     # initialize model
     key, subkey = jax.random.split(key, 2)
-    params, state = model.init(subkey, (graph, particle_type[0]))
+
+    if args.model == "gns":
+        from gns_jax.gns import GNS
+
+        model = lambda x: GNS(
+            particle_dimension=particle_dimension,
+            latent_size=args.latent_dim,
+            num_mlp_layers=2,
+            num_message_passing_steps=args.num_mp_steps,
+            num_particle_types=NodeType.SIZE,
+            particle_type_embedding_size=16,
+        )(x)
+        graph_postprocess = None
+    else:
+        from e3nn_jax import Irreps
+        from segnn_jax import SEGNN, weight_balanced_irreps
+
+        assert args.input_seq_length == 1, "SEGNN currently only supports #history=1."
+
+        if args.noise_std > 0:
+            warnings.warn("Equivariant models don't work well with noise.")
+            args.noise_std = 0
+
+        hidden_irreps = weight_balanced_irreps(
+            scalar_units=args.latent_dim,
+            # attribute irreps
+            irreps_right=Irreps.spherical_harmonics(args.lmax_attributes),
+            use_sh=True,
+            lmax=args.lmax_hidden,
+        )
+        model = lambda x: SEGNN(
+            hidden_irreps=hidden_irreps,
+            output_irreps=Irreps("1x1o"),
+            num_layers=args.num_mp_steps,
+            task="node",
+            pool="avg",
+            blocks_per_layer=2,
+            norm="instance",
+        )(x)
+        graph_postprocess = steerable_graph_transform_builder(
+            node_features_irreps=Irreps("2x1o + 1x0e"),  # 1o vel, 1o boundary, 0e type
+            edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
+            lmax_attributes=args.lmax_attributes,
+        )
+
+    # transform core simulator outputting accelerations.
+    model = hk.without_apply_rng(hk.transform_with_state(model))
+
+    if graph_postprocess:
+        graph_tuple = graph_postprocess(graph, particle_type[0])
+    else:
+        graph_tuple = (graph, particle_type[0])
+
+    params, state = model.init(subkey, graph_tuple)
 
     print(f"Model with {get_num_params(params)} parameters.")
 
@@ -332,6 +400,25 @@ if __name__ == "__main__":
         params = load_haiku(args.model_dir)
 
     if args.mode == "train":
-        train(model, params, state, neighbors, loader_train, loader_valid, setup, args)
+        train(
+            model,
+            params,
+            state,
+            neighbors,
+            loader_train,
+            loader_valid,
+            setup,
+            graph_postprocess,
+            args,
+        )
     elif args.mode == "infer":
-        infer(model, params, state, neighbors, loader_valid, setup, args)
+        infer(
+            model,
+            params,
+            state,
+            neighbors,
+            loader_valid,
+            setup,
+            graph_postprocess,
+            args,
+        )
