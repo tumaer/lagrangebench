@@ -31,6 +31,8 @@ def steerable_graph_transform_builder(
     node_features_irreps: e3nn.Irreps,
     edge_features_irreps: e3nn.Irreps,
     lmax_attributes: int,
+    velocity_aggregate: str = "avg",
+    attribute_mode: str = "add",
 ) -> Callable:
     """
     Convert the standard gns GraphsTuple into a SteerableGraphsTuple to use in SEGNN.
@@ -38,13 +40,29 @@ def steerable_graph_transform_builder(
 
     attribute_irreps = e3nn.Irreps.spherical_harmonics(lmax_attributes)
 
+    assert velocity_aggregate in ["avg", "sum", "last"]
+    assert attribute_mode in ["velocity", "add", "concat"]
+
     def graph_transform(
         graph: jraph.GraphsTuple,
         particle_type: jnp.ndarray,
     ) -> SteerableGraphsTuple:
-        vel = graph.nodes[..., :-3]
-        # TODO: relative displacement or closest boundary in attributes?
-        # rel_pos = graph.nodes[..., -3:]
+        n_vels = (graph.nodes.shape[1] - 3) // 3
+        traj = jnp.reshape(
+            graph.nodes[..., :-3],
+            (graph.nodes.shape[0], n_vels, 3),
+        )
+
+        if n_vels > 1:
+            if velocity_aggregate == "avg":
+                vel = jnp.mean(traj, 1)
+            if velocity_aggregate == "sum":
+                vel = jnp.sum(traj, 1)
+            if velocity_aggregate == "last":
+                vel = traj[:, -1, :]
+        else:
+            vel = jnp.squeeze(traj)
+
         rel_pos = graph.edges[..., :3]
 
         edge_attributes = e3nn.spherical_harmonics(
@@ -55,23 +73,32 @@ def steerable_graph_transform_builder(
         )
         # scatter edge attributes
         sum_n_node = tree.tree_leaves(graph.nodes)[0].shape[0]
-        node_attributes = (
-            tree.tree_map(
+
+        if attribute_mode == "velocity":
+            node_attributes = vel_embedding
+        else:
+            scattered_edges = tree.tree_map(
                 lambda e: jraph.segment_mean(e, graph.receivers, sum_n_node),
                 edge_attributes,
             )
-            + vel_embedding
-        )
+            if attribute_mode == "concat":
+                node_attributes = e3nn.concatenate(
+                    [scattered_edges, vel_embedding], axis=-1
+                )
+            if attribute_mode == "add":
+                node_attributes = scattered_edges + vel_embedding
 
         # scalar attribute to 1 by default
         node_attributes.array = node_attributes.array.at[:, 0].set(1.0)
+        edge_attributes.array = edge_attributes.array.at[:, 0].set(1.0)
 
         return SteerableGraphsTuple(
             graph=jraph.GraphsTuple(
                 nodes=e3nn.IrrepsArray(
                     node_features_irreps,
                     jnp.concatenate(
-                        [graph.nodes, particle_type[..., jnp.newaxis]], axis=-1
+                        [graph.nodes, jax.nn.one_hot(particle_type, NodeType.SIZE)],
+                        axis=-1,
                     ),
                 ),
                 edges=None,
@@ -394,6 +421,14 @@ def load_haiku(model_dir: str):
 def get_num_params(params):
     """Get the number of parameters in a Haiku model"""
     return sum(np.prod(p.shape) for p in jax.tree_leaves(params))
+
+
+def print_params_shapes(params, prefix=""):
+    if not isinstance(params, dict):
+        print(f"{prefix: <40}, shape = {params.shape}")
+    else:
+        for k, v in params.items():
+            print_params_shapes(v, prefix=prefix + k)
 
 
 # Utilities for saving generated trajectories

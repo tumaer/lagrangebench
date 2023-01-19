@@ -241,7 +241,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr_final", type=float, default=1e-6)
     parser.add_argument("--lr_decay_rate", type=float, default=0.1)
     parser.add_argument("--lr_decay_steps", type=int, default=5e6)
-    parser.add_argument("--noise_std", type=float, default=6.7e-4)
+    parser.add_argument("--noise_std", type=float, default=3e-4)  # 6.7e-4
     parser.add_argument("--input_seq_length", type=int, default=6)
     parser.add_argument("--num_mp_steps", type=int, default=10)
     parser.add_argument("--latent_dim", type=int, default=128)
@@ -259,8 +259,28 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
 
     # segnn argumentslmax_hidden
-    parser.add_argument("--lmax-attributes", type=int, default=2)
+    parser.add_argument("--lmax-attributes", type=int, default=1)
     parser.add_argument("--lmax-hidden", type=int, default=1)
+    parser.add_argument(
+        "--norm",
+        type=str,
+        default="instance",
+        choices=["instance", "batch", "none"],
+        help="Normalisation type",
+    )
+    parser.add_argument(
+        "--velocity_aggregate",
+        type=str,
+        default="avg",
+        choices=["avg", "sum", "last"],
+        help="Velocity aggregation function for node attributes",
+    )
+    parser.add_argument(
+        "--attribute_mode",
+        type=str,
+        default="add",
+        choices=["add", "concat", "velocity"],
+    )
 
     args = parser.parse_args()
 
@@ -316,13 +336,15 @@ if __name__ == "__main__":
     args.box = bounds[:, 1] - bounds[:, 0]
 
     # dataset-specific setup
-    if args.dataset_name == "BoxBath":
+    if args.dataset_name in ["BoxBath", "BoxBathSample"]:
         particle_dimension = 3
         # node_in = 37, edge_in = 4
         args.box *= 1.2
     elif args.dataset_name in ["WaterDrop", "WaterDropSample"]:
         particle_dimension = 2
         # node_in = 30, edge_in = 3
+    elif args.dataset_name == "TGV_debug":
+        particle_dimension = 3
 
     # preprocessing allocate and update functions in the spirit of jax-md's
     # `partition.neighbor_list`. And an integration utility with PBC.
@@ -355,11 +377,8 @@ if __name__ == "__main__":
         from e3nn_jax import Irreps
         from segnn_jax import SEGNN, weight_balanced_irreps
 
-        assert args.input_seq_length == 1, "SEGNN currently only supports #history=1."
-
         if args.noise_std > 0:
             warnings.warn("Equivariant models don't work well with noise.")
-            args.noise_std = 0
 
         hidden_irreps = weight_balanced_irreps(
             scalar_units=args.latent_dim,
@@ -373,14 +392,17 @@ if __name__ == "__main__":
             output_irreps=Irreps("1x1o"),
             num_layers=args.num_mp_steps,
             task="node",
-            pool="avg",
             blocks_per_layer=2,
-            norm="instance",
+            norm=args.norm,
         )(x)
         graph_postprocess = steerable_graph_transform_builder(
-            node_features_irreps=Irreps("2x1o + 1x0e"),  # 1o vel, 1o boundary, 0e type
+            node_features_irreps=Irreps(
+                f"{args.input_seq_length}x1o + 1x1o + {NodeType.SIZE}x0e"
+            ),  # Lx1o vel, 1x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
             lmax_attributes=args.lmax_attributes,
+            velocity_aggregate=args.velocity_aggregate,
+            attribute_mode=args.attribute_mode,
         )
 
     # transform core simulator outputting accelerations.
