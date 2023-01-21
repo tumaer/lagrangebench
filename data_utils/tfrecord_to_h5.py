@@ -174,5 +174,6 @@ if __name__ == "__main__":
     args.compression = "gzip" if args.compression == "gzip" else None
 
     # convert_tfrecord_to_h5(args)
+    # read_h5_demo(args)
     # compute_statistics_tfrecord(args)
     # extract_one_trajectory_from_tfrecord_and_write_to_tfrecord(args)
