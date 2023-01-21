@@ -70,7 +70,11 @@ def train(
         end_value=args.lr_final,
     )
     opt_init, opt_update = optax.adam(learning_rate=lr_scheduler)
-    opt_state = opt_init(params)
+    # continue training from checkpoint or initialize optimizer state
+    if args.model_dir:
+        _, _, opt_state, _ = load_haiku(args.model_dir)
+    else:
+        opt_state = opt_init(params)
 
     # Precompile model for evaluation
     model_apply = jax.jit(model.apply)
@@ -134,7 +138,7 @@ def train(
     neighbors_batch = broadcast_to_batch(neighbors, args.batch_size)
 
     step_digits = len(str(int(args.step_max)))
-    step = 0
+    step = args.step_start
     while step < args.step_max:
 
         for raw_batch in loader_train:
@@ -177,7 +181,7 @@ def train(
                     print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
             if step % args.save_steps == 0:
-                save_haiku(os.path.join(ckp_dir), params)
+                save_haiku(os.path.join(ckp_dir), params, state, opt_state, step)
 
             if step % args.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
@@ -241,7 +245,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr_final", type=float, default=1e-6)
     parser.add_argument("--lr_decay_rate", type=float, default=0.1)
     parser.add_argument("--lr_decay_steps", type=int, default=5e6)
-    parser.add_argument("--noise_std", type=float, default=3e-4)  # 6.7e-4
+    parser.add_argument("--noise_std", type=float, default=6.7e-4)
     parser.add_argument("--input_seq_length", type=int, default=6)
     parser.add_argument("--num_mp_steps", type=int, default=10)
     parser.add_argument("--latent_dim", type=int, default=128)
@@ -258,7 +262,7 @@ if __name__ == "__main__":
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
 
-    # segnn argumentslmax_hidden
+    # segnn arguments
     parser.add_argument("--lmax-attributes", type=int, default=1)
     parser.add_argument("--lmax-hidden", type=int, default=1)
     parser.add_argument(
@@ -415,11 +419,14 @@ if __name__ == "__main__":
 
     params, state = model.init(subkey, graph_tuple)
 
-    print(f"Model with {get_num_params(params)} parameters.")
+    args.num_params = get_num_params(params)
+    print(f"Model with {args.num_params} parameters.")
 
     # load model from checkpoint if provided
     if args.model_dir:
-        params = load_haiku(args.model_dir)
+        params, state, _, args.step_start = load_haiku(args.model_dir)
+    else:
+        args.step_start = 0
 
     if args.mode == "train":
         train(

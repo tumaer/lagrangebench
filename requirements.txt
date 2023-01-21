@@ -6,9 +6,9 @@
 
 # Core of this project
 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+cloudpickle
 dm-tree
 h5py
-
 # Utilities
 ipykernel
 
