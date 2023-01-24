@@ -12,11 +12,14 @@ import jax.numpy as jnp
 import jraph
 import numpy as np
 import optax
+from e3nn_jax import Irreps
 from jax import vmap
+from segnn_jax import SEGNN, weight_balanced_irreps
 from torch.utils.data import DataLoader
 
 import wandb
 from gns_jax.data import H5Dataset, numpy_collate
+from gns_jax.gns import GNS
 from gns_jax.utils import (
     NodeType,
     broadcast_from_batch,
@@ -27,8 +30,9 @@ from gns_jax.utils import (
     load_haiku,
     save_haiku,
     setup_builder,
-    steerable_graph_transform_builder,
 )
+from segnn_utils.rsegnn import RSEGNN
+from segnn_utils.utils import steerable_graph_transform_builder
 
 
 def train(
@@ -237,7 +241,9 @@ def infer(
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="gns", choices=["gns", "segnn"])
+    parser.add_argument(
+        "--model", type=str, default="gns", choices=["gns", "segnn", "segnn_rewind"]
+    )
     parser.add_argument("--mode", type=str, default="train", choices=["train", "infer"])
     parser.add_argument("--step_max", type=int, default=2e7)
     parser.add_argument("--batch_size", type=int, default=2)
@@ -276,7 +282,7 @@ if __name__ == "__main__":
         "--velocity_aggregate",
         type=str,
         default="avg",
-        choices=["avg", "sum", "last"],
+        choices=["avg", "sum", "last", "all"],
         help="Velocity aggregation function for node attributes",
     )
     parser.add_argument(
@@ -366,8 +372,6 @@ if __name__ == "__main__":
     key, subkey = jax.random.split(key, 2)
 
     if args.model == "gns":
-        from gns_jax.gns import GNS
-
         model = lambda x: GNS(
             particle_dimension=particle_dimension,
             latent_size=args.latent_dim,
@@ -378,9 +382,6 @@ if __name__ == "__main__":
         )(x)
         graph_postprocess = None
     else:
-        from e3nn_jax import Irreps
-        from segnn_jax import SEGNN, weight_balanced_irreps
-
         if args.noise_std > 0:
             warnings.warn("Equivariant models don't work well with noise.")
 
@@ -391,14 +392,32 @@ if __name__ == "__main__":
             use_sh=True,
             lmax=args.lmax_hidden,
         )
-        model = lambda x: SEGNN(
-            hidden_irreps=hidden_irreps,
-            output_irreps=Irreps("1x1o"),
-            num_layers=args.num_mp_steps,
-            task="node",
-            blocks_per_layer=2,
-            norm=args.norm,
-        )(x)
+        if args.model == "segnn":
+            model = lambda x: SEGNN(
+                hidden_irreps=hidden_irreps,
+                output_irreps=Irreps("1x1o"),
+                num_layers=args.num_mp_steps,
+                task="node",
+                blocks_per_layer=2,
+                norm=args.norm,
+            )(x)
+        if args.model == "segnn_rewind":
+            assert (
+                args.num_mp_steps == args.input_seq_length
+            ), "The number of layers must be the same size of the history"
+            assert (
+                args.velocity_aggregate == "all"
+            ), "SEGNN with rewind is supposed to have all historical velocities"
+
+            model = lambda x: RSEGNN(
+                hidden_irreps=hidden_irreps,
+                output_irreps=Irreps("1x1o"),
+                num_layers=args.num_mp_steps,
+                task="node",
+                blocks_per_layer=2,
+                norm=args.norm,
+                historical_edge_attributes=False,
+            )(x)
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
                 f"{args.input_seq_length}x1o + 1x1o + {NodeType.SIZE}x0e"
