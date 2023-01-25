@@ -31,8 +31,9 @@ from gns_jax.utils import (
     save_haiku,
     setup_builder,
 )
-from segnn_utils.rsegnn import RSEGNN
-from segnn_utils.utils import steerable_graph_transform_builder
+from segnn_experiments.asegnn import AttentionSEGNN
+from segnn_experiments.rsegnn import RSEGNN
+from segnn_experiments.utils import steerable_graph_transform_builder
 
 
 def train(
@@ -52,15 +53,15 @@ def train(
     i = 0
     while os.path.isdir(os.path.join(args.ckp_dir, run_prefix + str(i))):
         i += 1
-    run_name = run_prefix + str(i)
-    ckp_dir = os.path.join(args.ckp_dir, run_name)
+    args.run_name = run_prefix + str(i)
+    ckp_dir = os.path.join(args.ckp_dir, args.run_name)
     os.makedirs(ckp_dir, exist_ok=True)
 
     if args.wandb:
         wandb.init(
             project="segnn",
             entity="segnn-sph",
-            name=run_name,
+            name=args.run_name,
             config=args,
             save_code=True,
         )
@@ -222,7 +223,7 @@ def infer(
     model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
 ):
     model_apply = jax.jit(model.apply)
-    eval_loss, _ = eval_rollout(
+    eval_loss, _ = eval_rollout(  # TODO: add saving loss and further stats
         setup=setup,
         model_apply=model_apply,
         params=params,
@@ -242,7 +243,10 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--model", type=str, default="gns", choices=["gns", "segnn", "segnn_rewind"]
+        "--model",
+        type=str,
+        default="gns",
+        choices=["gns", "segnn", "segnn_rewind", "segnn_attention"],
     )
     parser.add_argument("--mode", type=str, default="train", choices=["train", "infer"])
     parser.add_argument("--step_max", type=int, default=2e7)
@@ -416,7 +420,19 @@ if __name__ == "__main__":
                 task="node",
                 blocks_per_layer=2,
                 norm=args.norm,
-                historical_edge_attributes=False,
+            )(x)
+        if args.model == "segnn_attention":
+            assert (
+                args.velocity_aggregate == "all"
+            ), "SEGNN with attention is supposed to have all historical velocities"
+
+            model = lambda x: AttentionSEGNN(
+                hidden_irreps=hidden_irreps,
+                output_irreps=Irreps("1x1o"),
+                num_layers=args.num_mp_steps,
+                task="node",
+                blocks_per_layer=2,
+                norm=args.norm,
             )(x)
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
