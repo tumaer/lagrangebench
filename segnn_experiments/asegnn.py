@@ -124,7 +124,9 @@ class AttentionSEGNN(SEGNN):
 
         # layer attribute attributes
         node_attributes_emb, edge_attributes_emb = AttentionEmbedding(
-            self._embedding_latent_irreps, "encoder", self._embed_msg_features
+            self._embedding_latent_irreps,
+            f"layer_{layer_num}",
+            self._embed_msg_features,
         )(st_graph)
 
         return st_graph._replace(
