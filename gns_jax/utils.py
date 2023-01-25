@@ -4,6 +4,7 @@ import os
 import pickle
 from typing import Callable  # Dict, List, Optional, Tuple, Union
 
+import cloudpickle
 import e3nn_jax as e3nn
 import jax
 import jax.numpy as jnp
@@ -391,16 +392,41 @@ def broadcast_from_batch(batch, index: int):
 # Utilities for saving and loading Haiku models
 
 
-def save_haiku(ckpt_dir: str, state) -> None:
-    """https://github.com/deepmind/dm-haiku/issues/18"""
-
-    with open(os.path.join(ckpt_dir, "arrays.npy"), "wb") as f:
-        for x in jax.tree_leaves(state):
+def save_pytree(ckpt_dir: str, pytree_obj, name) -> None:
+    with open(os.path.join(ckpt_dir, f"{name}_array.npy"), "wb") as f:
+        for x in jax.tree_leaves(pytree_obj):
             np.save(f, x, allow_pickle=False)
 
-    tree_struct = jax.tree_map(lambda t: 0, state)
-    with open(os.path.join(ckpt_dir, "tree.pkl"), "wb") as f:
+    tree_struct = jax.tree_map(lambda t: 0, pytree_obj)
+    with open(os.path.join(ckpt_dir, f"{name}_tree.pkl"), "wb") as f:
         pickle.dump(tree_struct, f)
+
+
+def save_haiku(ckpt_dir: str, params, state, opt_state, step) -> None:
+    """https://github.com/deepmind/dm-haiku/issues/18"""
+
+    print("Saving model to", ckpt_dir, "at step", step)
+
+    save_pytree(ckpt_dir, params, "params")
+    save_pytree(ckpt_dir, state, "state")
+
+    with open(os.path.join(ckpt_dir, "opt_state.pkl"), "wb") as f:
+        cloudpickle.dump(opt_state, f)
+    with open(os.path.join(ckpt_dir, "step.txt"), "w") as f:
+        f.write(str(step))
+
+
+def load_pytree(model_dir: str, name):
+    """load a pytree from a directory"""
+    with open(os.path.join(model_dir, f"{name}_tree.pkl"), "rb") as f:
+        tree_struct = pickle.load(f)
+
+    leaves, treedef = jax.tree_flatten(tree_struct)
+
+    with open(os.path.join(model_dir, f"{name}_array.npy"), "rb") as f:
+        flat_state = [np.load(f) for _ in leaves]
+
+    return jax.tree_unflatten(treedef, flat_state)
 
 
 def load_haiku(model_dir: str):
@@ -408,14 +434,16 @@ def load_haiku(model_dir: str):
 
     print("Loading model from", model_dir)
 
-    with open(os.path.join(model_dir, "tree.pkl"), "rb") as f:
-        tree_struct = pickle.load(f)
+    params = load_pytree(model_dir, "params")
+    state = load_pytree(model_dir, "state")
 
-    leaves, treedef = jax.tree_flatten(tree_struct)
-    with open(os.path.join(model_dir, "arrays.npy"), "rb") as f:
-        flat_state = [np.load(f) for _ in leaves]
+    with open(os.path.join(model_dir, "opt_state.pkl"), "rb") as f:
+        opt_state = cloudpickle.load(f)
 
-    return jax.tree_unflatten(treedef, flat_state)
+    with open(os.path.join(model_dir, "step.txt"), "r") as f:
+        step = int(f.read())
+
+    return params, state, opt_state, step
 
 
 def get_num_params(params):
