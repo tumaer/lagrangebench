@@ -5,12 +5,14 @@ import os
 
 import h5py
 import numpy as np
-import reading_utils
-import tensorflow.compat.v1 as tf
-import tensorflow_datasets as tfds
+from data_utils import reading_utils
 
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
 # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 # os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
+import tensorflow.compat.v1 as tf
+import tensorflow_datasets as tfds
 
 
 def extract_one_trajectory_from_tfrecord_and_write_to_tfrecord(args):
@@ -51,6 +53,7 @@ def convert_tfrecord_to_h5(args):
     """Read .tfrecord file and convert it to its closest .h5 equivalent"""
 
     file_path = os.path.join(args.dataset_path, args.file_name)
+    print(f"Start conversion of {file_path} to .h5")
 
     with open(os.path.join(args.dataset_path, "metadata.json"), "r") as fp:
         metadata = json.loads(fp.read())
@@ -64,7 +67,8 @@ def convert_tfrecord_to_h5(args):
     )
     ds = tfds.as_numpy(ds)
 
-    hf = h5py.File(f"{file_path[:-9]}.h5", "w")
+    h5_file_path = f"{file_path[:-9]}.h5"
+    hf = h5py.File(h5_file_path, "w")
 
     for i, elem in enumerate(ds):
         traj_str = str(i).zfill(4)
@@ -84,6 +88,7 @@ def convert_tfrecord_to_h5(args):
         )
 
     hf.close()
+    print(f"Finish conversion to {h5_file_path}")
 
 
 def read_h5_demo(args):
@@ -152,6 +157,11 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
+        "--task",
+        required=True,
+        choices=["tfrecord2h5", "stats", "extract1"]
+    )
+    parser.add_argument(
         "--dataset_path",
         type=str,
         default="GNS/data/WaterDropSample",
@@ -173,7 +183,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.compression = "gzip" if args.compression == "gzip" else None
 
-    # convert_tfrecord_to_h5(args)
-    # read_h5_demo(args)
-    # compute_statistics_tfrecord(args)
-    # extract_one_trajectory_from_tfrecord_and_write_to_tfrecord(args)
+    if args.task == "tfrecord2h5":
+        convert_tfrecord_to_h5(args)
+    elif args.task == "stats":
+        compute_statistics_tfrecord(args)
+    elif args.task == "extract1":
+        extract_one_trajectory_from_tfrecord_and_write_to_tfrecord(args)
+    else:
+        raise NotImplementedError("Choose one of the provided tasks")
