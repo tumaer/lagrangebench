@@ -24,10 +24,11 @@ def AttentionEmbedding(
             [st_graph.node_attributes[:, i, :] for i in range(n_vels)], 1
         ).regroup()
         # NOTE: no biases here
-        right = e3nn.IrrepsArray(
-            f"{node_attributes_flat.irreps.dim}x0e",
-            jnp.ones_like(node_attributes_flat.array),
-        )
+        # right = e3nn.IrrepsArray(
+        #     f"{node_attributes_flat.irreps.dim}x0e",
+        #     jnp.ones_like(node_attributes_flat.array),
+        # )
+        right = None
         node_attributes_emb = O3TensorProduct(
             x=node_attributes_flat,
             y=right,

@@ -30,9 +30,10 @@ def steerable_graph_transform_builder(
         graph: jraph.GraphsTuple,
         particle_type: jnp.ndarray,
     ) -> SteerableGraphsTuple:
-        n_vels = (graph.nodes.shape[1] - 3) // 3
+        # remove the last two bounary displacement vectors
+        n_vels = int((graph.nodes.shape[1]) / 3) - 2
         traj = jnp.reshape(
-            graph.nodes[..., :-3],
+            graph.nodes[..., : -(3 * 2)],
             (graph.nodes.shape[0], n_vels, 3),
         )
 
@@ -74,8 +75,10 @@ def steerable_graph_transform_builder(
                 if velocity_aggregate == "all":
                     # transpose for broadcasting
                     node_attributes.array = jnp.transpose(
-                        jnp.transpose(node_attributes.array, (0, 2, 1))
-                        + jnp.expand_dims(scattered_edges.array, -1),
+                        (
+                            jnp.transpose(node_attributes.array, (0, 2, 1))
+                            + jnp.expand_dims(scattered_edges.array, -1)
+                        ),
                         (0, 2, 1),
                     )
                 else:
