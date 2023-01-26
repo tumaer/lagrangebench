@@ -28,6 +28,8 @@ class NodeType(enum.IntEnum):
 
 
 # TODO: this is not the right place for this. It's an util for segnn and not gns
+
+
 def steerable_graph_transform_builder(
     node_features_irreps: e3nn.Irreps,
     edge_features_irreps: e3nn.Irreps,
@@ -41,28 +43,29 @@ def steerable_graph_transform_builder(
 
     attribute_irreps = e3nn.Irreps.spherical_harmonics(lmax_attributes)
 
-    assert velocity_aggregate in ["avg", "sum", "last"]
+    assert velocity_aggregate in ["avg", "sum", "last", "all"]
     assert attribute_mode in ["velocity", "add", "concat"]
 
     def graph_transform(
         graph: jraph.GraphsTuple,
         particle_type: jnp.ndarray,
     ) -> SteerableGraphsTuple:
-        n_vels = (graph.nodes.shape[1] - 3) // 3
+        # remove the last two bounary displacement vectors
+        n_vels = int((graph.nodes.shape[1]) / 3) - 2
         traj = jnp.reshape(
-            graph.nodes[..., :-3],
+            graph.nodes[..., : -(3 * 2)],
             (graph.nodes.shape[0], n_vels, 3),
         )
 
-        if n_vels > 1:
+        if n_vels == 1 or velocity_aggregate == "all":
+            vel = jnp.squeeze(traj)
+        else:
             if velocity_aggregate == "avg":
                 vel = jnp.mean(traj, 1)
             if velocity_aggregate == "sum":
                 vel = jnp.sum(traj, 1)
             if velocity_aggregate == "last":
                 vel = traj[:, -1, :]
-        else:
-            vel = jnp.squeeze(traj)
 
         rel_pos = graph.edges[..., :3]
 
@@ -87,11 +90,22 @@ def steerable_graph_transform_builder(
                     [scattered_edges, vel_embedding], axis=-1
                 )
             if attribute_mode == "add":
-                node_attributes = scattered_edges + vel_embedding
+                node_attributes = vel_embedding
+                # TODO: a bit ugly
+                if velocity_aggregate == "all":
+                    # transpose for broadcasting
+                    node_attributes.array = jnp.transpose(
+                        (
+                            jnp.transpose(node_attributes.array, (0, 2, 1))
+                            + jnp.expand_dims(scattered_edges.array, -1)
+                        ),
+                        (0, 2, 1),
+                    )
+                else:
+                    node_attributes += scattered_edges
 
         # scalar attribute to 1 by default
         node_attributes.array = node_attributes.array.at[:, 0].set(1.0)
-        edge_attributes.array = edge_attributes.array.at[:, 0].set(1.0)
 
         return SteerableGraphsTuple(
             graph=jraph.GraphsTuple(

@@ -401,8 +401,8 @@ if __name__ == "__main__":
         )(x)
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
-                f"{args.input_seq_length}x1o + 1x1o + {NodeType.SIZE}x0e"
-            ),  # Lx1o vel, 1x1o boundary, 9x0e type
+                f"{args.input_seq_length - 1}x1o + 2x1o + {NodeType.SIZE}x0e"
+            ),  # Hx1o vel, 2x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
             lmax_attributes=args.lmax_attributes,
             velocity_aggregate=args.velocity_aggregate,
