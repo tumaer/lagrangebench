@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 
 import e3nn_jax as e3nn
 import jax.numpy as jnp
@@ -13,47 +13,84 @@ from segnn_jax import (
 )
 
 
+def HistoryEmbeddingBlock(
+    attributes: e3nn.IrrepsArray,
+    name: str,
+    embed_irreps: e3nn.IrrepsArray,
+    right_attribute: bool = False,
+    hidden_irreps: Optional[e3nn.Irreps] = None,
+    blocks: int = 1,
+):
+    if len(attributes.shape) > 2:
+        n_vels = attributes.shape[1]
+        attribute_emb = e3nn.concatenate(
+            [attributes[:, i, :] for i in range(n_vels)], 1
+        ).regroup()
+    else:
+        attribute_emb = attributes
+
+    # steer either with ones or with the last attribute
+    right = attributes[:, -1, :] if right_attribute else None
+    # NOTE: no biases in the embedding
+    for i in range(blocks):
+        attribute_emb = O3TensorProductGate(
+            attribute_emb,
+            right,
+            output_irreps=hidden_irreps,
+            biases=False,
+            name=f"attribute_embedding_{name}_{i}",
+        )
+    return O3TensorProduct(
+        x=attribute_emb,
+        y=right,
+        output_irreps=embed_irreps,
+        biases=False,
+        name=f"attribute_embedding_{name}_final",
+    )
+
+
 def AttentionEmbedding(
     embed_irreps: e3nn.Irreps,
     name: str,
+    hidden_irreps: Optional[e3nn.Irreps],
+    blocks: int = 1,
+    right_attribute: bool = False,
     embed_msg_features: bool = False,
 ):
+    """Embed the historical attributes of the nodes and edges.
+    Args:
+        embed_irreps: Attrubte embedding irreps
+        name: Name of the embedding
+        hidden_irreps: Irreps of the embedding hidden layer
+        blocks: Number of hidden layers
+        right_attribute: Whether to use the last attribute as the right input
+        embed_msg_features: Whether to embed the message features
+    """
+
+    if blocks > 0:
+        assert hidden_irreps is not None, "Hidden irreps must be specified"
+
     def _embed(st_graph: SteerableGraphsTuple) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        n_vels = st_graph.node_attributes.shape[1]
-        node_attributes_flat = e3nn.concatenate(
-            [st_graph.node_attributes[:, i, :] for i in range(n_vels)], 1
-        ).regroup()
-        # NOTE: no biases here
-        # right = e3nn.IrrepsArray(
-        #     f"{node_attributes_flat.irreps.dim}x0e",
-        #     jnp.ones_like(node_attributes_flat.array),
-        # )
-        right = None
-        node_attributes_emb = O3TensorProduct(
-            x=node_attributes_flat,
-            y=right,
-            output_irreps=embed_irreps,
-            biases=False,
-            name=f"node_attribute_embedding_{name}",
+        node_attributes_emb = HistoryEmbeddingBlock(
+            st_graph.node_attributes,
+            f"nodes_{name}",
+            embed_irreps,
+            right_attribute,
+            hidden_irreps,
+            blocks,
         )
         if embed_msg_features:
-            if len(st_graph.edge_attributes.shape) > 2:
-                n_vels = st_graph.node_attributes.shape[1]
-                edge_attributes_flat = e3nn.concatenate(
-                    [st_graph.edge_attributes[:, i, :] for i in range(n_vels)], 1
-                ).regroup()
-            else:
-                edge_attributes_flat = st_graph.edge_attributes
-            edges_attributes_emb = O3TensorProduct(
-                x=edge_attributes_flat,
-                y=right,
-                output_irreps=embed_irreps,
-                biases=False,
-                name=f"edge_attribute_embedding_{name}",
+            edge_attributes_emb = HistoryEmbeddingBlock(
+                st_graph.node_attributes,
+                f"edges_{name}",
+                embed_irreps,
+                right_attribute,
+                hidden_irreps,
+                blocks,
             )
         else:
-            edges_attributes_emb = st_graph.edge_attributes
-        return node_attributes_emb, edges_attributes_emb
+            edge_attributes_emb = st_graph.edge_attributes
+        return node_attributes_emb, edge_attributes_emb
 
     return _embed
 
@@ -64,11 +101,18 @@ def AttentionDecoder(
     output_irreps: e3nn.Irreps,
     embed_msg_features: bool = False,
     blocks: int = 1,
+    attribute_embedding_blocks: int = 1,
+    right_attribute: bool = False,
 ):
     def _decode(st_graph: SteerableGraphsTuple) -> jnp.ndarray:
         nodes = st_graph.graph.nodes
         node_attributes_emb, _ = AttentionEmbedding(
-            embedding_latent_irreps, "decoder", embed_msg_features
+            embedding_latent_irreps,
+            "decoder",
+            blocks=attribute_embedding_blocks,
+            hidden_irreps=latent_irreps,
+            right_attribute=right_attribute,
+            embed_msg_features=embed_msg_features,
         )(st_graph)
         for i in range(blocks):
             nodes = O3TensorProductGate(
@@ -95,14 +139,25 @@ class AttentionSEGNN(SEGNN):
 
     Args:
         lmax_latent: Maximum spherical harmonics level of the attribute latent space
+        right_attribute: Whether to use the last attribute as the right input
+        attribute_embedding_blocks: Number of hidden layers in the attribute embedding
     """
 
-    def __init__(self, *args, lmax_latent: int = 1, **kwargs):
+    def __init__(
+        self,
+        *args,
+        lmax_latent: int = 1,
+        right_attribute: bool = False,
+        attribute_embedding_blocks: int = 1,
+        **kwargs,
+    ):
         super(AttentionSEGNN, self).__init__(  # noqa # pylint: disable=R1725
             *args, **kwargs
         )
         self._output_irreps = kwargs.get("output_irreps")
         self._embedding_latent_irreps = e3nn.Irreps.spherical_harmonics(lmax_latent)
+        self._right_attribute = right_attribute
+        self._attribute_embedding_blocks = attribute_embedding_blocks
 
     def _propagate(
         self, st_graph: SteerableGraphsTuple, irreps: e3nn.Irreps, layer_num: int
@@ -127,7 +182,10 @@ class AttentionSEGNN(SEGNN):
         node_attributes_emb, edge_attributes_emb = AttentionEmbedding(
             self._embedding_latent_irreps,
             f"layer_{layer_num}",
-            self._embed_msg_features,
+            blocks=self._attribute_embedding_blocks,
+            hidden_irreps=irreps,
+            right_attribute=self._right_attribute,
+            embed_msg_features=self._embed_msg_features,
         )(st_graph)
 
         return st_graph._replace(
@@ -145,7 +203,12 @@ class AttentionSEGNN(SEGNN):
     def __call__(self, st_graph: SteerableGraphsTuple) -> jnp.array:
         # initial attribute embedding
         node_attributes_emb, edge_attributes_emb = AttentionEmbedding(
-            self._embedding_latent_irreps, "encoder", self._embed_msg_features
+            self._embedding_latent_irreps,
+            "encoder",
+            blocks=self._attribute_embedding_blocks,
+            hidden_irreps=self._hidden_irreps_units[0],
+            right_attribute=self._right_attribute,
+            embed_msg_features=self._embed_msg_features,
         )(st_graph)
 
         nodes = O3TensorProduct(
@@ -175,5 +238,7 @@ class AttentionSEGNN(SEGNN):
             latent_irreps=self._hidden_irreps_units[-1],
             embedding_latent_irreps=self._embedding_latent_irreps,
             output_irreps=self._output_irreps,
+            attribute_embedding_blocks=self._attribute_embedding_blocks,
+            right_attribute=self._right_attribute,
             embed_msg_features=self._embed_msg_features,
         )(st_graph)

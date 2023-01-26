@@ -25,5 +25,9 @@ if __name__ == "__main__":
     w = get_attention_weights(args.model_dir)
 
     # visualize the attention weights
-    p = sns.heatmap(w, annot=False).set_title("Attention Weights")
-    p.figure.savefig("attention_weights.png")
+    ax = sns.heatmap(w, annot=False)
+    ax.set_title("Attention Weights")
+    ax.vlines([(w.columns.max() + 1) // 2], *ax.get_ylim())
+    ax.figure.savefig(
+        f"attention_weights_{args.model_dir.split('_')[-1]}.png", dpi=1000
+    )

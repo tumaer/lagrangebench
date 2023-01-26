@@ -273,8 +273,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
 
     # segnn arguments
-    parser.add_argument("--lmax-attributes", type=int, default=1)
-    parser.add_argument("--lmax-hidden", type=int, default=1)
+    parser.add_argument("--lmax_attributes", type=int, default=1)
+    parser.add_argument("--lmax_hidden", type=int, default=1)
     parser.add_argument(
         "--norm",
         type=str,
@@ -295,6 +295,8 @@ if __name__ == "__main__":
         default="add",
         choices=["add", "concat", "velocity"],
     )
+    parser.add_argument("--right_attribute", action="store_true")
+    parser.add_argument("--attention_blocks", type=int, default=0)
 
     args = parser.parse_args()
 
@@ -433,6 +435,8 @@ if __name__ == "__main__":
                 task="node",
                 blocks_per_layer=2,
                 norm=args.norm,
+                right_attribute=args.right_attribute,
+                attribute_embedding_blocks=args.attention_blocks,
             )(x)
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(

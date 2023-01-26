@@ -4,7 +4,7 @@ rollout/
 wandb/
 *.out
 datasets/
-attention_weights.png
+attention_weights*.png
 # dev
 .vscode
 __pycache__/
