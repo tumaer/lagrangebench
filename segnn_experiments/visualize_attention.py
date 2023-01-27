@@ -1,5 +1,6 @@
 import argparse
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -12,8 +13,8 @@ def get_attention_weights(model_dir: str) -> pd.DataFrame:
     params, _, _, _ = load_haiku(model_dir)
     weights = {}
     for layer, tp_weighs in params.items():
-        if "node_attribute_embedding" in layer:
-            name = layer.split("/")[-1].replace("node_attribute_embedding_", "")
+        if "attribute_embedding" in layer and "final" not in layer:
+            name = layer.split("/")[-1].replace("attribute_embedding_", "")
             weights[name] = np.vstack(tp_weighs.values()).flatten()
     return pd.DataFrame(weights).fillna(0.0).T
 
@@ -25,9 +26,8 @@ if __name__ == "__main__":
     w = get_attention_weights(args.model_dir)
 
     # visualize the attention weights
-    ax = sns.heatmap(w, annot=False)
+    plt.figure(figsize=(20, 10))
+    ax = sns.heatmap(w, annot=True)
     ax.set_title("Attention Weights")
     ax.vlines([(w.columns.max() + 1) // 2], *ax.get_ylim())
-    ax.figure.savefig(
-        f"attention_weights_{args.model_dir.split('_')[-1]}.png", dpi=1000
-    )
+    ax.figure.savefig(f"attention_weights_{args.model_dir.split('_')[-1]}.png", dpi=300)

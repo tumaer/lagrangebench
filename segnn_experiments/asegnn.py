@@ -16,6 +16,7 @@ from segnn_jax import (
 def HistoryEmbeddingBlock(
     attributes: e3nn.IrrepsArray,
     name: str,
+    where: str,
     embed_irreps: e3nn.IrrepsArray,
     right_attribute: bool = False,
     hidden_irreps: Optional[e3nn.Irreps] = None,
@@ -38,14 +39,14 @@ def HistoryEmbeddingBlock(
             right,
             output_irreps=hidden_irreps,
             biases=False,
-            name=f"attribute_embedding_{name}_{i}",
+            name=f"{where}_attribute_embedding_{name}_{i}",
         )
     return O3TensorProduct(
         x=attribute_emb,
         y=right,
         output_irreps=embed_irreps,
         biases=False,
-        name=f"attribute_embedding_{name}_final",
+        name=f"{where}_attribute_embedding_{name}_final",
     )
 
 
@@ -73,7 +74,8 @@ def AttentionEmbedding(
     def _embed(st_graph: SteerableGraphsTuple) -> Tuple[jnp.ndarray, jnp.ndarray]:
         node_attributes_emb = HistoryEmbeddingBlock(
             st_graph.node_attributes,
-            f"nodes_{name}",
+            name,
+            "node",
             embed_irreps,
             right_attribute,
             hidden_irreps,
@@ -82,7 +84,8 @@ def AttentionEmbedding(
         if embed_msg_features:
             edge_attributes_emb = HistoryEmbeddingBlock(
                 st_graph.node_attributes,
-                f"edges_{name}",
+                name,
+                "edge",
                 embed_irreps,
                 right_attribute,
                 hidden_irreps,
