@@ -2,7 +2,7 @@ import argparse
 import enum
 import os
 import pickle
-from typing import Callable  # Dict, List, Optional, Tuple, Union
+from typing import Callable, Tuple  # Dict, List, Optional, Union
 
 import cloudpickle
 import e3nn_jax as e3nn
@@ -10,6 +10,7 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
+import haiku as hk
 import numpy as np
 import pyvista
 from jax import lax, vmap
@@ -34,6 +35,7 @@ def steerable_graph_transform_builder(
     lmax_attributes: int,
     velocity_aggregate: str = "avg",
     attribute_mode: str = "add",
+    pbc: list[bool, bool, bool] = [False, False, False]
 ) -> Callable:
     """
     Convert the standard gns GraphsTuple into a SteerableGraphsTuple to use in SEGNN.
@@ -44,13 +46,19 @@ def steerable_graph_transform_builder(
     assert velocity_aggregate in ["avg", "sum", "last"]
     assert attribute_mode in ["velocity", "add", "concat"]
 
+    # TODO: for now only 1) all directions periodic or 2) none of them
+    if np.array(pbc).any(): # if PBC, no boundary forces
+        num_boundary_entries = 0
+    else:
+        num_boundary_entries = 6
+        
     def graph_transform(
         graph: jraph.GraphsTuple,
         particle_type: jnp.ndarray,
     ) -> SteerableGraphsTuple:
-        n_vels = (graph.nodes.shape[1] - 3) // 3
+        n_vels = (graph.nodes.shape[1] - num_boundary_entries) // 3
         traj = jnp.reshape(
-            graph.nodes[..., :-3],
+            graph.nodes[..., : 3 * n_vels],
             (graph.nodes.shape[0], n_vels, 3),
         )
 
@@ -124,6 +132,7 @@ def graph_transform_builder(
     normalization_stats: dict,
     connectivity_radius: float,
     displacement_fn: Callable,
+    pbc: list[bool, bool, bool],
 ) -> Callable:
     """Convert raw coordinates to jraph GraphsTuple."""
 
@@ -149,22 +158,24 @@ def graph_transform_builder(
         )
         node_features.append(flat_velocity_sequence)
 
-        # Normalized clipped distances to lower and upper boundaries.
-        # boundaries are an array of shape [num_dimensions, 2], where the
-        # second axis, provides the lower/upper boundaries.
-        boundaries = lax.stop_gradient(jnp.array(bounds))
+        # TODO: for now just disable it completely if any periodicity applies
+        if not np.array(pbc).any(): 
+            # Normalized clipped distances to lower and upper boundaries.
+            # boundaries are an array of shape [num_dimensions, 2], where the
+            # second axis, provides the lower/upper boundaries.
+            boundaries = lax.stop_gradient(jnp.array(bounds))
 
-        distance_to_lower_boundary = most_recent_position - boundaries[:, 0][None]
-        distance_to_upper_boundary = boundaries[:, 1][None] - most_recent_position
+            distance_to_lower_boundary = most_recent_position - boundaries[:, 0][None]
+            distance_to_upper_boundary = boundaries[:, 1][None] - most_recent_position
 
-        # rewritten the code above in jax
-        distance_to_boundaries = jnp.concatenate(
-            [distance_to_lower_boundary, distance_to_upper_boundary], axis=1
-        )
-        normalized_clipped_distance_to_boundaries = jnp.clip(
-            distance_to_boundaries / connectivity_radius, -1.0, 1.0
-        )
-        node_features.append(normalized_clipped_distance_to_boundaries)
+            # rewritten the code above in jax
+            distance_to_boundaries = jnp.concatenate(
+                [distance_to_lower_boundary, distance_to_upper_boundary], axis=1
+            )
+            normalized_clipped_distance_to_boundaries = jnp.clip(
+                distance_to_boundaries / connectivity_radius, -1.0, 1.0
+            )
+            node_features.append(normalized_clipped_distance_to_boundaries)
 
         # Collect edge features.
         edge_features = []
@@ -269,6 +280,8 @@ def setup_builder(args: argparse.Namespace):
         displacement_fn, shift_fn = space.periodic(side=args.box)
     else:
         displacement_fn, shift_fn = space.free()
+        
+    displacement_fn_set = vmap(displacement_fn, in_axes=(0, 0))
 
     neighbor_fn = partition.neighbor_list(
         displacement_fn,
@@ -285,11 +298,14 @@ def setup_builder(args: argparse.Namespace):
         normalization_stats=normalization_stats,
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
+        pbc=args.metadata["periodic_boundary_conditions"],
     )
 
     def _compute_target(pos_input, pos_target):
-        current_velocity = pos_input[:, -1] - pos_input[:, -2]
-        next_velocity = pos_target - pos_input[:, -1]
+        # displacement(r1, r2) = r1-r2  # without PBC
+        
+        current_velocity = displacement_fn_set(pos_input[:, -1], pos_input[:, -2])
+        next_velocity = displacement_fn_set(pos_target, pos_input[:, -1])
         current_acceleration = next_velocity - current_velocity
         acc_stats = normalization_stats["acceleration"]
         normalized_acceleration = (
@@ -627,3 +643,20 @@ def eval_rollout(
         if (i + 1) == num_trajs:
             break
     return np.mean(valid_loss), neighbors
+
+
+# Unit Test utils
+
+
+class Linear(hk.Module):
+    """Model defining linear relation between input nodes and targets.
+    
+    Used as unit test case.
+    """
+    def __init__(self, dim_out):
+        super().__init__()
+        self.mlp = hk.nets.MLP([dim_out], activate_final=False, name="MLP")
+    
+    def __call__(self, input: Tuple[jraph.GraphsTuple, np.ndarray]) -> jraph.GraphsTuple:
+        graph, _ = input
+        return jax.vmap(self.mlp)(graph.nodes)

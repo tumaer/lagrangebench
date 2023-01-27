@@ -19,6 +19,7 @@ import wandb
 from gns_jax.data import H5Dataset, numpy_collate
 from gns_jax.utils import (
     NodeType,
+    Linear,
     broadcast_from_batch,
     broadcast_to_batch,
     eval_rollout,
@@ -237,7 +238,7 @@ def infer(
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="gns", choices=["gns", "segnn"])
+    parser.add_argument("--model", type=str, choices=["gns", "segnn", "lin"])
     parser.add_argument("--mode", type=str, default="train", choices=["train", "infer"])
     parser.add_argument("--step_max", type=int, default=2e7)
     parser.add_argument("--batch_size", type=int, default=2)
@@ -347,7 +348,7 @@ if __name__ == "__main__":
     elif args.dataset_name in ["WaterDrop", "WaterDropSample"]:
         particle_dimension = 2
         # node_in = 30, edge_in = 3
-    elif args.dataset_name == "TGV_debug":
+    elif args.dataset_name in ["TGV_debug", "dataset_tgv_debug", "dataset_ut"]:
         particle_dimension = 3
 
     # preprocessing allocate and update functions in the spirit of jax-md's
@@ -377,6 +378,9 @@ if __name__ == "__main__":
             particle_type_embedding_size=16,
         )(x)
         graph_postprocess = None
+    elif args.model == "lin":
+        model = lambda x: Linear(dim_out=3)(x)
+        graph_postprocess = None
     else:
         from e3nn_jax import Irreps
         from segnn_jax import SEGNN, weight_balanced_irreps
@@ -399,14 +403,21 @@ if __name__ == "__main__":
             blocks_per_layer=2,
             norm=args.norm,
         )(x)
+        pbc = args.metadata["periodic_boundary_conditions"]
+        if np.array(pbc).any():
+            pbc_irrep = ""
+        else:
+            pbc_irrep = "+ 2x1o "
+
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
-                f"{args.input_seq_length}x1o + 1x1o + {NodeType.SIZE}x0e"
+                f"{args.input_seq_length - 1}x1o {pbc_irrep}+ {NodeType.SIZE}x0e"
             ),  # Lx1o vel, 1x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
             lmax_attributes=args.lmax_attributes,
             velocity_aggregate=args.velocity_aggregate,
             attribute_mode=args.attribute_mode,
+            pbc=pbc
         )
 
     # transform core simulator outputting accelerations.
