@@ -6,11 +6,11 @@ from typing import Callable, Tuple  # Dict, List, Optional, Union
 
 import cloudpickle
 import e3nn_jax as e3nn
+import haiku as hk
 import jax
 import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
-import haiku as hk
 import numpy as np
 import pyvista
 from jax import lax, vmap
@@ -29,13 +29,15 @@ class NodeType(enum.IntEnum):
 
 
 # TODO: this is not the right place for this. It's an util for segnn and not gns
+
+
 def steerable_graph_transform_builder(
     node_features_irreps: e3nn.Irreps,
     edge_features_irreps: e3nn.Irreps,
     lmax_attributes: int,
     velocity_aggregate: str = "avg",
     attribute_mode: str = "add",
-    pbc: list[bool, bool, bool] = [False, False, False]
+    pbc: list[bool, bool, bool] = [False, False, False],
 ) -> Callable:
     """
     Convert the standard gns GraphsTuple into a SteerableGraphsTuple to use in SEGNN.
@@ -43,15 +45,15 @@ def steerable_graph_transform_builder(
 
     attribute_irreps = e3nn.Irreps.spherical_harmonics(lmax_attributes)
 
-    assert velocity_aggregate in ["avg", "sum", "last"]
+    assert velocity_aggregate in ["avg", "sum", "last", "all"]
     assert attribute_mode in ["velocity", "add", "concat"]
 
     # TODO: for now only 1) all directions periodic or 2) none of them
-    if np.array(pbc).any(): # if PBC, no boundary forces
+    if np.array(pbc).any():  # if PBC, no boundary forces
         num_boundary_entries = 0
     else:
         num_boundary_entries = 6
-        
+
     def graph_transform(
         graph: jraph.GraphsTuple,
         particle_type: jnp.ndarray,
@@ -62,15 +64,15 @@ def steerable_graph_transform_builder(
             (graph.nodes.shape[0], n_vels, 3),
         )
 
-        if n_vels > 1:
+        if n_vels == 1 or velocity_aggregate == "all":
+            vel = jnp.squeeze(traj)
+        else:
             if velocity_aggregate == "avg":
                 vel = jnp.mean(traj, 1)
             if velocity_aggregate == "sum":
                 vel = jnp.sum(traj, 1)
             if velocity_aggregate == "last":
                 vel = traj[:, -1, :]
-        else:
-            vel = jnp.squeeze(traj)
 
         rel_pos = graph.edges[..., :3]
 
@@ -95,11 +97,22 @@ def steerable_graph_transform_builder(
                     [scattered_edges, vel_embedding], axis=-1
                 )
             if attribute_mode == "add":
-                node_attributes = scattered_edges + vel_embedding
+                node_attributes = vel_embedding
+                # TODO: a bit ugly
+                if velocity_aggregate == "all":
+                    # transpose for broadcasting
+                    node_attributes.array = jnp.transpose(
+                        (
+                            jnp.transpose(node_attributes.array, (0, 2, 1))
+                            + jnp.expand_dims(scattered_edges.array, -1)
+                        ),
+                        (0, 2, 1),
+                    )
+                else:
+                    node_attributes += scattered_edges
 
         # scalar attribute to 1 by default
         node_attributes.array = node_attributes.array.at[:, 0].set(1.0)
-        edge_attributes.array = edge_attributes.array.at[:, 0].set(1.0)
 
         return SteerableGraphsTuple(
             graph=jraph.GraphsTuple(
@@ -159,7 +172,7 @@ def graph_transform_builder(
         node_features.append(flat_velocity_sequence)
 
         # TODO: for now just disable it completely if any periodicity applies
-        if not np.array(pbc).any(): 
+        if not np.array(pbc).any():
             # Normalized clipped distances to lower and upper boundaries.
             # boundaries are an array of shape [num_dimensions, 2], where the
             # second axis, provides the lower/upper boundaries.
@@ -280,7 +293,7 @@ def setup_builder(args: argparse.Namespace):
         displacement_fn, shift_fn = space.periodic(side=args.box)
     else:
         displacement_fn, shift_fn = space.free()
-        
+
     displacement_fn_set = vmap(displacement_fn, in_axes=(0, 0))
 
     neighbor_fn = partition.neighbor_list(
@@ -303,7 +316,7 @@ def setup_builder(args: argparse.Namespace):
 
     def _compute_target(pos_input, pos_target):
         # displacement(r1, r2) = r1-r2  # without PBC
-        
+
         current_velocity = displacement_fn_set(pos_input[:, -1], pos_input[:, -2])
         next_velocity = displacement_fn_set(pos_target, pos_input[:, -1])
         current_acceleration = next_velocity - current_velocity
@@ -650,13 +663,16 @@ def eval_rollout(
 
 class Linear(hk.Module):
     """Model defining linear relation between input nodes and targets.
-    
+
     Used as unit test case.
     """
+
     def __init__(self, dim_out):
         super().__init__()
         self.mlp = hk.nets.MLP([dim_out], activate_final=False, name="MLP")
-    
-    def __call__(self, input: Tuple[jraph.GraphsTuple, np.ndarray]) -> jraph.GraphsTuple:
-        graph, _ = input
+
+    def __call__(
+        self, input_: Tuple[jraph.GraphsTuple, np.ndarray]
+    ) -> jraph.GraphsTuple:
+        graph, _ = input_
         return jax.vmap(self.mlp)(graph.nodes)
