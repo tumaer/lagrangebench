@@ -85,7 +85,7 @@ def steerable_graph_transform_builder(
                     node_attributes += scattered_edges
 
         # scalar attribute to 1 by default
-        node_attributes.array = node_attributes.array.at[:, 0].set(1.0)
+        node_attributes.array = node_attributes.array.at[..., 0].set(1.0)
 
         return SteerableGraphsTuple(
             graph=jraph.GraphsTuple(

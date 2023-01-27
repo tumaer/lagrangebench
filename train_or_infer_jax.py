@@ -359,7 +359,7 @@ if __name__ == "__main__":
     elif args.dataset_name in ["WaterDrop", "WaterDropSample"]:
         particle_dimension = 2
         # node_in = 30, edge_in = 3
-    elif args.dataset_name == "TGV_debug":
+    elif "tgv" in args.dataset_name or "TGV" in args.dataset_name:
         particle_dimension = 3
 
     # preprocessing allocate and update functions in the spirit of jax-md's
