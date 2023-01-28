@@ -12,15 +12,13 @@ import jax.numpy as jnp
 import jraph
 import numpy as np
 import optax
-from e3nn_jax import Irreps
 from jax import vmap
-from segnn_jax import SEGNN, weight_balanced_irreps
 from torch.utils.data import DataLoader
 
 import wandb
 from gns_jax.data import H5Dataset, numpy_collate
-from gns_jax.gns import GNS
 from gns_jax.utils import (
+    Linear,
     NodeType,
     broadcast_from_batch,
     broadcast_to_batch,
@@ -31,8 +29,6 @@ from gns_jax.utils import (
     save_haiku,
     setup_builder,
 )
-from segnn_experiments.asegnn import AttentionSEGNN
-from segnn_experiments.rsegnn import RSEGNN
 from segnn_experiments.utils import steerable_graph_transform_builder
 
 
@@ -53,15 +49,15 @@ def train(
     i = 0
     while os.path.isdir(os.path.join(args.ckp_dir, run_prefix + str(i))):
         i += 1
-    args.run_name = run_prefix + str(i)
-    ckp_dir = os.path.join(args.ckp_dir, args.run_name)
+    run_name = run_prefix + str(i)
+    ckp_dir = os.path.join(args.ckp_dir, run_name)
     os.makedirs(ckp_dir, exist_ok=True)
 
     if args.wandb:
         wandb.init(
             project="segnn",
             entity="segnn-sph",
-            name=args.run_name,
+            name=run_name,
             config=args,
             save_code=True,
         )
@@ -74,7 +70,7 @@ def train(
         decay_rate=args.lr_decay_rate,
         end_value=args.lr_final,
     )
-    opt_init, opt_update = optax.adam(learning_rate=lr_scheduler)
+    opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
     # continue training from checkpoint or initialize optimizer state
     if args.model_dir:
         _, _, opt_state, _ = load_haiku(args.model_dir)
@@ -223,7 +219,7 @@ def infer(
     model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
 ):
     model_apply = jax.jit(model.apply)
-    eval_loss, _ = eval_rollout(  # TODO: add saving loss and further stats
+    eval_loss, _ = eval_rollout(
         setup=setup,
         model_apply=model_apply,
         params=params,
@@ -245,8 +241,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
-        default="gns",
-        choices=["gns", "segnn", "segnn_rewind", "segnn_attention"],
+        choices=["gns", "segnn", "segnn_attention", "segnn_rewind", "lin"],
     )
     parser.add_argument("--mode", type=str, default="train", choices=["train", "infer"])
     parser.add_argument("--step_max", type=int, default=2e7)
@@ -273,8 +268,8 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
 
     # segnn arguments
-    parser.add_argument("--lmax_attributes", type=int, default=1)
-    parser.add_argument("--lmax_hidden", type=int, default=1)
+    parser.add_argument("--lmax-attributes", type=int, default=1)
+    parser.add_argument("--lmax-hidden", type=int, default=1)
     parser.add_argument(
         "--norm",
         type=str,
@@ -378,6 +373,8 @@ if __name__ == "__main__":
     key, subkey = jax.random.split(key, 2)
 
     if args.model == "gns":
+        from gns_jax.gns import GNS
+
         model = lambda x: GNS(
             particle_dimension=particle_dimension,
             latent_size=args.latent_dim,
@@ -387,7 +384,13 @@ if __name__ == "__main__":
             particle_type_embedding_size=16,
         )(x)
         graph_postprocess = None
-    else:
+    elif args.model == "lin":
+        model = lambda x: Linear(dim_out=3)(x)
+        graph_postprocess = None
+    elif "segnn" in args.model:
+        from e3nn_jax import Irreps
+        from segnn_jax import SEGNN, weight_balanced_irreps
+
         if args.noise_std > 0:
             warnings.warn("Equivariant models don't work well with noise.")
 
@@ -407,9 +410,11 @@ if __name__ == "__main__":
                 blocks_per_layer=2,
                 norm=args.norm,
             )(x)
-        if args.model == "segnn_rewind":
+        elif args.model == "segnn_rewind":
+            from segnn_experiments.rsegnn import RSEGNN
+
             assert (
-                args.num_mp_steps == args.input_seq_length
+                args.num_mp_steps == args.input_seq_length - 1
             ), "The number of layers must be the same size of the history"
             assert (
                 args.velocity_aggregate == "all"
@@ -423,7 +428,9 @@ if __name__ == "__main__":
                 blocks_per_layer=2,
                 norm=args.norm,
             )(x)
-        if args.model == "segnn_attention":
+        elif args.model == "segnn_attention":
+            from segnn_experiments.asegnn import AttentionSEGNN
+
             assert (
                 args.velocity_aggregate == "all"
             ), "SEGNN with attention is supposed to have all historical velocities"
@@ -438,14 +445,23 @@ if __name__ == "__main__":
                 right_attribute=args.right_attribute,
                 attribute_embedding_blocks=args.attention_blocks,
             )(x)
+
+        pbc = args.metadata["periodic_boundary_conditions"]
+
+        if np.array(pbc).any():
+            pbc_irrep = ""
+        else:
+            pbc_irrep = "+ 2x1o "
+
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
-                f"{args.input_seq_length - 1}x1o + 2x1o + {NodeType.SIZE}x0e"
+                f"{args.input_seq_length - 1}x1o {pbc_irrep} + {NodeType.SIZE}x0e"
             ),  # Hx1o vel, 2x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
             lmax_attributes=args.lmax_attributes,
             velocity_aggregate=args.velocity_aggregate,
             attribute_mode=args.attribute_mode,
+            pbc=pbc,
         )
 
     # transform core simulator outputting accelerations.

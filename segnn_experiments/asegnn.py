@@ -46,7 +46,7 @@ def HistoryEmbeddingBlock(
         y=right,
         output_irreps=embed_irreps,
         biases=False,
-        name=f"{where}_attribute_embedding_{name}_final",
+        name=f"{where}_attribute_embedding_{name}",
     )
 
 

@@ -1,10 +1,11 @@
-from typing import Callable
+from typing import Callable, Tuple
 
 import e3nn_jax as e3nn
 import jax
 import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
+import numpy as np
 from segnn_jax import SteerableGraphsTuple
 
 from gns_jax.utils import NodeType
@@ -14,6 +15,7 @@ def steerable_graph_transform_builder(
     node_features_irreps: e3nn.Irreps,
     edge_features_irreps: e3nn.Irreps,
     lmax_attributes: int,
+    pbc: Tuple[bool, bool, bool],
     velocity_aggregate: str = "avg",
     attribute_mode: str = "add",
 ) -> Callable:
@@ -26,14 +28,20 @@ def steerable_graph_transform_builder(
     assert velocity_aggregate in ["avg", "sum", "last", "all"]
     assert attribute_mode in ["velocity", "add", "concat"]
 
+    # TODO: for now only 1) all directions periodic or 2) none of them
+    if np.array(pbc).any():  # if PBC, no boundary forces
+        num_boundary_entries = 0
+    else:
+        num_boundary_entries = 6
+
     def graph_transform(
         graph: jraph.GraphsTuple,
         particle_type: jnp.ndarray,
     ) -> SteerableGraphsTuple:
         # remove the last two bounary displacement vectors
-        n_vels = int((graph.nodes.shape[1]) / 3) - 2
+        n_vels = (graph.nodes.shape[1] - num_boundary_entries) // 3
         traj = jnp.reshape(
-            graph.nodes[..., : -(3 * 2)],
+            graph.nodes[..., : 3 * n_vels],
             (graph.nodes.shape[0], n_vels, 3),
         )
 
