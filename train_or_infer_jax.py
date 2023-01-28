@@ -70,7 +70,7 @@ def train(
         decay_rate=args.lr_decay_rate,
         end_value=args.lr_final,
     )
-    opt_init, opt_update = optax.adam(learning_rate=lr_scheduler)
+    opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler,  weight_decay=1e-8)
     # continue training from checkpoint or initialize optimizer state
     if args.model_dir:
         _, _, opt_state, _ = load_haiku(args.model_dir)
