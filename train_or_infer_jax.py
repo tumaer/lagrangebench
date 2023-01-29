@@ -12,10 +12,10 @@ import jax.numpy as jnp
 import jraph
 import numpy as np
 import optax
-import wandb
 from jax import vmap
 from torch.utils.data import DataLoader
 
+import wandb
 from gns_jax.data import H5Dataset, numpy_collate
 from gns_jax.utils import (
     Linear,
@@ -70,7 +70,7 @@ def train(
         decay_rate=args.lr_decay_rate,
         end_value=args.lr_final,
     )
-    opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler,  weight_decay=1e-8)
+    opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
     # continue training from checkpoint or initialize optimizer state
     if args.model_dir:
         _, _, opt_state, _ = load_haiku(args.model_dir)

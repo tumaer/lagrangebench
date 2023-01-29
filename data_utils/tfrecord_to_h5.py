@@ -5,14 +5,14 @@ import os
 
 import h5py
 import numpy as np
-from data_utils import reading_utils
-
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3' 
-# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-# os.environ["CUDA_VISIBLE_DEVICES"] = ""
-
 import tensorflow.compat.v1 as tf
 import tensorflow_datasets as tfds
+
+from data_utils import reading_utils
+
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+# os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+# os.environ["CUDA_VISIBLE_DEVICES"] = ""
 
 
 def extract_one_trajectory_from_tfrecord_and_write_to_tfrecord(args):
@@ -157,9 +157,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--task",
-        required=True,
-        choices=["tfrecord2h5", "stats", "extract1"]
+        "--task", required=True, choices=["tfrecord2h5", "stats", "extract1"]
     )
     parser.add_argument(
         "--dataset_path",
