@@ -249,6 +249,7 @@ if __name__ == "__main__":
     parser.add_argument("--noise_std", type=float, default=6.7e-4)
     parser.add_argument("--input_seq_length", type=int, default=6)
     parser.add_argument("--num_mp_steps", type=int, default=10)
+    parser.add_argument("--num_mlp_layers", type=int, default=2)
     parser.add_argument("--latent_dim", type=int, default=128)
     parser.add_argument("--eval_num_trajs", type=int, default=5)
 
@@ -372,7 +373,7 @@ if __name__ == "__main__":
         model = lambda x: GNS(
             particle_dimension=particle_dimension,
             latent_size=args.latent_dim,
-            num_mlp_layers=2,
+            num_mlp_layers=args.num_mlp_layers,
             num_message_passing_steps=args.num_mp_steps,
             num_particle_types=NodeType.SIZE,
             particle_type_embedding_size=16,
@@ -400,7 +401,7 @@ if __name__ == "__main__":
             output_irreps=Irreps("1x1o"),
             num_layers=args.num_mp_steps,
             task="node",
-            blocks_per_layer=2,
+            blocks_per_layer=args.num_mlp_layers,
             norm=args.norm,
         )(x)
         pbc = args.metadata["periodic_boundary_conditions"]
