@@ -60,6 +60,7 @@ disable=C0114, # module docstring
         W0621, # redifining from outer scope
         C0103, # bad function names
         C0412, # non-grouped imports
+        W0102, # default being a list
         abstract-method,
         apply-builtin,
         arguments-differ,

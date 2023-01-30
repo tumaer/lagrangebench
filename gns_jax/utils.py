@@ -42,7 +42,10 @@ def graph_transform_builder(
 
         n_total_points = pos_input.shape[0]
         most_recent_position = pos_input[:, -1]  # (n_nodes, 2)
-        velocity_sequence = pos_input[:, 1:] - pos_input[:, :-1]
+        displacement_fn_vmap = vmap(displacement_fn, in_axes=(0, 0))
+        displacement_fn_dvmap = vmap(displacement_fn_vmap, in_axes=(0, 0))
+        # pos_input.shape = (n_nodes, n_timesteps, dim)
+        velocity_sequence = displacement_fn_dvmap(pos_input[:, 1:], pos_input[:, :-1])
         # senders and receivers are integers of shape (E,)
         senders, receivers = nbrs.idx
         node_features = []
@@ -139,15 +142,19 @@ def _get_random_walk_noise_for_pos_sequence(
     return key, position_sequence_noise
 
 
-def _add_gns_noise(key, pos_input, particle_type, pos_target, noise_std):
+def _add_gns_noise(key, pos_input, particle_type, pos_target, noise_std, shift_fn):
     # add noise to the input and adjust the target accordingly
     key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
         key, pos_input, noise_std_last_step=noise_std
     )
     kinematic_mask = get_kinematic_mask(particle_type)
     pos_input_noise = jnp.where(kinematic_mask[:, None, None], 0.0, pos_input_noise)
-    pos_input_noisy = pos_input + pos_input_noise
-    pos_target_adjusted = pos_target + pos_input_noise[:, -1]
+
+    shift_vmap = vmap(shift_fn, in_axes=(0, 0))
+    shift_dvmap = vmap(shift_vmap, in_axes=(0, 0))
+    pos_input_noisy = shift_dvmap(pos_input, pos_input_noise)
+    pos_target_adjusted = shift_vmap(pos_target, pos_input_noise[:, -1])
+
     return key, pos_input_noisy, pos_target_adjusted
 
 
@@ -225,7 +232,7 @@ def setup_builder(args: argparse.Namespace):
             key, noise_std = kwargs["key"], kwargs["noise_std"]
             if pos_input.shape[1] > 1:
                 key, pos_input, pos_target = _add_gns_noise(
-                    key, pos_input, particle_type, pos_target, noise_std
+                    key, pos_input, particle_type, pos_target, noise_std, shift_fn
                 )
         elif mode == "eval":
             pos_input, particle_type = sample
