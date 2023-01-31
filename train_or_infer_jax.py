@@ -3,7 +3,6 @@
 import argparse
 import json
 import os
-import warnings
 from typing import Tuple
 
 import haiku as hk
@@ -98,8 +97,17 @@ def train(
 
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
         num_non_kinematic = non_kinematic_mask.sum()
-        # MSE loss
-        loss = ((pred - target) ** 2).sum(axis=-1)
+        if args.loss == "mae":
+            loss = jnp.abs(pred - target)
+        elif args.loss == "mse":
+            loss = (pred - target) ** 2
+        elif args.loss == "huber":
+            loss = jnp.where(
+                jnp.abs(pred - target) < 1.0,
+                0.5 * (pred - target) ** 2,
+                jnp.abs(pred - target) - 0.5,
+            )
+        loss = loss.sum(axis=-1)
         loss = jnp.where(non_kinematic_mask, loss, 0)
         loss = loss.sum() / num_non_kinematic
 
@@ -268,6 +276,9 @@ if __name__ == "__main__":
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--magnitudes", action="store_true")
+    parser.add_argument(
+        "--loss", type=str, default="mse", choices=["mse", "mae", "huber"]
+    )
 
     # segnn arguments
     parser.add_argument("--lmax-attributes", type=int, default=1)
@@ -392,9 +403,6 @@ if __name__ == "__main__":
     elif "segnn" in args.model:
         from e3nn_jax import Irreps
         from segnn_jax import SEGNN, weight_balanced_irreps
-
-        if args.noise_std > 0:
-            warnings.warn("Equivariant models don't work well with noise.")
 
         hidden_irreps = weight_balanced_irreps(
             scalar_units=args.latent_dim,
