@@ -2,6 +2,7 @@ import argparse
 import enum
 import os
 import pickle
+import time
 from typing import Callable, Tuple  # Dict, List, Optional, Union
 
 import cloudpickle
@@ -11,6 +12,7 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
+import matplotlib.pyplot as plt
 import numpy as np
 import pyvista
 from jax import lax, vmap
@@ -174,6 +176,19 @@ def graph_transform_builder(
         )
         node_features.append(flat_velocity_sequence)
 
+        # append the magnitude of the velocity of each particle to the node features
+        velocity_magnitude_sequence = jnp.linalg.norm(
+            normalized_velocity_sequence, axis=-1
+        )
+        node_features.append(velocity_magnitude_sequence)
+        # node features shape = (n_nodes, (input_sequence_length - 1) * (dim + 1))
+
+        # # append the average velocity over all particles to the node features
+        # # we hope that this feature can be used like layer normalization
+        # vel_mag_seq_mean = velocity_magnitude_sequence.mean(axis=0, keepdims=True)
+        # vel_mag_seq_mean_tile = jnp.tile(vel_mag_seq_mean, (n_total_points, 1))
+        # node_features.append(vel_mag_seq_mean_tile)
+
         # TODO: for now just disable it completely if any periodicity applies
         if not np.array(pbc).any():
             # Normalized clipped distances to lower and upper boundaries.
@@ -280,6 +295,7 @@ class SetupFn:
     allocate_eval: Callable = dataclasses.static_field()
     preprocess_eval: Callable = dataclasses.static_field()
     integrate: Callable = dataclasses.static_field()
+    displacement: Callable = dataclasses.static_field()
 
 
 def setup_builder(args: argparse.Namespace):
@@ -406,7 +422,12 @@ def setup_builder(args: argparse.Namespace):
         return new_position
 
     return SetupFn(
-        allocate_fn, preprocess_fn, allocate_eval_fn, preprocess_eval_fn, integrate_fn
+        allocate_fn,
+        preprocess_fn,
+        allocate_eval_fn,
+        preprocess_eval_fn,
+        integrate_fn,
+        displacement_fn,
     )
 
 
@@ -587,7 +608,14 @@ def eval_single_rollout(
 
     # (n_nodes, traj_len - t_window, dim) -> (traj_len - t_window, n_nodes, dim)
     ground_truth_positions = ground_truth_positions.transpose(1, 0, 2)
-    loss = ((predictions - ground_truth_positions) ** 2).mean()
+
+    displacement_vmap = vmap(setup.displacement, in_axes=(0, 0))
+    displacement_fn_dvmap = vmap(displacement_vmap, in_axes=(0, 0))
+    # pos_input.shape = (n_nodes, n_timesteps, dim)
+    displacement_tensor = displacement_fn_dvmap(predictions, ground_truth_positions)
+
+    loss = (displacement_tensor**2).mean((1, 2))
+    # the loss is now a vector of length n_timesteps - t_window
 
     return predictions, loss, neighbors
 
@@ -608,6 +636,7 @@ def eval_rollout(
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
     valid_loss = []
+    plt.figure()
     for i, traj_i in enumerate(loader_valid):
         # remove batch dimension
         assert traj_i[0].shape[0] == 1, "Batch dimension should be 1"
@@ -624,7 +653,10 @@ def eval_rollout(
             input_sequence_length=input_sequence_length,
             graph_postprocess=graph_postprocess,
         )
-        valid_loss.append(loss)
+
+        plt.plot(loss, label=f"rollout loss {i}")
+
+        valid_loss.append(loss.mean())
 
         if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
@@ -662,6 +694,12 @@ def eval_rollout(
 
         if (i + 1) == num_trajs:
             break
+
+    plt.legend()
+    plt.xlabel("time step")
+    plt.ylabel("roullout loss")
+    t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
+    plt.savefig(f"datasets/rollout_loss_{t}.png")
     return np.mean(valid_loss), neighbors
 
 
