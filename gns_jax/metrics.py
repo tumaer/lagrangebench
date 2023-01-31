@@ -4,8 +4,6 @@ from typing import Callable, Dict, List
 
 import jax
 import jax.numpy as jnp
-from ot import emd2
-from ot.bregman import sinkhorn2
 
 
 class MetricsComputer:
@@ -67,6 +65,8 @@ class MetricsComputer:
 
     @partial(jax.jit, static_argnums=(0,))
     def emd(self, pred: jnp.ndarray, target: jnp.ndarray):
+        from ot import emd2
+
         loss_matrix = self._distance_matrix(pred, target)
         # weights are uniform
         a, b = (
@@ -82,6 +82,8 @@ class MetricsComputer:
 
     @partial(jax.jit, static_argnums=(0,))
     def _custom_empirical_sinkorn2(self, pred: jnp.ndarray, target: jnp.ndarray):
+        from ot.bregman import sinkhorn2
+
         # weights are uniform
         a, b = (
             jnp.ones((pred.shape[0],)) / pred.shape[0],
