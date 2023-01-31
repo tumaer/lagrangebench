@@ -447,15 +447,16 @@ if __name__ == "__main__":
                 right_attribute=args.right_attribute,
                 attribute_embedding_blocks=args.attention_blocks,
             )(x)
+
         pbc = args.metadata["periodic_boundary_conditions"]
         if np.array(pbc).any():
             pbc_irrep = ""
         else:
             pbc_irrep = "+ 2x1o"
         if args.magnitudes:
-            magnitude_irrep = ""
-        else:
             magnitude_irrep = f"+ {args.input_seq_length - 1}x0e"
+        else:
+            magnitude_irrep = ""
 
         args.node_feature_irreps = (
             f"{args.input_seq_length - 1}x1o "
