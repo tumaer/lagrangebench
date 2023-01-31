@@ -267,6 +267,7 @@ if __name__ == "__main__":
     parser.add_argument("--rollout_dir", type=str, default=None)
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--magnitudes", action="store_true")
 
     # segnn arguments
     parser.add_argument("--lmax-attributes", type=int, default=1)
@@ -446,18 +447,27 @@ if __name__ == "__main__":
                 right_attribute=args.right_attribute,
                 attribute_embedding_blocks=args.attention_blocks,
             )(x)
-
         pbc = args.metadata["periodic_boundary_conditions"]
-
         if np.array(pbc).any():
             pbc_irrep = ""
         else:
             pbc_irrep = "+ 2x1o"
+        if args.magnitudes:
+            magnitude_irrep = ""
+        else:
+            magnitude_irrep = f"+ {args.input_seq_length - 1}x0e"
+
+        args.node_feature_irreps = (
+            f"{args.input_seq_length - 1}x1o "
+            f"{magnitude_irrep} "
+            f"{pbc_irrep} + "
+            f"{NodeType.SIZE}x0e"
+        )
 
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
-                f"{args.input_seq_length - 1}x1o {pbc_irrep} + {NodeType.SIZE}x0e"
-            ),  # Hx1o vel, 2x1o boundary, 9x0e type
+                args.node_feature_irreps
+            ),  # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
             lmax_attributes=args.lmax_attributes,
             velocity_aggregate=args.velocity_aggregate,
