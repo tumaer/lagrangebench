@@ -2,7 +2,7 @@ import argparse
 import enum
 import os
 import pickle
-from typing import Callable, Tuple  # Dict, List, Optional, Union
+from typing import Callable, Dict, Tuple  # List, Optional, Union
 
 import cloudpickle
 import e3nn_jax as e3nn
@@ -16,6 +16,8 @@ import pyvista
 from jax import lax, vmap
 from jax_md import dataclasses, partition, space
 from segnn_jax import SteerableGraphsTuple
+
+from gns_jax.metrics import MetricsComputer
 
 # Physical setup for the GNS model.
 
@@ -280,6 +282,7 @@ class SetupFn:
     allocate_eval: Callable = dataclasses.static_field()
     preprocess_eval: Callable = dataclasses.static_field()
     integrate: Callable = dataclasses.static_field()
+    metrics_computer: Callable = dataclasses.static_field()
 
 
 def setup_builder(args: argparse.Namespace):
@@ -405,8 +408,16 @@ def setup_builder(args: argparse.Namespace):
         new_position = shift_fn(most_recent_position, new_velocity)
         return new_position
 
+    def metrics_computer(predictions, ground_truth):
+        return MetricsComputer(args.metrics, displacement_fn)(predictions, ground_truth)
+
     return SetupFn(
-        allocate_fn, preprocess_fn, allocate_eval_fn, preprocess_eval_fn, integrate_fn
+        allocate_fn,
+        preprocess_fn,
+        allocate_eval_fn,
+        preprocess_eval_fn,
+        integrate_fn,
+        metrics_computer,
     )
 
 
@@ -536,7 +547,7 @@ def eval_single_rollout(
     num_rollout_steps,
     input_sequence_length,
     graph_postprocess=None,
-):
+) -> Dict:
     pos_input, particle_type = traj_i
 
     # (n_nodes, t_window, dim)
@@ -587,9 +598,12 @@ def eval_single_rollout(
 
     # (n_nodes, traj_len - t_window, dim) -> (traj_len - t_window, n_nodes, dim)
     ground_truth_positions = ground_truth_positions.transpose(1, 0, 2)
-    loss = ((predictions - ground_truth_positions) ** 2).mean()
 
-    return predictions, loss, neighbors
+    return (
+        predictions,
+        setup.metrics_computer(predictions, ground_truth_positions),
+        neighbors,
+    )
 
 
 def eval_rollout(
@@ -607,13 +621,13 @@ def eval_rollout(
 ):
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
-    valid_loss = []
+    valid_metrics = {}
     for i, traj_i in enumerate(loader_valid):
         # remove batch dimension
         assert traj_i[0].shape[0] == 1, "Batch dimension should be 1"
         traj_i = broadcast_from_batch(traj_i, index=0)  # (nodes, t, dim)
 
-        example_rollout, loss, neighbors = eval_single_rollout(
+        example_rollout, metrics, neighbors = eval_single_rollout(
             setup=setup,
             model_apply=model_apply,
             params=params,
@@ -624,7 +638,9 @@ def eval_rollout(
             input_sequence_length=input_sequence_length,
             graph_postprocess=graph_postprocess,
         )
-        valid_loss.append(loss)
+
+        for k, v in metrics.items():
+            valid_metrics.setdefault(k, []).append(v)
 
         if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
@@ -662,7 +678,23 @@ def eval_rollout(
 
         if (i + 1) == num_trajs:
             break
-    return np.mean(valid_loss), neighbors
+    return {k: jnp.array(v) for k, v in valid_metrics.items()}, neighbors
+
+
+def metrics_to_screen(metrics: Dict) -> Dict[str, float]:
+    """Averages the metrics over the rollouts."""
+    small_metrics = {}
+    for k, v in metrics.items():
+        if k in ["mse", "mae"]:
+            k = "loss"
+        small_metrics[f"val/{k}"] = float(jnp.mean(v))
+    return small_metrics
+
+
+# def metrics_to_plots(metrics: Dict):
+#     """Creates rollout plots from metrics. Averages over trajectories."""
+#     # TODO
+#     pass
 
 
 # Unit Test utils

@@ -17,6 +17,7 @@ from torch.utils.data import DataLoader
 
 import wandb
 from gns_jax.data import H5Dataset, numpy_collate
+from gns_jax.metrics import MetricsComputer
 from gns_jax.utils import (
     Linear,
     NodeType,
@@ -26,6 +27,7 @@ from gns_jax.utils import (
     get_kinematic_mask,
     get_num_params,
     load_haiku,
+    metrics_to_screen,
     save_haiku,
     setup_builder,
     steerable_graph_transform_builder,
@@ -186,7 +188,7 @@ def train(
 
             if step % args.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
-                eval_loss, nbrs = eval_rollout(
+                eval_metrics, nbrs = eval_rollout(
                     setup=setup,
                     model_apply=model_apply,
                     params=params,
@@ -206,9 +208,9 @@ def train(
                 # neighbors_batch = broadcast_to_batch(nbrs, args.batch_size)
 
                 if args.wandb:
-                    wandb.log({"val/loss": eval_loss}, step)
+                    wandb.log(metrics_to_screen(eval_metrics), step)
                 else:
-                    print(f"val/loss: {eval_loss}")
+                    print(metrics_to_screen(eval_metrics))
 
             step += 1
             if step == args.step_max:
@@ -219,7 +221,7 @@ def infer(
     model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
 ):
     model_apply = jax.jit(model.apply)
-    eval_loss, _ = eval_rollout(
+    eval_metrics, _ = eval_rollout(
         setup=setup,
         model_apply=model_apply,
         params=params,
@@ -232,7 +234,7 @@ def infer(
         is_write_vtk=args.write_vtk,
         graph_postprocess=graph_postprocess,
     )
-    print(f"Rollout loss = {eval_loss}")
+    print(metrics_to_screen(eval_metrics))
 
 
 if __name__ == "__main__":
@@ -263,6 +265,14 @@ if __name__ == "__main__":
     parser.add_argument("--rollout_dir", type=str, default=None)
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
+
+    # metrics
+    parser.add_argument(
+        "--metrics",
+        nargs="+",
+        default=["mse", "sinkhorn"],
+        choices=MetricsComputer.METRICS,
+    )
 
     # segnn arguments
     parser.add_argument("--lmax-attributes", type=int, default=1)
@@ -437,6 +447,9 @@ if __name__ == "__main__":
     # load model from checkpoint if provided
     if args.model_dir:
         params, state, _, args.step_start = load_haiku(args.model_dir)
+        assert (
+            get_num_params(params) == args.num_params
+        ), f"Model size mismatch. {get_num_params(params)} != {args.num_params}"
     else:
         args.step_start = 0
 
