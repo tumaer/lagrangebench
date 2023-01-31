@@ -3,7 +3,6 @@
 import argparse
 import json
 import os
-import warnings
 from typing import Tuple
 
 import haiku as hk
@@ -17,7 +16,7 @@ from torch.utils.data import DataLoader
 
 import wandb
 from gns_jax.data import H5Dataset, numpy_collate
-from gns_jax.metrics import MetricsComputer
+from gns_jax.metrics import BuildMetricsList
 from gns_jax.utils import (
     Linear,
     NodeType,
@@ -51,15 +50,15 @@ def train(
     i = 0
     while os.path.isdir(os.path.join(args.ckp_dir, run_prefix + str(i))):
         i += 1
-    run_name = run_prefix + str(i)
-    ckp_dir = os.path.join(args.ckp_dir, run_name)
+    args.run_name = run_prefix + str(i)
+    ckp_dir = os.path.join(args.ckp_dir, args.run_name)
     os.makedirs(ckp_dir, exist_ok=True)
 
     if args.wandb:
         wandb.init(
             project="segnn",
             entity="segnn-sph",
-            name=run_name,
+            name=args.run_name,
             config=args,
             save_code=True,
         )
@@ -200,6 +199,7 @@ def train(
                     rollout_dir=args.rollout_dir,
                     is_write_vtk=args.write_vtk,
                     graph_postprocess=graph_postprocess,
+                    run_name=args.run_name,
                 )
                 # In the beginning of training, the dynamics ae very random and
                 # we don't want to influence the training neighbors list by
@@ -220,6 +220,11 @@ def train(
 def infer(
     model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
 ):
+    run_name = (
+        args.model_dir.split("/")[-1]
+        if args.model_dir
+        else f"{args.model}_{args.dataset}"
+    )
     model_apply = jax.jit(model.apply)
     eval_metrics, _ = eval_rollout(
         setup=setup,
@@ -233,6 +238,7 @@ def infer(
         rollout_dir=args.rollout_dir,
         is_write_vtk=args.write_vtk,
         graph_postprocess=graph_postprocess,
+        run_name=run_name,
     )
     print(metrics_to_screen(eval_metrics))
 
@@ -265,13 +271,11 @@ if __name__ == "__main__":
     parser.add_argument("--rollout_dir", type=str, default=None)
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--magnitude", action="store_true")
 
     # metrics
     parser.add_argument(
-        "--metrics",
-        nargs="+",
-        default=["mse", "sinkhorn"],
-        choices=MetricsComputer.METRICS,
+        "--metrics", default=["mse", "sinkhorn", "emd"], action=BuildMetricsList
     )
 
     # segnn arguments
@@ -396,9 +400,6 @@ if __name__ == "__main__":
         from e3nn_jax import Irreps
         from segnn_jax import SEGNN, weight_balanced_irreps
 
-        if args.noise_std > 0:
-            warnings.warn("Equivariant models don't work well with noise.")
-
         hidden_irreps = weight_balanced_irreps(
             scalar_units=args.latent_dim,
             # attribute irreps
@@ -418,12 +419,23 @@ if __name__ == "__main__":
         if np.array(pbc).any():
             pbc_irrep = ""
         else:
-            pbc_irrep = "+ 2x1o "
+            pbc_irrep = "+ 2x1o"
+        if args.magnitudes:
+            magnitude_irrep = f"+ {args.input_seq_length - 1}x0e"
+        else:
+            magnitude_irrep = ""
+
+        args.node_feature_irreps = (
+            f"{args.input_seq_length - 1}x1o "
+            f"{magnitude_irrep} "
+            f"{pbc_irrep} + "
+            f"{NodeType.SIZE}x0e"
+        )
 
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
-                f"{args.input_seq_length - 1}x1o {pbc_irrep}+ {NodeType.SIZE}x0e"
-            ),  # Hx1o vel, 2x1o boundary, 9x0e type
+                args.node_feature_irreps
+            ),  # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
             lmax_attributes=args.lmax_attributes,
             velocity_aggregate=args.velocity_aggregate,
@@ -447,9 +459,10 @@ if __name__ == "__main__":
     # load model from checkpoint if provided
     if args.model_dir:
         params, state, _, args.step_start = load_haiku(args.model_dir)
-        assert (
-            get_num_params(params) == args.num_params
-        ), f"Model size mismatch. {get_num_params(params)} != {args.num_params}"
+        assert get_num_params(params) == args.num_params, (
+            "Model size mismatch. "
+            f"{args.num_params} (expected) vs {get_num_params(params)} (actual)."
+        )
     else:
         args.step_start = 0
 

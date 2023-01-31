@@ -150,6 +150,7 @@ def graph_transform_builder(
     connectivity_radius: float,
     displacement_fn: Callable,
     pbc: list[bool, bool, bool],
+    magnitudes: bool = False,
 ) -> Callable:
     """Convert raw coordinates to jraph GraphsTuple."""
 
@@ -178,18 +179,19 @@ def graph_transform_builder(
         )
         node_features.append(flat_velocity_sequence)
 
-        # append the magnitude of the velocity of each particle to the node features
-        velocity_magnitude_sequence = jnp.linalg.norm(
-            normalized_velocity_sequence, axis=-1
-        )
-        node_features.append(velocity_magnitude_sequence)
-        # node features shape = (n_nodes, (input_sequence_length - 1) * (dim + 1))
+        if magnitudes:
+            # append the magnitude of the velocity of each particle to the node features
+            velocity_magnitude_sequence = jnp.linalg.norm(
+                normalized_velocity_sequence, axis=-1
+            )
+            node_features.append(velocity_magnitude_sequence)
+            # node features shape = (n_nodes, (input_sequence_length - 1) * (dim + 1))
 
-        # # append the average velocity over all particles to the node features
-        # # we hope that this feature can be used like layer normalization
-        # vel_mag_seq_mean = velocity_magnitude_sequence.mean(axis=0, keepdims=True)
-        # vel_mag_seq_mean_tile = jnp.tile(vel_mag_seq_mean, (n_total_points, 1))
-        # node_features.append(vel_mag_seq_mean_tile)
+            # # append the average velocity over all particles to the node features
+            # # we hope that this feature can be used like layer normalization
+            # vel_mag_seq_mean = velocity_magnitude_sequence.mean(axis=0, keepdims=True)
+            # vel_mag_seq_mean_tile = jnp.tile(vel_mag_seq_mean, (n_total_points, 1))
+            # node_features.append(vel_mag_seq_mean_tile)
 
         # TODO: for now just disable it completely if any periodicity applies
         if not np.array(pbc).any():
@@ -338,6 +340,7 @@ def setup_builder(args: argparse.Namespace):
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=args.metadata["periodic_boundary_conditions"],
+        magnitudes=args.magnitudes,
     )
 
     def _compute_target(pos_input, pos_target):
@@ -635,6 +638,7 @@ def eval_rollout(
     rollout_dir,
     is_write_vtk=False,
     graph_postprocess=None,
+    run_name=None,
 ):
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
@@ -702,10 +706,14 @@ def eval_rollout(
 
         if (i + 1) == num_trajs:
             break
+
+    # TODO proper plotting
     plt.legend()
     plt.xlabel("time step")
     plt.ylabel("roullout loss")
     t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
+    if run_name:
+        t = f"{run_name}_{t}"
     plt.savefig(f"datasets/rollout_loss_{t}.png")
     return {k: jnp.array(v) for k, v in valid_metrics.items()}, neighbors
 

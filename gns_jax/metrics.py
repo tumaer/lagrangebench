@@ -1,3 +1,4 @@
+import argparse
 import warnings
 from functools import partial
 from typing import Callable, Dict, List
@@ -16,13 +17,13 @@ class MetricsComputer:
         self,
         active_metrics: List,
         dist: Callable,
-        divergence_step: int = 10,
+        stride: int = 10,
     ):
         assert all([hasattr(self, metric) for metric in active_metrics])
         self._active_metrics = active_metrics
         self._dist = dist
         self._dist_vmap = jax.vmap(dist, in_axes=(0, 0))
-        self._divergence_step = divergence_step
+        self._stride = stride
 
     def __call__(self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray) -> Dict:
         assert pred_rollout.shape[0] == target_rollout.shape[0]
@@ -41,19 +42,19 @@ class MetricsComputer:
                         lambda _, x: (None, metric_fn(*x)),
                         None,
                         (
-                            pred_rollout[0 : -1 : self._divergence_step],
-                            target_rollout[0 : -1 : self._divergence_step],
+                            pred_rollout[0 : -1 : self._stride],
+                            target_rollout[0 : -1 : self._stride],
                         ),
                     )
         return metrics
 
     @partial(jax.jit, static_argnums=(0,))
     def mse(self, pred: jnp.ndarray, target: jnp.ndarray):
-        return (self._dist_vmap(pred, target) ** 2).mean(1, 2)
+        return (self._dist_vmap(pred, target) ** 2).mean()
 
     @partial(jax.jit, static_argnums=(0,))
     def mae(self, pred: jnp.ndarray, target: jnp.ndarray):
-        return (jnp.abs(self._dist_vmap(pred, target))).mean(1, 2)
+        return (jnp.abs(self._dist_vmap(pred, target))).mean()
 
     @partial(jax.jit, static_argnums=(0,))
     def sinkhorn(self, pred: jnp.ndarray, target: jnp.ndarray):
@@ -112,3 +113,15 @@ class MetricsComputer:
         if not squared:
             dist = lambda a, b: jnp.sqrt(dist(a, b))
         return jnp.array(jax.vmap(lambda a: jax.vmap(lambda b: dist(a, b))(y))(x))
+
+
+class BuildMetricsList(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        _ = option_string
+        values = values.split(" ")
+        for value in values:
+            if value not in MetricsComputer.METRICS:
+                parser.error(
+                    f"Invalid choice: {value} (choose from 'red', 'green', 'blue')"
+                )
+        setattr(namespace, self.dest, values)
