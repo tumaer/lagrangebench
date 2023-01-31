@@ -51,11 +51,11 @@ class MetricsComputer:
 
     @partial(jax.jit, static_argnums=(0,))
     def mse(self, pred: jnp.ndarray, target: jnp.ndarray):
-        return jnp.mean(self._dist_vmap(pred, target) ** 2)
+        return (self._dist_vmap(pred, target) ** 2).mean(1, 2)
 
     @partial(jax.jit, static_argnums=(0,))
     def mae(self, pred: jnp.ndarray, target: jnp.ndarray):
-        return jnp.mean(jnp.abs(self._dist_vmap(pred, target)))
+        return (jnp.abs(self._dist_vmap(pred, target))).mean(1, 2)
 
     @partial(jax.jit, static_argnums=(0,))
     def sinkhorn(self, pred: jnp.ndarray, target: jnp.ndarray):
