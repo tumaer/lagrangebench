@@ -496,7 +496,7 @@ def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
             if metadata_ckp["loss"] < metadata_ckp_best["loss"]:
                 print(
                     f"Saving model to {ckp_dir} at step {metadata_ckp['step']}"
-                    f"with loss {metadata_ckp['loss']} (best so far)"
+                    f" with loss {metadata_ckp['loss']} (best so far)"
                 )
 
                 save_haiku(ckp_dir_best, params, state, opt_state, metadata_ckp)

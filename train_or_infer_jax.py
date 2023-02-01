@@ -183,10 +183,6 @@ def train(
                     step_str = str(step).zfill(step_digits)
                     print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
-            if step % args.save_steps == 0:
-                metadata_ckp = {"step": step, "loss": loss.item()}
-                save_haiku(ckp_dir, params, state, opt_state, metadata_ckp)
-
             if step % args.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
                 eval_metrics, nbrs = eval_rollout(
@@ -208,6 +204,14 @@ def train(
                 # this extreme case of the dynamics. Therefore, we only update
                 # the neighbors list inside of the eval_rollout function.
                 # neighbors_batch = broadcast_to_batch(nbrs, args.batch_size)
+
+                # TODO: is disabling the "save_step" argument a good idea?
+                # if step % args.save_steps == 0:
+                metadata_ckp = {
+                    "step": step,
+                    "loss": metrics_to_screen(eval_metrics)["val/loss"],
+                }
+                save_haiku(ckp_dir, params, state, opt_state, metadata_ckp)
 
                 if args.wandb:
                     wandb.log(metrics_to_screen(eval_metrics), step)

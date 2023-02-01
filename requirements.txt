@@ -16,8 +16,8 @@ jax-md==0.2.3
 jax[cuda11_cudnn82]
 matplotlib
 optax
-ot
 pandas
+POT
 pre-commit
 pyg-lib
 pyvista
