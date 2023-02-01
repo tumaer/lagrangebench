@@ -1,8 +1,10 @@
 import argparse
 import enum
+import json
 import os
 import pickle
 import time
+import warnings
 from typing import Callable, Dict, Tuple  # List, Optional, Union
 
 import cloudpickle
@@ -340,7 +342,7 @@ def setup_builder(args: argparse.Namespace):
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=args.metadata["periodic_boundary_conditions"],
-        magnitudes=args.magnitudes,
+        magnitudes=args.magnitude,
     )
 
     def _compute_target(pos_input, pos_target):
@@ -428,7 +430,9 @@ def setup_builder(args: argparse.Namespace):
         return new_position
 
     def metrics_computer(predictions, ground_truth):
-        return MetricsComputer(args.metrics, displacement_fn)(predictions, ground_truth)
+        return MetricsComputer(args.metrics, displacement_fn, args.metadata)(
+            predictions, ground_truth
+        )
 
     return SetupFn(
         allocate_fn,
@@ -459,28 +463,45 @@ def broadcast_from_batch(batch, index: int):
 # Utilities for saving and loading Haiku models
 
 
-def save_pytree(ckpt_dir: str, pytree_obj, name) -> None:
-    with open(os.path.join(ckpt_dir, f"{name}_array.npy"), "wb") as f:
+def save_pytree(ckp_dir: str, pytree_obj, name) -> None:
+    with open(os.path.join(ckp_dir, f"{name}_array.npy"), "wb") as f:
         for x in jax.tree_leaves(pytree_obj):
             np.save(f, x, allow_pickle=False)
 
     tree_struct = jax.tree_map(lambda t: 0, pytree_obj)
-    with open(os.path.join(ckpt_dir, f"{name}_tree.pkl"), "wb") as f:
+    with open(os.path.join(ckp_dir, f"{name}_tree.pkl"), "wb") as f:
         pickle.dump(tree_struct, f)
 
 
-def save_haiku(ckpt_dir: str, params, state, opt_state, step) -> None:
+def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
     """https://github.com/deepmind/dm-haiku/issues/18"""
 
-    print("Saving model to", ckpt_dir, "at step", step)
+    save_pytree(ckp_dir, params, "params")
+    save_pytree(ckp_dir, state, "state")
 
-    save_pytree(ckpt_dir, params, "params")
-    save_pytree(ckpt_dir, state, "state")
-
-    with open(os.path.join(ckpt_dir, "opt_state.pkl"), "wb") as f:
+    with open(os.path.join(ckp_dir, "opt_state.pkl"), "wb") as f:
         cloudpickle.dump(opt_state, f)
-    with open(os.path.join(ckpt_dir, "step.txt"), "w") as f:
-        f.write(str(step))
+    with open(os.path.join(ckp_dir, "metadata_ckp.json"), "w") as f:
+        json.dump(metadata_ckp, f)
+
+    if "best" not in ckp_dir:
+        ckp_dir_best = os.path.join(ckp_dir, "best")
+        metadata_best_path = os.path.join(ckp_dir, "best", "metadata_ckp.json")
+
+        if os.path.exists(metadata_best_path):  # all except first step
+            with open(metadata_best_path, "r") as fp:
+                metadata_ckp_best = json.loads(fp.read())
+
+            # if loss is better than best previous loss, save to best model directory
+            if metadata_ckp["loss"] < metadata_ckp_best["loss"]:
+                print(
+                    f"Saving model to {ckp_dir} at step {metadata_ckp['step']}"
+                    f"with loss {metadata_ckp['loss']} (best so far)"
+                )
+
+                save_haiku(ckp_dir_best, params, state, opt_state, metadata_ckp)
+        else:  # first step
+            save_haiku(ckp_dir_best, params, state, opt_state, metadata_ckp)
 
 
 def load_pytree(model_dir: str, name):
@@ -507,10 +528,10 @@ def load_haiku(model_dir: str):
     with open(os.path.join(model_dir, "opt_state.pkl"), "rb") as f:
         opt_state = cloudpickle.load(f)
 
-    with open(os.path.join(model_dir, "step.txt"), "r") as f:
-        step = int(f.read())
+    with open(os.path.join(model_dir, "metadata_ckp.json"), "r") as fp:
+        metadata_ckp = json.loads(fp.read())
 
-    return params, state, opt_state, step
+    return params, state, opt_state, metadata_ckp["step"]
 
 
 def get_num_params(params):
@@ -567,6 +588,7 @@ def eval_single_rollout(
     num_rollout_steps,
     input_sequence_length,
     graph_postprocess=None,
+    eval_n_more_steps=-1,
 ) -> Dict:
     pos_input, particle_type = traj_i
 
@@ -576,7 +598,14 @@ def eval_single_rollout(
     ground_truth_positions = pos_input[:, input_sequence_length:]
 
     current_positions = initial_positions  # (n_nodes, t_window, dim)
-    predictions = jnp.zeros_like(ground_truth_positions).transpose(1, 0, 2)
+
+    if eval_n_more_steps == -1:
+        # the number of predictions is the number of ground truth positions
+        predictions = jnp.zeros_like(ground_truth_positions).transpose(1, 0, 2)
+    else:
+        num_predictions = num_rollout_steps - input_sequence_length + eval_n_more_steps
+        num_nodes, _, dim = ground_truth_positions.shape
+        predictions = jnp.zeros((num_predictions, num_nodes, dim))
 
     step = 0
     while step < num_rollout_steps:
@@ -600,14 +629,17 @@ def eval_single_rollout(
 
         next_position = setup.integrate(normalized_acceleration, current_positions)
 
-        kinematic_mask = get_kinematic_mask(particle_type)
-        next_position_ground_truth = ground_truth_positions[:, step]
+        if eval_n_more_steps == -1:
+            kinematic_mask = get_kinematic_mask(particle_type)
+            next_position_ground_truth = ground_truth_positions[:, step]
 
-        next_position = jnp.where(
-            kinematic_mask[:, None],
-            next_position_ground_truth,
-            next_position,
-        )
+            next_position = jnp.where(
+                kinematic_mask[:, None],
+                next_position_ground_truth,
+                next_position,
+            )
+        else:
+            warnings.warn("kinematic mask is not applied in eval_n_more_steps mode.")
 
         predictions = predictions.at[step].set(next_position)
         current_positions = jnp.concatenate(
@@ -670,6 +702,16 @@ def eval_rollout(
         if "mae" in metrics:
             plt.plot(metrics["mae"], label=f"Rollout mae {i}")
 
+        if "e_kin" in metrics:
+            # TODO: this call breaks the code at the the return due to dict in dict
+            # only supported during inference
+            plt.figure()
+            plt.plot(metrics["e_kin"]["predicted"], label="predicted")
+            plt.plot(metrics["e_kin"]["target"], label="target")
+            plt.yscale("log")
+            plt.legend()
+            plt.savefig(f"e_kin_{run_name}_{i}.png")
+
         if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
             initial_positions = pos_input[:input_sequence_length]
@@ -712,9 +754,9 @@ def eval_rollout(
     plt.xlabel("time step")
     plt.ylabel("roullout loss")
     t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
-    if run_name:
+    if run_name is not None:
         t = f"{run_name}_{t}"
-    plt.savefig(f"datasets/rollout_loss_{t}.png")
+    plt.savefig(f"datasets/{t}.png")
     return {k: jnp.array(v) for k, v in valid_metrics.items()}, neighbors
 
 

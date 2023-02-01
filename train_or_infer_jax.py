@@ -53,6 +53,7 @@ def train(
     args.run_name = run_prefix + str(i)
     ckp_dir = os.path.join(args.ckp_dir, args.run_name)
     os.makedirs(ckp_dir, exist_ok=True)
+    os.makedirs(os.path.join(ckp_dir, "best"), exist_ok=True)
 
     if args.wandb:
         wandb.init(
@@ -183,7 +184,8 @@ def train(
                     print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
             if step % args.save_steps == 0:
-                save_haiku(os.path.join(ckp_dir), params, state, opt_state, step)
+                metadata_ckp = {"step": step, "loss": loss.item()}
+                save_haiku(ckp_dir, params, state, opt_state, metadata_ckp)
 
             if step % args.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
@@ -271,11 +273,13 @@ if __name__ == "__main__":
     parser.add_argument("--rollout_dir", type=str, default=None)
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--magnitude", action="store_true")
+    parser.add_argument("--magnitude", action="store_true", help="Of input velocity")
 
     # metrics
     parser.add_argument(
-        "--metrics", default=["mse", "sinkhorn", "emd"], action=BuildMetricsList
+        "--metrics",
+        default=["mse", "mae", "sinkhorn", "emd", "e_kin"],
+        action=BuildMetricsList,
     )
 
     # segnn arguments
@@ -420,7 +424,7 @@ if __name__ == "__main__":
             pbc_irrep = ""
         else:
             pbc_irrep = "+ 2x1o"
-        if args.magnitudes:
+        if args.magnitude:
             magnitude_irrep = f"+ {args.input_seq_length - 1}x0e"
         else:
             magnitude_irrep = ""

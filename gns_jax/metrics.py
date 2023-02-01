@@ -11,22 +11,25 @@ class MetricsComputer:
     """Metrics between predicted and target rollouts."""
 
     # TODO for now
-    METRICS = ["mse", "mae", "sinkhorn", "emd"]
+    METRICS = ["mse", "mae", "sinkhorn", "emd", "e_kin"]
 
     def __init__(
         self,
         active_metrics: List,
         dist: Callable,
+        metadata=Dict,
         stride: int = 10,
     ):
         assert all([hasattr(self, metric) for metric in active_metrics])
         self._active_metrics = active_metrics
         self._dist = dist
         self._dist_vmap = jax.vmap(dist, in_axes=(0, 0))
+        self._dist_dvmap = jax.vmap(self._dist_vmap, in_axes=(0, 0))
         self._stride = stride
+        self._metadata = metadata
 
     def __call__(self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray) -> Dict:
-        assert pred_rollout.shape[0] == target_rollout.shape[0]
+        # assert pred_rollout.shape[0] == target_rollout.shape[0]
         metrics = {}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -36,7 +39,33 @@ class MetricsComputer:
                     metrics[metric_name] = jax.vmap(metric_fn)(
                         pred_rollout, target_rollout
                     )
-                else:
+                elif metric_name in ["e_kin"]:
+                    dt = self._metadata["dt"]
+                    dx = self._metadata["dx"]
+                    dim = self._metadata["dim"]
+
+                    metric_dvmap = jax.vmap(jax.vmap(metric_fn))
+
+                    velocity_rollout = self._dist_dvmap(
+                        pred_rollout[1 :: self._stride],
+                        pred_rollout[0 : -1 : self._stride],
+                    )
+                    e_kin_pred = metric_dvmap(velocity_rollout / dt)
+
+                    velocity_rollout = self._dist_dvmap(
+                        target_rollout[1 :: self._stride],
+                        target_rollout[0 : -1 : self._stride],
+                    )
+                    e_kin_target = metric_dvmap(velocity_rollout / dt)
+
+                    # TODO: overlay analytical solution for comparison
+
+                    metrics[metric_name] = {
+                        "predicted": e_kin_pred.sum(1) * dx**dim,
+                        "target": e_kin_target.sum(1) / dt**dim,
+                    }
+
+                elif metric_name in ["sinkhorn", "emd"]:
                     # vmap blows up for emd and sinkhorn (distance matrix)
                     _, metrics[metric_name] = jax.lax.scan(
                         lambda _, x: (None, metric_fn(*x)),
@@ -114,6 +143,12 @@ class MetricsComputer:
             dist = lambda a, b: jnp.sqrt(dist(a, b))
         return jnp.array(jax.vmap(lambda a: jax.vmap(lambda b: dist(a, b))(y))(x))
 
+    @partial(jax.jit, static_argnums=(0,))
+    def e_kin(self, frame: jnp.ndarray):
+        """Computes the kinetic energy of a frame"""
+        # TODO: get all relevant physical properties from the args
+        return 0.5 * jnp.sum(frame**2)  # * dx ** 3
+
 
 class BuildMetricsList(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
@@ -122,6 +157,6 @@ class BuildMetricsList(argparse.Action):
         for value in values:
             if value not in MetricsComputer.METRICS:
                 parser.error(
-                    f"Invalid choice: {value} (choose from 'red', 'green', 'blue')"
+                    f"Invalid choice: {value} (choose from {MetricsComputer.METRICS})"
                 )
         setattr(namespace, self.dest, values)
