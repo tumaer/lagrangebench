@@ -101,6 +101,7 @@ def train(
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
         num_non_kinematic = non_kinematic_mask.sum()
         # MSE loss
+        # TODO (Artur): implement log scaling
         loss = ((pred - target) ** 2).sum(axis=-1)
         loss = jnp.where(non_kinematic_mask, loss, 0)
         loss = loss.sum() / num_non_kinematic
@@ -227,7 +228,7 @@ def infer(
     model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
 ):
     run_name = (
-        args.model_dir.split("/")[-1]
+        "/".join(args.model_dir.split("/")[1:])  # get rid of "ckp" in path
         if args.model_dir
         else f"{args.model}_{args.dataset}"
     )
@@ -245,6 +246,7 @@ def infer(
         is_write_vtk=args.write_vtk,
         graph_postprocess=graph_postprocess,
         run_name=run_name,
+        eval_n_more_steps=args.eval_n_more_steps,
     )
     print(metrics_to_screen(eval_metrics))
 
@@ -278,6 +280,7 @@ if __name__ == "__main__":
     parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--magnitude", action="store_true", help="Of input velocity")
+    parser.add_argument("--eval_n_more_steps", type=int, default=0, help="for plotting")
 
     # metrics
     parser.add_argument(

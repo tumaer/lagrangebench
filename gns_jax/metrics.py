@@ -46,23 +46,24 @@ class MetricsComputer:
 
                     metric_dvmap = jax.vmap(jax.vmap(metric_fn))
 
+                    # Ekin of predicted rollout
                     velocity_rollout = self._dist_dvmap(
                         pred_rollout[1 :: self._stride],
                         pred_rollout[0 : -1 : self._stride],
                     )
-                    e_kin_pred = metric_dvmap(velocity_rollout / dt)
+                    e_kin_pred = metric_dvmap(velocity_rollout / dt).sum(1)
 
+                    # Ekin of target rollout
                     velocity_rollout = self._dist_dvmap(
                         target_rollout[1 :: self._stride],
                         target_rollout[0 : -1 : self._stride],
                     )
-                    e_kin_target = metric_dvmap(velocity_rollout / dt)
-
-                    # TODO: overlay analytical solution for comparison
+                    e_kin_target = metric_dvmap(velocity_rollout / dt).sum(1)
 
                     metrics[metric_name] = {
-                        "predicted": e_kin_pred.sum(1) * dx**dim,
-                        "target": e_kin_target.sum(1) / dt**dim,
+                        "metadata": self._metadata,
+                        "predicted": e_kin_pred * dx**dim,
+                        "target": e_kin_target * dx**dim,
                     }
 
                 elif metric_name in ["sinkhorn", "emd"]:
@@ -147,7 +148,7 @@ class MetricsComputer:
     def e_kin(self, frame: jnp.ndarray):
         """Computes the kinetic energy of a frame"""
         # TODO: get all relevant physical properties from the args
-        return 0.5 * jnp.sum(frame**2)  # * dx ** 3
+        return jnp.sum(frame**2)  # * dx ** 3
 
 
 class BuildMetricsList(argparse.Action):

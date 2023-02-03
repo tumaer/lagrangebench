@@ -179,6 +179,7 @@ def graph_transform_builder(
         flat_velocity_sequence = normalized_velocity_sequence.reshape(
             n_total_points, -1
         )
+        # TODO (Artur): log normalization
         node_features.append(flat_velocity_sequence)
 
         if magnitudes:
@@ -588,7 +589,7 @@ def eval_single_rollout(
     num_rollout_steps,
     input_sequence_length,
     graph_postprocess=None,
-    eval_n_more_steps=-1,
+    eval_n_more_steps=0,
 ) -> Dict:
     pos_input, particle_type = traj_i
 
@@ -599,16 +600,16 @@ def eval_single_rollout(
 
     current_positions = initial_positions  # (n_nodes, t_window, dim)
 
-    if eval_n_more_steps == -1:
+    if eval_n_more_steps == 0:
         # the number of predictions is the number of ground truth positions
         predictions = jnp.zeros_like(ground_truth_positions).transpose(1, 0, 2)
     else:
-        num_predictions = num_rollout_steps - input_sequence_length + eval_n_more_steps
+        num_predictions = num_rollout_steps + eval_n_more_steps
         num_nodes, _, dim = ground_truth_positions.shape
         predictions = jnp.zeros((num_predictions, num_nodes, dim))
 
     step = 0
-    while step < num_rollout_steps:
+    while step < num_rollout_steps + eval_n_more_steps:
         sample = (current_positions, particle_type)
         graph, neighbors = setup.preprocess_eval(sample, neighbors)
 
@@ -629,7 +630,7 @@ def eval_single_rollout(
 
         next_position = setup.integrate(normalized_acceleration, current_positions)
 
-        if eval_n_more_steps == -1:
+        if eval_n_more_steps == 0:
             kinematic_mask = get_kinematic_mask(particle_type)
             next_position_ground_truth = ground_truth_positions[:, step]
 
@@ -671,6 +672,7 @@ def eval_rollout(
     is_write_vtk=False,
     graph_postprocess=None,
     run_name=None,
+    eval_n_more_steps=0,
 ):
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
@@ -691,6 +693,7 @@ def eval_rollout(
             num_rollout_steps=num_rollout_steps,
             input_sequence_length=input_sequence_length,
             graph_postprocess=graph_postprocess,
+            eval_n_more_steps=eval_n_more_steps,
         )
 
         for k, v in metrics.items():
@@ -705,12 +708,7 @@ def eval_rollout(
         if "e_kin" in metrics:
             # TODO: this call breaks the code at the the return due to dict in dict
             # only supported during inference
-            plt.figure()
-            plt.plot(metrics["e_kin"]["predicted"], label="predicted")
-            plt.plot(metrics["e_kin"]["target"], label="target")
-            plt.yscale("log")
-            plt.legend()
-            plt.savefig(f"e_kin_{run_name}_{i}.png")
+            np.save(f"ckp/{run_name}/e_kin_{i}.npy", metrics["e_kin"]["predicted"])
 
         if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
