@@ -7,43 +7,49 @@ import yaml
 
 def cli_arguments() -> Dict:
     parser = argparse.ArgumentParser()
-    parser.add_argument("-c", "--config", type=str, help="Path to the config yaml.")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("-c", "--config", type=str, help="Path to the config yaml.")
+    group.add_argument("--model_dir", type=str, help="Path to the model checkpoint.")
+
     parser.add_argument(
         "--model", type=str, choices=["gns", "segnn", "lin"], help="Model name."
     )
-    parser.add_argument("--batch_size", type=int, default=2, help="Batch size.")
+    parser.add_argument("--batch_size", type=int, required=False, help="Batch size.")
     parser.add_argument(
-        "--lr_start", type=float, default=1e-4, help="Starting learning rate."
+        "--lr_start", type=float, required=False, help="Starting learning rate."
     )
     parser.add_argument(
-        "--lr_final", type=float, default=1e-6, help="Learning rate after decay."
+        "--lr_final", type=float, required=False, help="Learning rate after decay."
     )
     parser.add_argument(
-        "--lr_decay_rate", type=float, default=0.1, help="Learning rate decay."
+        "--lr_decay_rate", type=float, required=False, help="Learning rate decay."
     )
     parser.add_argument(
-        "--lr_decay_steps", type=int, default=5e6, help="Learning rate decay steps."
+        "--lr_decay_steps", type=int, required=False, help="Learning rate decay steps."
     )
     parser.add_argument(
         "--noise_std",
         type=float,
-        default=6.7e-4,
+        required=False,
         help="Additive noise standard deviation.",
     )
     parser.add_argument(
         "--input_seq_length",
         type=int,
-        default=6,
+        required=False,
         help="Input position sequence length.",
     )
     parser.add_argument(
-        "--num_mp_steps", type=int, default=10, help="Number of message passing layers."
+        "--num_mp_steps",
+        type=int,
+        required=False,
+        help="Number of message passing layers.",
     )
     parser.add_argument(
-        "--num_mlp_layers", type=int, default=2, help="Number of MLP layers."
+        "--num_mlp_layers", type=int, required=False, help="Number of MLP layers."
     )
     parser.add_argument(
-        "--latent_dim", type=int, default=128, help="Hidden layer dimension."
+        "--latent_dim", type=int, required=False, help="Hidden layer dimension."
     )
 
     parser.add_argument(
@@ -54,41 +60,48 @@ def cli_arguments() -> Dict:
 
     parser.add_argument(
         "--log_norm",
-        default="none",
+        required=False,
         choices=["none", "input", "output", "both"],
         help="Logarithmic normalization of input and/or output",
     )
 
     # segnn arguments
     parser.add_argument(
-        "--lmax-attributes", type=int, default=1, help="Maximum degree of attributes."
+        "--lmax-attributes",
+        type=int,
+        required=False,
+        help="Maximum degree of attributes.",
     )
     parser.add_argument(
-        "--lmax-hidden", type=int, default=1, help="Maximum degree of hidden layers."
+        "--lmax-hidden",
+        type=int,
+        required=False,
+        help="Maximum degree of hidden layers.",
     )
     parser.add_argument(
         "--norm",
         type=str,
-        default="instance",
+        required=False,
         choices=["instance", "batch", "none"],
         help="Normalisation type.",
     )
     parser.add_argument(
         "--velocity_aggregate",
         type=str,
-        default="avg",
+        required=False,
         choices=["avg", "sum", "last"],
         help="Velocity aggregation function for node attributes.",
     )
     parser.add_argument(
         "--attribute_mode",
         type=str,
-        default="add",
+        required=False,
         choices=["add", "concat", "velocity"],
         help="How to combine node attributes.",
     )
 
-    return vars(parser.parse_args())
+    # only keep passed arguments to avoid overwriting config
+    return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 
 
 class NestedLoader(yaml.SafeLoader):

@@ -262,8 +262,15 @@ def infer(
 if __name__ == "__main__":
     # priority to command line arguments
     cli_args = cli_arguments()
-    with open(cli_args["config"], "r") as f:
+    if "config" in cli_args:
+        config_path = cli_args["config"]
+    elif "model_dir" in cli_args:
+        config_path = os.path.join(cli_args["model_dir"], "config.yaml")
+
+    with open(config_path, "r") as f:
         args = yaml.load(f, NestedLoader)
+
+    # cli arguments have priority
     args.update(cli_args)
     args = Namespace(config=Namespace(**args), info=Namespace())
 
