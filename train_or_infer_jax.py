@@ -16,15 +16,18 @@ from torch.utils.data import DataLoader
 
 import wandb
 from gns_jax.data import H5Dataset, numpy_collate
+from gns_jax.metrics import BuildMetricsList
 from gns_jax.utils import (
     Linear,
     NodeType,
+    averaged_metrics,
     broadcast_from_batch,
     broadcast_to_batch,
     eval_rollout,
     get_kinematic_mask,
     get_num_params,
     load_haiku,
+    log_norm_fn,
     save_haiku,
     setup_builder,
 )
@@ -48,15 +51,16 @@ def train(
     i = 0
     while os.path.isdir(os.path.join(args.ckp_dir, run_prefix + str(i))):
         i += 1
-    run_name = run_prefix + str(i)
-    ckp_dir = os.path.join(args.ckp_dir, run_name)
+    args.run_name = run_prefix + str(i)
+    ckp_dir = os.path.join(args.ckp_dir, args.run_name)
     os.makedirs(ckp_dir, exist_ok=True)
+    os.makedirs(os.path.join(ckp_dir, "best"), exist_ok=True)
 
     if args.wandb:
         wandb.init(
             project="segnn",
             entity="segnn-sph",
-            name=run_name,
+            name=args.run_name,
             config=args,
             save_code=True,
         )
@@ -97,17 +101,13 @@ def train(
 
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
         num_non_kinematic = non_kinematic_mask.sum()
-        if args.loss == "mae":
-            loss = jnp.abs(pred - target)
-        elif args.loss == "mse":
-            loss = (pred - target) ** 2
-        elif args.loss == "huber":
-            loss = jnp.where(
-                jnp.abs(pred - target) < 1.0,
-                0.5 * (pred - target) ** 2,
-                jnp.abs(pred - target) - 0.5,
-            )
-        loss = loss.sum(axis=-1)
+
+        if args.log_norm in ["output", "both"]:
+            pred = log_norm_fn(pred)
+            target = log_norm_fn(target)
+
+        # MSE loss
+        loss = ((pred - target) ** 2).sum(axis=-1)
         loss = jnp.where(non_kinematic_mask, loss, 0)
         loss = loss.sum() / num_non_kinematic
 
@@ -189,12 +189,9 @@ def train(
                     step_str = str(step).zfill(step_digits)
                     print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
-            if step % args.save_steps == 0:
-                save_haiku(os.path.join(ckp_dir), params, state, opt_state, step)
-
             if step % args.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
-                eval_loss, nbrs = eval_rollout(
+                eval_metrics, nbrs = eval_rollout(
                     setup=setup,
                     model_apply=model_apply,
                     params=params,
@@ -204,7 +201,7 @@ def train(
                     num_rollout_steps=args.num_rollout_steps + 1,  # +1 <- not training
                     num_trajs=args.eval_num_trajs,
                     rollout_dir=args.rollout_dir,
-                    is_write_vtk=args.write_vtk,
+                    out_type=args.out_type,
                     graph_postprocess=graph_postprocess,
                 )
                 # In the beginning of training, the dynamics ae very random and
@@ -213,10 +210,19 @@ def train(
                 # the neighbors list inside of the eval_rollout function.
                 # neighbors_batch = broadcast_to_batch(nbrs, args.batch_size)
 
+                # TODO: is disabling the "save_step" argument a good idea?
+                # if step % args.save_steps == 0:
+                metrics = averaged_metrics(eval_metrics)
+                metadata_ckp = {
+                    "step": step,
+                    "loss": metrics["val/loss"],
+                }
+                save_haiku(ckp_dir, params, state, opt_state, metadata_ckp)
+
                 if args.wandb:
-                    wandb.log({"val/loss": eval_loss}, step)
+                    wandb.log(metrics, step)
                 else:
-                    print(f"val/loss: {eval_loss}")
+                    print(metrics)
 
             step += 1
             if step == args.step_max:
@@ -226,8 +232,9 @@ def train(
 def infer(
     model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
 ):
+
     model_apply = jax.jit(model.apply)
-    eval_loss, _ = eval_rollout(
+    eval_metrics, _ = eval_rollout(
         setup=setup,
         model_apply=model_apply,
         params=params,
@@ -237,10 +244,11 @@ def infer(
         num_rollout_steps=args.num_rollout_steps + 1,  # +1 because we are not training
         num_trajs=args.eval_num_trajs,
         rollout_dir=args.rollout_dir,
-        is_write_vtk=args.write_vtk,
+        out_type=args.out_type,
         graph_postprocess=graph_postprocess,
+        eval_n_more_steps=args.eval_n_more_steps,
     )
-    print(f"Rollout loss = {eval_loss}")
+    print(averaged_metrics(eval_metrics))
 
 
 if __name__ == "__main__":
@@ -273,11 +281,28 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, help="Path to the dataset")
     parser.add_argument("--ckp_dir", type=str, default="ckp")
     parser.add_argument("--rollout_dir", type=str, default=None)
-    parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--magnitudes", action="store_true")
     parser.add_argument(
-        "--loss", type=str, default="mse", choices=["mse", "mae", "huber"]
+        "--out_type",
+        type=str,
+        choices=["none", "vtk", "pkl"],
+        help="Rollout storage format",
+    )
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--magnitudes", action="store_true", help="Of input velocity")
+    parser.add_argument("--eval_n_more_steps", type=int, default=0, help="for plotting")
+
+    parser.add_argument(
+        "--log_norm",
+        default="none",
+        choices=["none", "input", "output", "both"],
+        help="Logarithmic normalization of input and/or output",
+    )
+
+    # metrics
+    parser.add_argument(
+        "--metrics",
+        default=["mse", "mae", "sinkhorn", "emd", "e_kin"],
+        action=BuildMetricsList,
     )
 
     # segnn arguments
@@ -456,22 +481,23 @@ if __name__ == "__main__":
                 attribute_embedding_blocks=args.attention_blocks,
             )(x)
 
-        pbc = args.metadata["periodic_boundary_conditions"]
-        if np.array(pbc).any():
-            pbc_irrep = ""
-        else:
-            pbc_irrep = "+ 2x1o"
-        if args.magnitudes:
-            magnitude_irrep = f"+ {args.input_seq_length - 1}x0e"
-        else:
-            magnitude_irrep = ""
+        args.node_feature_irreps = []
 
-        args.node_feature_irreps = (
-            f"{args.input_seq_length - 1}x1o "
-            f"{magnitude_irrep} "
-            f"{pbc_irrep} + "
-            f"{NodeType.SIZE}x0e"
-        )
+        vel_irrep = f"{args.input_seq_length - 1}x1o"
+
+        pbc = np.array(args.metadata["periodic_boundary_conditions"]).any()
+        homogeneous_particles = particle_type.max() == particle_type.min()
+
+        if not pbc:
+            args.node_feature_irreps.append("2x1o")
+
+        if args.magnitudes:
+            args.node_feature_irreps.append(f"{args.input_seq_length - 1}x0e")
+
+        if homogeneous_particles:
+            args.node_feature_irreps.append(f"{NodeType.SIZE}x0e")
+
+        args.node_feature_irreps = "+".join(args.node_feature_irreps)
 
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
@@ -481,7 +507,8 @@ if __name__ == "__main__":
             lmax_attributes=args.lmax_attributes,
             velocity_aggregate=args.velocity_aggregate,
             attribute_mode=args.attribute_mode,
-            pbc=pbc,
+            n_vels=args.input_seq_length - 1,
+            homogeneous_particles=homogeneous_particles,
         )
 
     # transform core simulator outputting accelerations.
@@ -500,6 +527,10 @@ if __name__ == "__main__":
     # load model from checkpoint if provided
     if args.model_dir:
         params, state, _, args.step_start = load_haiku(args.model_dir)
+        assert get_num_params(params) == args.num_params, (
+            "Model size mismatch. "
+            f"{args.num_params} (expected) vs {get_num_params(params)} (actual)."
+        )
     else:
         args.step_start = 0
 

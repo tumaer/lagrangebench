@@ -61,6 +61,9 @@ disable=C0114, # module docstring
         C0103, # bad function names
         C0412, # non-grouped imports
         W0102, # default being a list
+        R1729, # use a generator
+        W0640,
+        C0415, # import outside toplevel
         abstract-method,
         apply-builtin,
         arguments-differ,

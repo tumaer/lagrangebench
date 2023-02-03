@@ -1,11 +1,10 @@
-from typing import Callable, Tuple
+from typing import Callable
 
 import e3nn_jax as e3nn
 import jax
 import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
-import numpy as np
 from segnn_jax import SteerableGraphsTuple
 
 from gns_jax.utils import NodeType
@@ -15,9 +14,10 @@ def steerable_graph_transform_builder(
     node_features_irreps: e3nn.Irreps,
     edge_features_irreps: e3nn.Irreps,
     lmax_attributes: int,
-    pbc: Tuple[bool, bool, bool],
     velocity_aggregate: str = "avg",
     attribute_mode: str = "add",
+    n_vels: int = 5,
+    homogeneous_particles: bool = False,
 ) -> Callable:
     """
     Convert the standard gns GraphsTuple into a SteerableGraphsTuple to use in SEGNN.
@@ -28,18 +28,11 @@ def steerable_graph_transform_builder(
     assert velocity_aggregate in ["avg", "sum", "last", "all"]
     assert attribute_mode in ["velocity", "add", "concat"]
 
-    # TODO: for now only 1) all directions periodic or 2) none of them
-    if np.array(pbc).any():  # if PBC, no boundary forces
-        num_boundary_entries = 0
-    else:
-        num_boundary_entries = 6
-
     def graph_transform(
         graph: jraph.GraphsTuple,
         particle_type: jnp.ndarray,
     ) -> SteerableGraphsTuple:
         # remove the last two bounary displacement vectors
-        n_vels = (graph.nodes.shape[1] - num_boundary_entries) // 3
         traj = jnp.reshape(
             graph.nodes[..., : 3 * n_vels],
             (graph.nodes.shape[0], n_vels, 3),
@@ -95,15 +88,15 @@ def steerable_graph_transform_builder(
         # scalar attribute to 1 by default
         node_attributes.array = node_attributes.array.at[..., 0].set(1.0)
 
+        if not homogeneous_particles:
+            particles = jax.nn.one_hot(particle_type, NodeType.SIZE)
+            nodes = jnp.concatenate([graph.nodes, particles], axis=-1)
+        else:
+            nodes = graph.nodes
+
         return SteerableGraphsTuple(
             graph=jraph.GraphsTuple(
-                nodes=e3nn.IrrepsArray(
-                    node_features_irreps,
-                    jnp.concatenate(
-                        [graph.nodes, jax.nn.one_hot(particle_type, NodeType.SIZE)],
-                        axis=-1,
-                    ),
-                ),
+                nodes=e3nn.IrrepsArray(node_features_irreps, nodes),
                 edges=None,
                 senders=graph.senders,
                 receivers=graph.receivers,
