@@ -6,9 +6,17 @@ from typing import Callable, Dict, List
 import jax
 import jax.numpy as jnp
 
+MetricsDict = Dict[str, Dict[str, jnp.ndarray]]
+
 
 class MetricsComputer:
-    """Metrics between predicted and target rollouts."""
+    """Metrics between predicted and target rollouts.
+    Args:
+        active_metrics: list of metrics to compute
+        dist: distance function
+        metadata: metadata of the dataset
+        stride: stride for computing metrics
+    """
 
     # TODO for now
     METRICS = ["mse", "mae", "sinkhorn", "emd", "e_kin"]
@@ -17,7 +25,7 @@ class MetricsComputer:
         self,
         active_metrics: List,
         dist: Callable,
-        metadata=Dict,
+        metadata: Dict,
         stride: int = 10,
     ):
         assert all([hasattr(self, metric) for metric in active_metrics])
@@ -152,6 +160,9 @@ class MetricsComputer:
 
 
 class BuildMetricsList(argparse.Action):
+    """Builds a list of metrics to compute from the command line."""
+
+    # TODO remove this and use config files
     def __call__(self, parser, namespace, values, option_string=None):
         _ = option_string
         values = values.split(" ")

@@ -5,7 +5,8 @@ import os
 import pickle
 import time
 import warnings
-from typing import Callable, Dict, Tuple  # List, Optional, Union
+from collections import defaultdict
+from typing import Callable, Dict, Iterable, Tuple
 
 import cloudpickle
 import e3nn_jax as e3nn
@@ -14,14 +15,13 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
-import matplotlib.pyplot as plt
 import numpy as np
 import pyvista
 from jax import lax, vmap
 from jax_md import dataclasses, partition, space
 from segnn_jax import SteerableGraphsTuple
 
-from gns_jax.metrics import MetricsComputer
+from gns_jax.metrics import MetricsComputer, MetricsDict
 
 # Physical setup for the GNS model.
 
@@ -584,16 +584,16 @@ def write_vtk_temp(data_dict, path):
 
 
 def eval_single_rollout(
-    setup,
-    model_apply,
-    params,
-    state,
-    neighbors,
-    traj_i,
-    num_rollout_steps,
-    input_sequence_length,
-    graph_postprocess=None,
-    eval_n_more_steps=0,
+    setup: SetupFn,
+    model_apply: hk.TransformedWithState,
+    params: hk.Params,
+    state: hk.State,
+    neighbors: jnp.ndarray,
+    traj_i: Tuple[jnp.ndarray, jnp.ndarray],
+    num_rollout_steps: int,
+    input_sequence_length: int,
+    graph_postprocess: Callable = None,
+    eval_n_more_steps: int = 0,
 ) -> Dict:
     pos_input, particle_type = traj_i
 
@@ -664,24 +664,26 @@ def eval_single_rollout(
 
 
 def eval_rollout(
-    setup,
-    model_apply,
-    params,
-    state,
-    neighbors,
-    loader_valid,
-    num_rollout_steps,
-    num_trajs,
-    rollout_dir,
-    is_write_vtk=False,
-    graph_postprocess=None,
-    run_name=None,
-    eval_n_more_steps=0,
-):
+    setup: SetupFn,
+    model_apply: hk.TransformedWithState,
+    params: hk.Params,
+    state: hk.State,
+    neighbors: jnp.ndarray,
+    loader_valid: Iterable,
+    num_rollout_steps: int,
+    num_trajs: int,
+    rollout_dir: str,
+    out_type: str = "none",
+    graph_postprocess: Callable = None,
+    eval_n_more_steps: int = 0,
+) -> Tuple[MetricsDict, jnp.ndarray]:
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
-    valid_metrics = {}
-    plt.figure()
+    eval_metrics = {}
+
+    if rollout_dir is not None:
+        os.makedirs(rollout_dir, exist_ok=True)
+
     for i, traj_i in enumerate(loader_valid):
         # remove batch dimension
         assert traj_i[0].shape[0] == 1, "Batch dimension should be 1"
@@ -700,19 +702,7 @@ def eval_rollout(
             eval_n_more_steps=eval_n_more_steps,
         )
 
-        for k, v in metrics.items():
-            valid_metrics.setdefault(k, []).append(v)
-
-        if "mse" in metrics:
-            plt.plot(metrics["mse"], label=f"Rollout mse {i}")
-
-        if "mae" in metrics:
-            plt.plot(metrics["mae"], label=f"Rollout mae {i}")
-
-        if "e_kin" in metrics:
-            # TODO: this call breaks the code at the the return due to dict in dict
-            # only supported during inference
-            np.save(f"ckp/{run_name}/e_kin_{i}.npy", metrics["e_kin"]["predicted"])
+        eval_metrics[f"rollout_{i}"] = metrics
 
         if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
@@ -722,10 +712,9 @@ def eval_rollout(
                 "predicted_rollout": example_full,  # (t, nodes, dim)
                 "ground_truth_rollout": pos_input,  # (t, nodes, dim)
             }
-            os.makedirs(rollout_dir, exist_ok=True)
 
             file_prefix = f"{rollout_dir}/rollout_{i}"
-            if is_write_vtk:
+            if out_type == "vtk":
 
                 for j in range(pos_input.shape[0]):
                     filename_vtk = file_prefix + f"_{j}.vtk"
@@ -742,7 +731,7 @@ def eval_rollout(
                         "tag": traj_i[1],
                     }
                     write_vtk_temp(state_vtk, filename_vtk)
-            else:
+            if out_type == "pkl":
                 filename = f"{file_prefix}.pkl"
 
                 with open(filename, "wb") as f:
@@ -751,31 +740,26 @@ def eval_rollout(
         if (i + 1) == num_trajs:
             break
 
-    # TODO proper plotting
-    plt.legend()
-    plt.xlabel("time step")
-    plt.ylabel("roullout loss")
-    t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
-    if run_name is not None:
-        t = f"{run_name}_{t}"
-    plt.savefig(f"datasets/{t}.png")
-    return {k: jnp.array(v) for k, v in valid_metrics.items()}, neighbors
+    if rollout_dir is not None:
+        # save metrics
+        t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
+        with open(f"{rollout_dir}/metrics{t}.pkl", "wb") as f:
+            pickle.dump(eval_metrics, f)
+
+    return eval_metrics, neighbors
 
 
-def metrics_to_screen(metrics: Dict) -> Dict[str, float]:
+def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
     """Averages the metrics over the rollouts."""
-    small_metrics = {}
-    for k, v in metrics.items():
-        if k in ["mse", "mae"]:
-            k = "loss"
-        small_metrics[f"val/{k}"] = float(jnp.mean(v))
-    return small_metrics
-
-
-def metrics_to_plots(metrics: Dict):
-    """Creates rollout plots from metrics. Averages over trajectories."""
-    _ = metrics
-    pass
+    small_metrics = defaultdict(lambda: 0.0)
+    for rollout in eval_metrics.values():
+        for k, m in rollout.items():
+            if k == "e_kin":
+                continue
+            if k in ["mse", "mae"]:
+                k = "loss"
+            small_metrics[f"val/{k}"] += float(jnp.mean(m)) / len(eval_metrics)
+    return dict(small_metrics)
 
 
 # Unit Test utils
@@ -805,15 +789,16 @@ def safe_log(x: jnp.ndarray) -> jnp.ndarray:
     """Logarithm with clipping to avoid numerical issues."""
     return jnp.log(jnp.clip(x, a_min=1e-10, a_max=None))
 
+
 def log_norm_fn(x: jnp.ndarray) -> jnp.ndarray:
     """Log-normalization for Gaussian-distributed data.
-    
+
     Design choices:
     1. Clipping is applied to avoid numerical issues.
-    2. The value 1.11 guarantees that stardard Gaussian inputs x are mapped to a 
+    2. The value 1.11 guarantees that stardard Gaussian inputs x are mapped to a
     distribution with mean 0 and standard deviation 1 (however, not Gaussian anymore).
-    3. The value 0.637 guarantees that if the inputs x are Gaussian with std S, then 
+    3. The value 0.637 guarantees that if the inputs x are Gaussian with std S, then
     the outputs of this function have the same std as if the outputs had std 1/S.
     """
 
-    return jnp.sign(x) * (safe_log(jnp.abs(x)) + 0.637) / 1.11 
+    return jnp.sign(x) * (safe_log(jnp.abs(x)) + 0.637) / 1.11

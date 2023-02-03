@@ -20,6 +20,7 @@ from gns_jax.metrics import BuildMetricsList
 from gns_jax.utils import (
     Linear,
     NodeType,
+    averaged_metrics,
     broadcast_from_batch,
     broadcast_to_batch,
     eval_rollout,
@@ -27,7 +28,6 @@ from gns_jax.utils import (
     get_num_params,
     load_haiku,
     log_norm_fn,
-    metrics_to_screen,
     save_haiku,
     setup_builder,
     steerable_graph_transform_builder,
@@ -201,9 +201,8 @@ def train(
                     num_rollout_steps=args.num_rollout_steps + 1,  # +1 <- not training
                     num_trajs=args.eval_num_trajs,
                     rollout_dir=args.rollout_dir,
-                    is_write_vtk=args.write_vtk,
+                    out_type=args.out_type,
                     graph_postprocess=graph_postprocess,
-                    run_name=args.run_name,
                 )
                 # In the beginning of training, the dynamics ae very random and
                 # we don't want to influence the training neighbors list by
@@ -213,16 +212,17 @@ def train(
 
                 # TODO: is disabling the "save_step" argument a good idea?
                 # if step % args.save_steps == 0:
+                metrics = averaged_metrics(eval_metrics)
                 metadata_ckp = {
                     "step": step,
-                    "loss": metrics_to_screen(eval_metrics)["val/loss"],
+                    "loss": metrics["val/loss"],
                 }
                 save_haiku(ckp_dir, params, state, opt_state, metadata_ckp)
 
                 if args.wandb:
-                    wandb.log(metrics_to_screen(eval_metrics), step)
+                    wandb.log(metrics, step)
                 else:
-                    print(metrics_to_screen(eval_metrics))
+                    print(metrics)
 
             step += 1
             if step == args.step_max:
@@ -232,11 +232,7 @@ def train(
 def infer(
     model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
 ):
-    run_name = (
-        "/".join(args.model_dir.split("/")[1:])  # get rid of "ckp" in path
-        if args.model_dir
-        else f"{args.model}_{args.dataset}"
-    )
+
     model_apply = jax.jit(model.apply)
     eval_metrics, _ = eval_rollout(
         setup=setup,
@@ -248,12 +244,11 @@ def infer(
         num_rollout_steps=args.num_rollout_steps + 1,  # +1 because we are not training
         num_trajs=args.eval_num_trajs,
         rollout_dir=args.rollout_dir,
-        is_write_vtk=args.write_vtk,
+        out_type=args.out_type,
         graph_postprocess=graph_postprocess,
-        run_name=run_name,
         eval_n_more_steps=args.eval_n_more_steps,
     )
-    print(metrics_to_screen(eval_metrics))
+    print(averaged_metrics(eval_metrics))
 
 
 if __name__ == "__main__":
@@ -282,16 +277,21 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, help="Path to the dataset")
     parser.add_argument("--ckp_dir", type=str, default="ckp")
     parser.add_argument("--rollout_dir", type=str, default=None)
-    parser.add_argument("--write_vtk", action="store_true", help="vtk rollout")
+    parser.add_argument(
+        "--out_type",
+        type=str,
+        choices=["none", "vtk", "pkl"],
+        help="Rollout storage format",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--magnitude", action="store_true", help="Of input velocity")
     parser.add_argument("--eval_n_more_steps", type=int, default=0, help="for plotting")
-    
+
     parser.add_argument(
-        "--log_norm", 
-        default="none", 
+        "--log_norm",
+        default="none",
         choices=["none", "input", "output", "both"],
-        help="Logarithmic normalization of input and/or output"
+        help="Logarithmic normalization of input and/or output",
     )
 
     # metrics
