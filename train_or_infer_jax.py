@@ -1,8 +1,8 @@
 """GNS in JAX with Haiku, Jraph, and JAX-MD"""
 
-import argparse
 import json
 import os
+from argparse import Namespace
 from typing import Tuple
 
 import haiku as hk
@@ -11,12 +11,13 @@ import jax.numpy as jnp
 import jraph
 import numpy as np
 import optax
+import yaml
 from jax import vmap
 from torch.utils.data import DataLoader
 
 import wandb
+from gns_jax.configs import NestedLoader, cli_arguments
 from gns_jax.data import H5Dataset, numpy_collate
-from gns_jax.metrics import BuildMetricsList
 from gns_jax.utils import (
     Linear,
     NodeType,
@@ -47,20 +48,25 @@ def train(
 ):
 
     # checkpointing and logging
-    run_prefix = "_".join([args.model, args.dataset_name, ""])
+    run_prefix = "_".join([args.config.model, args.info.dataset_name, ""])
     i = 0
-    while os.path.isdir(os.path.join(args.ckp_dir, run_prefix + str(i))):
+    while os.path.isdir(os.path.join(args.config.ckp_dir, run_prefix + str(i))):
         i += 1
-    args.run_name = run_prefix + str(i)
-    ckp_dir = os.path.join(args.ckp_dir, args.run_name)
+    args.info.run_name = run_prefix + str(i)
+
+    ckp_dir = os.path.join(args.config.ckp_dir, args.info.run_name)
     os.makedirs(ckp_dir, exist_ok=True)
     os.makedirs(os.path.join(ckp_dir, "best"), exist_ok=True)
 
-    if args.wandb:
+    # save config file
+    with open(os.path.join(ckp_dir, "config.yaml"), "w") as f:
+        yaml.dump(vars(args.config), f)
+
+    if args.config.wandb:
         wandb.init(
             project="segnn",
             entity="segnn-sph",
-            name=args.run_name,
+            name=args.info.run_name,
             config=args,
             save_code=True,
         )
@@ -68,15 +74,15 @@ def train(
     # Set learning rate to decay from 1e-4 to 1e-6 over 10M steps exponentially
     # and then keep it at 1e-6
     lr_scheduler = optax.exponential_decay(
-        init_value=args.lr_start,
+        init_value=args.config.lr_start,
         transition_steps=int(5e6),
-        decay_rate=args.lr_decay_rate,
-        end_value=args.lr_final,
+        decay_rate=args.config.lr_decay_rate,
+        end_value=args.config.lr_final,
     )
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
     # continue training from checkpoint or initialize optimizer state
-    if args.model_dir:
-        _, _, opt_state, _ = load_haiku(args.model_dir)
+    if args.config.model_dir:
+        _, _, opt_state, _ = load_haiku(args.config.model_dir)
     else:
         opt_state = opt_init(params)
 
@@ -102,7 +108,7 @@ def train(
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
         num_non_kinematic = non_kinematic_mask.sum()
 
-        if args.log_norm in ["output", "both"]:
+        if args.config.log_norm in ["output", "both"]:
             pred = log_norm_fn(pred)
             target = log_norm_fn(target)
 
@@ -142,19 +148,19 @@ def train(
     preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0))
 
     # prepare for batch training.
-    key = jax.random.PRNGKey(args.seed)
-    keys = jax.random.split(key, args.batch_size)
-    neighbors_batch = broadcast_to_batch(neighbors, args.batch_size)
+    key = jax.random.PRNGKey(args.config.seed)
+    keys = jax.random.split(key, args.config.batch_size)
+    neighbors_batch = broadcast_to_batch(neighbors, args.config.batch_size)
 
-    step_digits = len(str(int(args.step_max)))
-    step = args.step_start
-    while step < args.step_max:
+    step_digits = len(str(int(args.config.step_max)))
+    step = args.info.step_start
+    while step < args.config.step_max:
 
         for raw_batch in loader_train:
             # pos_input, particle_type, pos_target = raw_batch
 
             keys, graph_batch, target_batch, neighbors_batch = preprocess_vmap(
-                keys, raw_batch, args.noise_std, neighbors_batch
+                keys, raw_batch, args.config.noise_std, neighbors_batch
             )
 
             if neighbors_batch.did_buffer_overflow.sum() > 0:
@@ -167,7 +173,7 @@ def train(
                 _, _, _, nbrs = setup.allocate(keys[0], sample)
                 print(f"To list {nbrs.idx.shape}")
 
-                neighbors_batch = broadcast_to_batch(nbrs, args.batch_size)
+                neighbors_batch = broadcast_to_batch(nbrs, args.config.batch_size)
 
                 # To run the loop N times even if sometimes
                 # did_buffer_overflow > 0 we directly return to the beginning
@@ -182,14 +188,14 @@ def train(
                 opt_state=opt_state,
             )
 
-            if step % args.log_steps == 0:
-                if args.wandb:
+            if step % args.config.log_steps == 0:
+                if args.config.wandb:
                     wandb.log({"train/loss": loss.item()}, step)
                 else:
                     step_str = str(step).zfill(step_digits)
                     print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
-            if step % args.eval_steps == 0 and step > 0:
+            if step % args.config.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
                 eval_metrics, nbrs = eval_rollout(
                     setup=setup,
@@ -198,20 +204,21 @@ def train(
                     state=state,
                     neighbors=nbrs,
                     loader_valid=loader_valid,
-                    num_rollout_steps=args.num_rollout_steps + 1,  # +1 <- not training
-                    num_trajs=args.eval_num_trajs,
-                    rollout_dir=args.rollout_dir,
-                    out_type=args.out_type,
+                    num_rollout_steps=args.info.num_rollout_steps
+                    + 1,  # +1 not training
+                    num_trajs=args.config.eval_num_trajs,
+                    rollout_dir=args.config.rollout_dir,
+                    out_type=args.config.out_type,
                     graph_postprocess=graph_postprocess,
                 )
                 # In the beginning of training, the dynamics ae very random and
-                # we don't want to influence the training neighbors list by
+                # we don"t want to influence the training neighbors list by
                 # this extreme case of the dynamics. Therefore, we only update
                 # the neighbors list inside of the eval_rollout function.
                 # neighbors_batch = broadcast_to_batch(nbrs, args.batch_size)
 
                 # TODO: is disabling the "save_step" argument a good idea?
-                # if step % args.save_steps == 0:
+                # if step % args.config.save_steps == 0:
                 metrics = averaged_metrics(eval_metrics)
                 metadata_ckp = {
                     "step": step,
@@ -219,13 +226,13 @@ def train(
                 }
                 save_haiku(ckp_dir, params, state, opt_state, metadata_ckp)
 
-                if args.wandb:
+                if args.config.wandb:
                     wandb.log(metrics, step)
                 else:
                     print(metrics)
 
             step += 1
-            if step == args.step_max:
+            if step == args.config.step_max:
                 break
 
 
@@ -241,134 +248,66 @@ def infer(
         state=state,
         neighbors=neighbors,
         loader_valid=loader_valid,
-        num_rollout_steps=args.num_rollout_steps + 1,  # +1 because we are not training
-        num_trajs=args.eval_num_trajs,
-        rollout_dir=args.rollout_dir,
-        out_type=args.out_type,
+        num_rollout_steps=args.info.num_rollout_steps
+        + 1,  # +1 because we are not training
+        num_trajs=args.config.eval_num_trajs,
+        rollout_dir=args.config.rollout_dir,
+        out_type=args.config.out_type,
         graph_postprocess=graph_postprocess,
-        eval_n_more_steps=args.eval_n_more_steps,
+        eval_n_more_steps=args.config.eval_n_more_steps,
     )
     print(averaged_metrics(eval_metrics))
 
 
 if __name__ == "__main__":
+    # priority to command line arguments
+    cli_args = cli_arguments()
+    with open(cli_args["config"], "r") as f:
+        args = yaml.load(f, NestedLoader)
+    args.update(cli_args)
+    args = Namespace(config=Namespace(**args), info=Namespace())
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, choices=["gns", "segnn", "lin"])
-    parser.add_argument("--mode", type=str, default="train", choices=["train", "infer"])
-    parser.add_argument("--step_max", type=int, default=2e7)
-    parser.add_argument("--batch_size", type=int, default=2)
-    parser.add_argument("--lr_start", type=float, default=1e-4)
-    parser.add_argument("--lr_final", type=float, default=1e-6)
-    parser.add_argument("--lr_decay_rate", type=float, default=0.1)
-    parser.add_argument("--lr_decay_steps", type=int, default=5e6)
-    parser.add_argument("--noise_std", type=float, default=6.7e-4)
-    parser.add_argument("--input_seq_length", type=int, default=6)
-    parser.add_argument("--num_mp_steps", type=int, default=10)
-    parser.add_argument("--num_mlp_layers", type=int, default=2)
-    parser.add_argument("--latent_dim", type=int, default=128)
-    parser.add_argument("--eval_num_trajs", type=int, default=5)
-
-    parser.add_argument("--wandb", action="store_true", help="Log to wandb")
-    parser.add_argument("--log_steps", type=int, default=1000)
-    parser.add_argument("--eval_steps", type=int, default=5000)
-    parser.add_argument("--save_steps", type=int, default=5000)
-    parser.add_argument("--model_dir", type=str, help="To load a checkpoint")
-    parser.add_argument("--data_dir", type=str, help="Path to the dataset")
-    parser.add_argument("--ckp_dir", type=str, default="ckp")
-    parser.add_argument("--rollout_dir", type=str, default=None)
-    parser.add_argument(
-        "--out_type",
-        type=str,
-        choices=["none", "vtk", "pkl"],
-        help="Rollout storage format",
-    )
-    parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--magnitude", action="store_true", help="Of input velocity")
-    parser.add_argument("--eval_n_more_steps", type=int, default=0, help="for plotting")
-
-    parser.add_argument(
-        "--log_norm",
-        default="none",
-        choices=["none", "input", "output", "both"],
-        help="Logarithmic normalization of input and/or output",
-    )
-
-    # metrics
-    parser.add_argument(
-        "--metrics",
-        default=["mse", "mae", "sinkhorn", "emd", "e_kin"],
-        action=BuildMetricsList,
-    )
-
-    # segnn arguments
-    parser.add_argument("--lmax-attributes", type=int, default=1)
-    parser.add_argument("--lmax-hidden", type=int, default=1)
-    parser.add_argument(
-        "--norm",
-        type=str,
-        default="instance",
-        choices=["instance", "batch", "none"],
-        help="Normalisation type",
-    )
-    parser.add_argument(
-        "--velocity_aggregate",
-        type=str,
-        default="avg",
-        choices=["avg", "sum", "last"],
-        help="Velocity aggregation function for node attributes",
-    )
-    parser.add_argument(
-        "--attribute_mode",
-        type=str,
-        default="add",
-        choices=["add", "concat", "velocity"],
-    )
-
-    args = parser.parse_args()
-
-    args.dataset_name = os.path.basename(args.data_dir.split("/")[-1])
-
-    if args.ckp_dir is not None:
-        os.makedirs(args.ckp_dir, exist_ok=True)
-
-    if args.rollout_dir is not None:
-        os.makedirs(args.rollout_dir, exist_ok=True)
-
-    with open(os.path.join(args.data_dir, "metadata.json"), "r") as f:
+    args.info.dataset_name = os.path.basename(args.config.data_dir.split("/")[-1])
+    if args.config.ckp_dir is not None:
+        os.makedirs(args.config.ckp_dir, exist_ok=True)
+    if args.config.rollout_dir is not None:
+        os.makedirs(args.config.rollout_dir, exist_ok=True)
+    with open(os.path.join(args.config.data_dir, "metadata.json"), "r") as f:
         args.metadata = json.loads(f.read())
 
-    args.normalization_stats = {
+    args.normalization = {
         "acceleration": {
             "mean": jnp.array(args.metadata["acc_mean"]),
             "std": jnp.sqrt(
-                jnp.array(args.metadata["acc_std"]) ** 2 + args.noise_std**2
+                jnp.array(args.metadata["acc_std"]) ** 2 + args.config.noise_std**2
             ),
         },
         "velocity": {
             "mean": jnp.array(args.metadata["vel_mean"]),
             "std": jnp.sqrt(
-                jnp.array(args.metadata["vel_std"]) ** 2 + args.noise_std**2
+                jnp.array(args.metadata["vel_std"]) ** 2 + args.config.noise_std**2
             ),
         },
     }
 
-    args.num_rollout_steps = args.metadata["sequence_length"] - args.input_seq_length
+    args.info.num_rollout_steps = (
+        args.metadata["sequence_length"] - args.config.input_seq_length
+    )
 
     # dataloader
     data_train = H5Dataset(
-        args.data_dir, "train", args.input_seq_length, is_rollout=False
+        args.config.data_dir, "train", args.config.input_seq_length, is_rollout=False
     )
     loader_train = DataLoader(
         dataset=data_train,
-        batch_size=args.batch_size,
+        batch_size=args.config.batch_size,
         shuffle=True,
         num_workers=2,
         collate_fn=numpy_collate,
         drop_last=True,
     )
     data_valid = H5Dataset(
-        args.data_dir, "valid", args.input_seq_length, is_rollout=True
+        args.config.data_dir, "valid", args.config.input_seq_length, is_rollout=True
     )
     loader_valid = DataLoader(
         dataset=data_valid, batch_size=1, collate_fn=numpy_collate
@@ -379,22 +318,22 @@ if __name__ == "__main__":
     args.box = bounds[:, 1] - bounds[:, 0]
 
     # dataset-specific setup
-    if args.dataset_name in ["BoxBath", "BoxBathSample"]:
+    if args.info.dataset_name in ["BoxBath", "BoxBathSample"]:
         particle_dimension = 3
         # node_in = 37, edge_in = 4
         args.box *= 1.2
-    elif args.dataset_name in ["WaterDrop", "WaterDropSample"]:
+    elif args.info.dataset_name in ["WaterDrop", "WaterDropSample"]:
         particle_dimension = 2
         # node_in = 30, edge_in = 3
-    elif "tgv" in args.dataset_name or "TGV" in args.dataset_name:
+    elif "TGV" in args.info.dataset_name.upper():
         particle_dimension = 3
 
-    # preprocessing allocate and update functions in the spirit of jax-md's
+    # preprocessing allocate and update functions in the spirit of jax-md"s
     # `partition.neighbor_list`. And an integration utility with PBC.
     setup = setup_builder(args)
 
     # first PRNG key
-    key = jax.random.PRNGKey(args.seed)
+    key = jax.random.PRNGKey(args.config.seed)
     # get an example to initialize the setup and model
     pos_input, particle_type, pos_target = next(iter(loader_train))
     # the torch loader give a whole batch. We take only the first sample.
@@ -404,19 +343,19 @@ if __name__ == "__main__":
     # initialize model
     key, subkey = jax.random.split(key, 2)
 
-    if args.model == "gns":
+    if args.config.model == "gns":
         from gns_jax.gns import GNS
 
         model = lambda x: GNS(
             particle_dimension=particle_dimension,
-            latent_size=args.latent_dim,
-            num_mlp_layers=args.num_mlp_layers,
-            num_message_passing_steps=args.num_mp_steps,
+            latent_size=args.config.latent_dim,
+            num_mlp_layers=args.config.num_mlp_layers,
+            num_message_passing_steps=args.config.num_mp_steps,
             num_particle_types=NodeType.SIZE,
             particle_type_embedding_size=16,
         )(x)
         graph_postprocess = None
-    elif args.model == "lin":
+    elif args.config.model == "lin":
         model = lambda x: Linear(dim_out=3)(x)
         graph_postprocess = None
     else:
@@ -424,32 +363,32 @@ if __name__ == "__main__":
         from segnn_jax import SEGNN, weight_balanced_irreps
 
         hidden_irreps = weight_balanced_irreps(
-            scalar_units=args.latent_dim,
+            scalar_units=args.config.latent_dim,
             # attribute irreps
-            irreps_right=Irreps.spherical_harmonics(args.lmax_attributes),
+            irreps_right=Irreps.spherical_harmonics(args.config.lmax_attributes),
             use_sh=True,
-            lmax=args.lmax_hidden,
+            lmax=args.config.lmax_hidden,
         )
         model = lambda x: SEGNN(
             hidden_irreps=hidden_irreps,
             output_irreps=Irreps("1x1o"),
-            num_layers=args.num_mp_steps,
+            num_layers=args.config.num_mp_steps,
             task="node",
-            blocks_per_layer=args.num_mlp_layers,
-            norm=args.norm,
+            blocks_per_layer=args.config.num_mlp_layers,
+            norm=args.config.norm,
         )(x)
         pbc = args.metadata["periodic_boundary_conditions"]
         if np.array(pbc).any():
             pbc_irrep = ""
         else:
             pbc_irrep = "+ 2x1o"
-        if args.magnitude:
-            magnitude_irrep = f"+ {args.input_seq_length - 1}x0e"
+        if args.config.magnitude:
+            magnitude_irrep = f"+ {args.config.input_seq_length - 1}x0e"
         else:
             magnitude_irrep = ""
 
-        args.node_feature_irreps = (
-            f"{args.input_seq_length - 1}x1o "
+        args.info.node_feature_irreps = (
+            f"{args.config.input_seq_length - 1}x1o "
             f"{magnitude_irrep} "
             f"{pbc_irrep} + "
             f"{NodeType.SIZE}x0e"
@@ -457,12 +396,12 @@ if __name__ == "__main__":
 
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
-                args.node_feature_irreps
+                args.info.node_feature_irreps
             ),  # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
-            lmax_attributes=args.lmax_attributes,
-            velocity_aggregate=args.velocity_aggregate,
-            attribute_mode=args.attribute_mode,
+            lmax_attributes=args.config.lmax_attributes,
+            velocity_aggregate=args.config.velocity_aggregate,
+            attribute_mode=args.config.attribute_mode,
             pbc=pbc,
         )
 
@@ -476,20 +415,20 @@ if __name__ == "__main__":
 
     params, state = model.init(subkey, graph_tuple)
 
-    args.num_params = get_num_params(params)
-    print(f"Model with {args.num_params} parameters.")
+    args.info.num_params = get_num_params(params)
+    print(f"Model with {args.info.num_params} parameters.")
 
     # load model from checkpoint if provided
-    if args.model_dir:
-        params, state, _, args.step_start = load_haiku(args.model_dir)
-        assert get_num_params(params) == args.num_params, (
+    if args.config.model_dir:
+        params, state, _, args.info.step_start = load_haiku(args.config.model_dir)
+        assert get_num_params(params) == args.info.num_params, (
             "Model size mismatch. "
-            f"{args.num_params} (expected) vs {get_num_params(params)} (actual)."
+            f"{args.info.num_params} (expected) vs {get_num_params(params)} (actual)."
         )
     else:
-        args.step_start = 0
+        args.info.step_start = 0
 
-    if args.mode == "train":
+    if args.config.mode == "train":
         train(
             model,
             params,
@@ -501,7 +440,7 @@ if __name__ == "__main__":
             graph_postprocess,
             args,
         )
-    elif args.mode == "infer":
+    elif args.config.mode == "infer":
         infer(
             model,
             params,

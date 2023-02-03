@@ -1,0 +1,14 @@
+includes: defaults.yaml
+
+name: segnn
+num_mp_steps: 5
+latent_dim: 128
+
+lr_start: 5e-4
+lr_final: 1e-6
+noise_std: 5e-6
+lr_decay_steps: 5000000
+
+mode: train
+
+data_dir: /home/atoshev/data/TGVCoarse

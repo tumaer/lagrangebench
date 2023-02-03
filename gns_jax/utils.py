@@ -320,7 +320,7 @@ def setup_builder(args: argparse.Namespace):
         integrate - Semi-implicit Euler respecting periodic boundary conditions
     """
 
-    normalization_stats = args.normalization_stats
+    normalization_stats = args.normalization
 
     # apply PBC in all directions or not at all
     if np.array(args.metadata["periodic_boundary_conditions"]).any():
@@ -346,8 +346,8 @@ def setup_builder(args: argparse.Namespace):
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=args.metadata["periodic_boundary_conditions"],
-        magnitudes=args.magnitude,
-        log_norm=args.log_norm,
+        magnitudes=args.config.magnitude,
+        log_norm=args.config.log_norm,
     )
 
     def _compute_target(pos_input, pos_target):
@@ -435,7 +435,7 @@ def setup_builder(args: argparse.Namespace):
         return new_position
 
     def metrics_computer(predictions, ground_truth):
-        return MetricsComputer(args.metrics, displacement_fn, args.metadata)(
+        return MetricsComputer(args.config.metrics, displacement_fn, args.metadata)(
             predictions, ground_truth
         )
 
