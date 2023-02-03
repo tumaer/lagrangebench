@@ -17,6 +17,7 @@ jax[cuda11_cudnn82]
 matplotlib
 optax
 pandas
+POT
 pre-commit
 pyg-lib
 pyvista

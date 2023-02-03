@@ -1,9 +1,12 @@
 import argparse
 import enum
+import json
 import os
 import pickle
 import time
-from typing import Callable, Tuple  # Dict, List, Optional, Union
+import warnings
+from collections import defaultdict
+from typing import Callable, Dict, Iterable, Tuple
 
 import cloudpickle
 import e3nn_jax as e3nn
@@ -12,12 +15,13 @@ import jax
 import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
-import matplotlib.pyplot as plt
 import numpy as np
 import pyvista
 from jax import lax, vmap
 from jax_md import dataclasses, partition, space
 from segnn_jax import SteerableGraphsTuple
+
+from gns_jax.metrics import MetricsComputer, MetricsDict
 
 # Physical setup for the GNS model.
 
@@ -148,6 +152,8 @@ def graph_transform_builder(
     connectivity_radius: float,
     displacement_fn: Callable,
     pbc: list[bool, bool, bool],
+    magnitudes: bool = False,
+    log_norm: str = "none",
 ) -> Callable:
     """Convert raw coordinates to jraph GraphsTuple."""
 
@@ -174,20 +180,24 @@ def graph_transform_builder(
         flat_velocity_sequence = normalized_velocity_sequence.reshape(
             n_total_points, -1
         )
+        # log normalization
+        if log_norm in ["input", "both"]:
+            flat_velocity_sequence = log_norm_fn(flat_velocity_sequence)
         node_features.append(flat_velocity_sequence)
 
-        # append the magnitude of the velocity of each particle to the node features
-        velocity_magnitude_sequence = jnp.linalg.norm(
-            normalized_velocity_sequence, axis=-1
-        )
-        node_features.append(velocity_magnitude_sequence)
-        # node features shape = (n_nodes, (input_sequence_length - 1) * (dim + 1))
+        if magnitudes:
+            # append the magnitude of the velocity of each particle to the node features
+            velocity_magnitude_sequence = jnp.linalg.norm(
+                normalized_velocity_sequence, axis=-1
+            )
+            node_features.append(velocity_magnitude_sequence)
+            # node features shape = (n_nodes, (input_sequence_length - 1) * (dim + 1))
 
-        # # append the average velocity over all particles to the node features
-        # # we hope that this feature can be used like layer normalization
-        # vel_mag_seq_mean = velocity_magnitude_sequence.mean(axis=0, keepdims=True)
-        # vel_mag_seq_mean_tile = jnp.tile(vel_mag_seq_mean, (n_total_points, 1))
-        # node_features.append(vel_mag_seq_mean_tile)
+            # # append the average velocity over all particles to the node features
+            # # we hope that this feature can be used like layer normalization
+            # vel_mag_seq_mean = velocity_magnitude_sequence.mean(axis=0, keepdims=True)
+            # vel_mag_seq_mean_tile = jnp.tile(vel_mag_seq_mean, (n_total_points, 1))
+            # node_features.append(vel_mag_seq_mean_tile)
 
         # TODO: for now just disable it completely if any periodicity applies
         if not np.array(pbc).any():
@@ -295,6 +305,7 @@ class SetupFn:
     allocate_eval: Callable = dataclasses.static_field()
     preprocess_eval: Callable = dataclasses.static_field()
     integrate: Callable = dataclasses.static_field()
+    metrics_computer: Callable = dataclasses.static_field()
     displacement: Callable = dataclasses.static_field()
 
 
@@ -335,6 +346,8 @@ def setup_builder(args: argparse.Namespace):
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=args.metadata["periodic_boundary_conditions"],
+        magnitudes=args.magnitude,
+        log_norm=args.log_norm,
     )
 
     def _compute_target(pos_input, pos_target):
@@ -421,12 +434,18 @@ def setup_builder(args: argparse.Namespace):
         new_position = shift_fn(most_recent_position, new_velocity)
         return new_position
 
+    def metrics_computer(predictions, ground_truth):
+        return MetricsComputer(args.metrics, displacement_fn, args.metadata)(
+            predictions, ground_truth
+        )
+
     return SetupFn(
         allocate_fn,
         preprocess_fn,
         allocate_eval_fn,
         preprocess_eval_fn,
         integrate_fn,
+        metrics_computer,
         displacement_fn,
     )
 
@@ -449,28 +468,45 @@ def broadcast_from_batch(batch, index: int):
 # Utilities for saving and loading Haiku models
 
 
-def save_pytree(ckpt_dir: str, pytree_obj, name) -> None:
-    with open(os.path.join(ckpt_dir, f"{name}_array.npy"), "wb") as f:
+def save_pytree(ckp_dir: str, pytree_obj, name) -> None:
+    with open(os.path.join(ckp_dir, f"{name}_array.npy"), "wb") as f:
         for x in jax.tree_leaves(pytree_obj):
             np.save(f, x, allow_pickle=False)
 
     tree_struct = jax.tree_map(lambda t: 0, pytree_obj)
-    with open(os.path.join(ckpt_dir, f"{name}_tree.pkl"), "wb") as f:
+    with open(os.path.join(ckp_dir, f"{name}_tree.pkl"), "wb") as f:
         pickle.dump(tree_struct, f)
 
 
-def save_haiku(ckpt_dir: str, params, state, opt_state, step) -> None:
+def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
     """https://github.com/deepmind/dm-haiku/issues/18"""
 
-    print("Saving model to", ckpt_dir, "at step", step)
+    save_pytree(ckp_dir, params, "params")
+    save_pytree(ckp_dir, state, "state")
 
-    save_pytree(ckpt_dir, params, "params")
-    save_pytree(ckpt_dir, state, "state")
-
-    with open(os.path.join(ckpt_dir, "opt_state.pkl"), "wb") as f:
+    with open(os.path.join(ckp_dir, "opt_state.pkl"), "wb") as f:
         cloudpickle.dump(opt_state, f)
-    with open(os.path.join(ckpt_dir, "step.txt"), "w") as f:
-        f.write(str(step))
+    with open(os.path.join(ckp_dir, "metadata_ckp.json"), "w") as f:
+        json.dump(metadata_ckp, f)
+
+    if "best" not in ckp_dir:
+        ckp_dir_best = os.path.join(ckp_dir, "best")
+        metadata_best_path = os.path.join(ckp_dir, "best", "metadata_ckp.json")
+
+        if os.path.exists(metadata_best_path):  # all except first step
+            with open(metadata_best_path, "r") as fp:
+                metadata_ckp_best = json.loads(fp.read())
+
+            # if loss is better than best previous loss, save to best model directory
+            if metadata_ckp["loss"] < metadata_ckp_best["loss"]:
+                print(
+                    f"Saving model to {ckp_dir} at step {metadata_ckp['step']}"
+                    f" with loss {metadata_ckp['loss']} (best so far)"
+                )
+
+                save_haiku(ckp_dir_best, params, state, opt_state, metadata_ckp)
+        else:  # first step
+            save_haiku(ckp_dir_best, params, state, opt_state, metadata_ckp)
 
 
 def load_pytree(model_dir: str, name):
@@ -497,10 +533,10 @@ def load_haiku(model_dir: str):
     with open(os.path.join(model_dir, "opt_state.pkl"), "rb") as f:
         opt_state = cloudpickle.load(f)
 
-    with open(os.path.join(model_dir, "step.txt"), "r") as f:
-        step = int(f.read())
+    with open(os.path.join(model_dir, "metadata_ckp.json"), "r") as fp:
+        metadata_ckp = json.loads(fp.read())
 
-    return params, state, opt_state, step
+    return params, state, opt_state, metadata_ckp["step"]
 
 
 def get_num_params(params):
@@ -548,16 +584,17 @@ def write_vtk_temp(data_dict, path):
 
 
 def eval_single_rollout(
-    setup,
-    model_apply,
-    params,
-    state,
-    neighbors,
-    traj_i,
-    num_rollout_steps,
-    input_sequence_length,
-    graph_postprocess=None,
-):
+    setup: SetupFn,
+    model_apply: hk.TransformedWithState,
+    params: hk.Params,
+    state: hk.State,
+    neighbors: jnp.ndarray,
+    traj_i: Tuple[jnp.ndarray, jnp.ndarray],
+    num_rollout_steps: int,
+    input_sequence_length: int,
+    graph_postprocess: Callable = None,
+    eval_n_more_steps: int = 0,
+) -> Dict:
     pos_input, particle_type = traj_i
 
     # (n_nodes, t_window, dim)
@@ -566,10 +603,17 @@ def eval_single_rollout(
     ground_truth_positions = pos_input[:, input_sequence_length:]
 
     current_positions = initial_positions  # (n_nodes, t_window, dim)
-    predictions = jnp.zeros_like(ground_truth_positions).transpose(1, 0, 2)
+
+    if eval_n_more_steps == 0:
+        # the number of predictions is the number of ground truth positions
+        predictions = jnp.zeros_like(ground_truth_positions).transpose(1, 0, 2)
+    else:
+        num_predictions = num_rollout_steps + eval_n_more_steps
+        num_nodes, _, dim = ground_truth_positions.shape
+        predictions = jnp.zeros((num_predictions, num_nodes, dim))
 
     step = 0
-    while step < num_rollout_steps:
+    while step < num_rollout_steps + eval_n_more_steps:
         sample = (current_positions, particle_type)
         graph, neighbors = setup.preprocess_eval(sample, neighbors)
 
@@ -590,14 +634,17 @@ def eval_single_rollout(
 
         next_position = setup.integrate(normalized_acceleration, current_positions)
 
-        kinematic_mask = get_kinematic_mask(particle_type)
-        next_position_ground_truth = ground_truth_positions[:, step]
+        if eval_n_more_steps == 0:
+            kinematic_mask = get_kinematic_mask(particle_type)
+            next_position_ground_truth = ground_truth_positions[:, step]
 
-        next_position = jnp.where(
-            kinematic_mask[:, None],
-            next_position_ground_truth,
-            next_position,
-        )
+            next_position = jnp.where(
+                kinematic_mask[:, None],
+                next_position_ground_truth,
+                next_position,
+            )
+        else:
+            warnings.warn("kinematic mask is not applied in eval_n_more_steps mode.")
 
         predictions = predictions.at[step].set(next_position)
         current_positions = jnp.concatenate(
@@ -609,40 +656,40 @@ def eval_single_rollout(
     # (n_nodes, traj_len - t_window, dim) -> (traj_len - t_window, n_nodes, dim)
     ground_truth_positions = ground_truth_positions.transpose(1, 0, 2)
 
-    displacement_vmap = vmap(setup.displacement, in_axes=(0, 0))
-    displacement_fn_dvmap = vmap(displacement_vmap, in_axes=(0, 0))
-    # pos_input.shape = (n_nodes, n_timesteps, dim)
-    displacement_tensor = displacement_fn_dvmap(predictions, ground_truth_positions)
-
-    loss = (displacement_tensor**2).mean((1, 2))
-    # the loss is now a vector of length n_timesteps - t_window
-
-    return predictions, loss, neighbors
+    return (
+        predictions,
+        setup.metrics_computer(predictions, ground_truth_positions),
+        neighbors,
+    )
 
 
 def eval_rollout(
-    setup,
-    model_apply,
-    params,
-    state,
-    neighbors,
-    loader_valid,
-    num_rollout_steps,
-    num_trajs,
-    rollout_dir,
-    is_write_vtk=False,
-    graph_postprocess=None,
-):
+    setup: SetupFn,
+    model_apply: hk.TransformedWithState,
+    params: hk.Params,
+    state: hk.State,
+    neighbors: jnp.ndarray,
+    loader_valid: Iterable,
+    num_rollout_steps: int,
+    num_trajs: int,
+    rollout_dir: str,
+    out_type: str = "none",
+    graph_postprocess: Callable = None,
+    eval_n_more_steps: int = 0,
+) -> Tuple[MetricsDict, jnp.ndarray]:
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
-    valid_loss = []
-    plt.figure()
+    eval_metrics = {}
+
+    if rollout_dir is not None:
+        os.makedirs(rollout_dir, exist_ok=True)
+
     for i, traj_i in enumerate(loader_valid):
         # remove batch dimension
         assert traj_i[0].shape[0] == 1, "Batch dimension should be 1"
         traj_i = broadcast_from_batch(traj_i, index=0)  # (nodes, t, dim)
 
-        example_rollout, loss, neighbors = eval_single_rollout(
+        example_rollout, metrics, neighbors = eval_single_rollout(
             setup=setup,
             model_apply=model_apply,
             params=params,
@@ -652,11 +699,10 @@ def eval_rollout(
             num_rollout_steps=num_rollout_steps,
             input_sequence_length=input_sequence_length,
             graph_postprocess=graph_postprocess,
+            eval_n_more_steps=eval_n_more_steps,
         )
 
-        plt.plot(loss, label=f"rollout loss {i}")
-
-        valid_loss.append(loss.mean())
+        eval_metrics[f"rollout_{i}"] = metrics
 
         if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
@@ -666,10 +712,9 @@ def eval_rollout(
                 "predicted_rollout": example_full,  # (t, nodes, dim)
                 "ground_truth_rollout": pos_input,  # (t, nodes, dim)
             }
-            os.makedirs(rollout_dir, exist_ok=True)
 
             file_prefix = f"{rollout_dir}/rollout_{i}"
-            if is_write_vtk:
+            if out_type == "vtk":
 
                 for j in range(pos_input.shape[0]):
                     filename_vtk = file_prefix + f"_{j}.vtk"
@@ -686,7 +731,7 @@ def eval_rollout(
                         "tag": traj_i[1],
                     }
                     write_vtk_temp(state_vtk, filename_vtk)
-            else:
+            if out_type == "pkl":
                 filename = f"{file_prefix}.pkl"
 
                 with open(filename, "wb") as f:
@@ -695,12 +740,26 @@ def eval_rollout(
         if (i + 1) == num_trajs:
             break
 
-    plt.legend()
-    plt.xlabel("time step")
-    plt.ylabel("roullout loss")
-    t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
-    plt.savefig(f"datasets/rollout_loss_{t}.png")
-    return np.mean(valid_loss), neighbors
+    if rollout_dir is not None:
+        # save metrics
+        t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
+        with open(f"{rollout_dir}/metrics{t}.pkl", "wb") as f:
+            pickle.dump(eval_metrics, f)
+
+    return eval_metrics, neighbors
+
+
+def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
+    """Averages the metrics over the rollouts."""
+    small_metrics = defaultdict(lambda: 0.0)
+    for rollout in eval_metrics.values():
+        for k, m in rollout.items():
+            if k == "e_kin":
+                continue
+            if k in ["mse", "mae"]:
+                k = "loss"
+            small_metrics[f"val/{k}"] += float(jnp.mean(m)) / len(eval_metrics)
+    return dict(small_metrics)
 
 
 # Unit Test utils
@@ -721,3 +780,25 @@ class Linear(hk.Module):
     ) -> jraph.GraphsTuple:
         graph, _ = input_
         return jax.vmap(self.mlp)(graph.nodes)
+
+
+# Normalization utils
+
+
+def safe_log(x: jnp.ndarray) -> jnp.ndarray:
+    """Logarithm with clipping to avoid numerical issues."""
+    return jnp.log(jnp.clip(x, a_min=1e-10, a_max=None))
+
+
+def log_norm_fn(x: jnp.ndarray) -> jnp.ndarray:
+    """Log-normalization for Gaussian-distributed data.
+
+    Design choices:
+    1. Clipping is applied to avoid numerical issues.
+    2. The value 1.11 guarantees that stardard Gaussian inputs x are mapped to a
+    distribution with mean 0 and standard deviation 1 (however, not Gaussian anymore).
+    3. The value 0.637 guarantees that if the inputs x are Gaussian with std S, then
+    the outputs of this function have the same std as if the outputs had std 1/S.
+    """
+
+    return jnp.sign(x) * (safe_log(jnp.abs(x)) + 0.637) / 1.11
