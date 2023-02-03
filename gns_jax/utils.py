@@ -153,6 +153,7 @@ def graph_transform_builder(
     displacement_fn: Callable,
     pbc: list[bool, bool, bool],
     magnitudes: bool = False,
+    log_norm: str = "none",
 ) -> Callable:
     """Convert raw coordinates to jraph GraphsTuple."""
 
@@ -179,7 +180,9 @@ def graph_transform_builder(
         flat_velocity_sequence = normalized_velocity_sequence.reshape(
             n_total_points, -1
         )
-        # TODO (Artur): log normalization
+        # log normalization
+        if log_norm in ["input", "both"]:
+            flat_velocity_sequence = log_norm_fn(flat_velocity_sequence)
         node_features.append(flat_velocity_sequence)
 
         if magnitudes:
@@ -344,6 +347,7 @@ def setup_builder(args: argparse.Namespace):
         displacement_fn=displacement_fn,
         pbc=args.metadata["periodic_boundary_conditions"],
         magnitudes=args.magnitude,
+        log_norm=args.log_norm,
     )
 
     def _compute_target(pos_input, pos_target):
@@ -792,3 +796,24 @@ class Linear(hk.Module):
     ) -> jraph.GraphsTuple:
         graph, _ = input_
         return jax.vmap(self.mlp)(graph.nodes)
+
+
+# Normalization utils
+
+
+def safe_log(x: jnp.ndarray) -> jnp.ndarray:
+    """Logarithm with clipping to avoid numerical issues."""
+    return jnp.log(jnp.clip(x, a_min=1e-10, a_max=None))
+
+def log_norm_fn(x: jnp.ndarray) -> jnp.ndarray:
+    """Log-normalization for Gaussian-distributed data.
+    
+    Design choices:
+    1. Clipping is applied to avoid numerical issues.
+    2. The value 1.11 guarantees that stardard Gaussian inputs x are mapped to a 
+    distribution with mean 0 and standard deviation 1 (however, not Gaussian anymore).
+    3. The value 0.637 guarantees that if the inputs x are Gaussian with std S, then 
+    the outputs of this function have the same std as if the outputs had std 1/S.
+    """
+
+    return jnp.sign(x) * (safe_log(jnp.abs(x)) + 0.637) / 1.11 

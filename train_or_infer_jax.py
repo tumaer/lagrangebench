@@ -26,6 +26,7 @@ from gns_jax.utils import (
     get_kinematic_mask,
     get_num_params,
     load_haiku,
+    log_norm_fn,
     metrics_to_screen,
     save_haiku,
     setup_builder,
@@ -100,8 +101,12 @@ def train(
 
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
         num_non_kinematic = non_kinematic_mask.sum()
+
+        if args.log_norm in ["output", "both"]:
+            pred = log_norm_fn(pred)
+            target = log_norm_fn(target)
+
         # MSE loss
-        # TODO (Artur): implement log scaling
         loss = ((pred - target) ** 2).sum(axis=-1)
         loss = jnp.where(non_kinematic_mask, loss, 0)
         loss = loss.sum() / num_non_kinematic
@@ -281,6 +286,13 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--magnitude", action="store_true", help="Of input velocity")
     parser.add_argument("--eval_n_more_steps", type=int, default=0, help="for plotting")
+    
+    parser.add_argument(
+        "--log_norm", 
+        default="none", 
+        choices=["none", "input", "output", "both"],
+        help="Logarithmic normalization of input and/or output"
+    )
 
     # metrics
     parser.add_argument(
