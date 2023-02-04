@@ -65,7 +65,7 @@ def train(
 
     if args.config.wandb:
         wandb.init(
-            project="segnn",
+            project=args.config.wandb_project,
             entity="segnn-sph",
             name=args.info.run_name,
             config=args,
