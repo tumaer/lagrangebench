@@ -65,9 +65,7 @@ def cli_arguments() -> Dict:
         help="Logarithmic normalization of input and/or output",
     )
 
-    parser.add_argument(
-        "--cuda_device", type=int, required=False, help="CUDA device to use."
-    )
+    parser.add_argument("--gpu", type=int, required=False, help="CUDA device to use.")
 
     # segnn arguments
     parser.add_argument(
