@@ -25,6 +25,7 @@ from gns_jax.utils import (
     broadcast_from_batch,
     broadcast_to_batch,
     eval_rollout,
+    get_dataset_normalization,
     get_kinematic_mask,
     get_num_params,
     load_haiku,
@@ -282,20 +283,9 @@ if __name__ == "__main__":
     with open(os.path.join(args.config.data_dir, "metadata.json"), "r") as f:
         args.metadata = json.loads(f.read())
 
-    args.normalization = {
-        "acceleration": {
-            "mean": jnp.array(args.metadata["acc_mean"]),
-            "std": jnp.sqrt(
-                jnp.array(args.metadata["acc_std"]) ** 2 + args.config.noise_std**2
-            ),
-        },
-        "velocity": {
-            "mean": jnp.array(args.metadata["vel_mean"]),
-            "std": jnp.sqrt(
-                jnp.array(args.metadata["vel_std"]) ** 2 + args.config.noise_std**2
-            ),
-        },
-    }
+    args.normalization = get_dataset_normalization(
+        args.metadata, args.config.isotropic_norm, args.config.noise_std
+    )
 
     args.info.num_rollout_steps = (
         args.metadata["sequence_length"] - args.config.input_seq_length

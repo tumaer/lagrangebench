@@ -1,13 +1,13 @@
 includes: defaults.yaml
 
-name: segnn
+model: segnn
 num_mp_steps: 5
 latent_dim: 128
 
-lr_start: 5e-4
-lr_final: 1e-6
-noise_std: 5e-6
-lr_decay_steps: 5000000
+lr_start: 5.e-4
+lr_final: 1.e-6
+noise_std: 1.e-5
+lr_decay_steps: 3.e+5
 
 mode: train
 

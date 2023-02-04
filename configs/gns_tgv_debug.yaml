@@ -1,0 +1,6 @@
+includes: gns_tgv.yaml
+
+num_mp_steps: 2
+latent_dim: 64
+log_steps: 10
+eval_steps: 50

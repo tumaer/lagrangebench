@@ -9,8 +9,9 @@ num_mp_steps: 10
 num_mlp_layers: 2
 # Hidden dimension
 latent_dim: 128
-# Load/save directory
+# Load checkpointed model from this directory
 model_dir:
+# SEGNN only parameters
 # Steerable attributes level
 lmax-attributes: 1
 # Level of the hidden layer
@@ -22,17 +23,19 @@ norm: instance
 # Batch size
 batch_size: 2
 # Starting learning rate
-lr_start: 1e-4
+lr_start: 1.e-4
 # Final learning rate after decay
-lr_final: 1e-6
+lr_final: 1.e-6
 # Rate of learning rate decay
 lr_decay_rate: 0.1
 # Number of steps for the learning rate to decay
-lr_decay_steps: 5000000
+lr_decay_steps: 5.e+6
 # Standard deviation for the additive noise
 noise_std: 0.00067
 # Logarithmic normalization. none, input, output, both
 log_norm: none
+# Whether to normalize inputs and outputs with the same value in x, y, ans z.
+isotropic_norm: False
 
 # Dataset settings
 # Dataset directory
@@ -48,7 +51,7 @@ attribute_mode: add
 # train, eval
 mode:
 # Max steps
-step_max: 20000000
+step_max: 2.e+7
 # Number of evaluation trajectories
 eval_num_trajs: 5
 # Number of extrapolation steps
