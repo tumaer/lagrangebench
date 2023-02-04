@@ -6,7 +6,7 @@ import pickle
 import time
 import warnings
 from collections import defaultdict
-from typing import Callable, Dict, Iterable, Tuple
+from typing import Callable, Dict, Iterable, List, Tuple
 
 import cloudpickle
 import e3nn_jax as e3nn
@@ -320,7 +320,7 @@ def setup_builder(args: argparse.Namespace):
         integrate - Semi-implicit Euler respecting periodic boundary conditions
     """
 
-    normalization_stats = args.normalization_stats
+    normalization_stats = args.normalization
 
     # apply PBC in all directions or not at all
     if np.array(args.metadata["periodic_boundary_conditions"]).any():
@@ -346,8 +346,8 @@ def setup_builder(args: argparse.Namespace):
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=args.metadata["periodic_boundary_conditions"],
-        magnitudes=args.magnitude,
-        log_norm=args.log_norm,
+        magnitudes=args.config.magnitude,
+        log_norm=args.config.log_norm,
     )
 
     def _compute_target(pos_input, pos_target):
@@ -435,7 +435,7 @@ def setup_builder(args: argparse.Namespace):
         return new_position
 
     def metrics_computer(predictions, ground_truth):
-        return MetricsComputer(args.metrics, displacement_fn, args.metadata)(
+        return MetricsComputer(args.config.metrics, displacement_fn, args.metadata)(
             predictions, ground_truth
         )
 
@@ -802,3 +802,41 @@ def log_norm_fn(x: jnp.ndarray) -> jnp.ndarray:
     """
 
     return jnp.sign(x) * (safe_log(jnp.abs(x)) + 0.637) / 1.11
+
+
+def get_dataset_normalization(
+    metadata: Dict[str, List[float]],
+    is_isotropic_norm: bool,
+    noise_std: float,
+) -> Dict[str, Dict[str, np.ndarray]]:
+
+    acc_mean = np.array(metadata["acc_mean"])
+    acc_std = np.array(metadata["acc_std"])
+    vel_mean = np.array(metadata["vel_mean"])
+    vel_std = np.array(metadata["vel_std"])
+
+    if is_isotropic_norm:
+        warnings.warn(
+            "The isotropic normalization is only a simplification of the general case."
+            "It is only valid if the means of the velocity and acceleration are"
+            "isotropic -> we use $max(abs(mean)) < 1% min(std)$ as a heuristic."
+        )
+
+        assert np.max(np.abs(acc_mean)) < 0.01 * np.min(acc_std)
+        assert np.max(np.abs(vel_mean)) < 0.01 * np.min(vel_std)
+
+        acc_mean = np.mean(acc_mean) * np.ones_like(acc_mean)
+        acc_std = np.sqrt(np.mean(acc_std**2)) * np.ones_like(acc_std)
+        vel_mean = np.mean(vel_mean) * np.ones_like(vel_mean)
+        vel_std = np.sqrt(np.mean(vel_std**2)) * np.ones_like(vel_std)
+
+    return {
+        "acceleration": {
+            "mean": acc_mean,
+            "std": np.sqrt(acc_std**2 + noise_std**2),
+        },
+        "velocity": {
+            "mean": vel_mean,
+            "std": np.sqrt(vel_std**2 + noise_std**2),
+        },
+    }
