@@ -58,6 +58,8 @@ eval_num_trajs: 5
 eval_n_more_steps: 0
 # Seed
 seed: 0
+# Cuda device
+cuda_device: 0
 
 # Logging settings
 # Use wandb for logging

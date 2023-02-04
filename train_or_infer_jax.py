@@ -1,8 +1,8 @@
 """GNS in JAX with Haiku, Jraph, and JAX-MD"""
 
+import copy
 import json
 import os
-from argparse import Namespace
 from typing import Tuple
 
 import haiku as hk
@@ -16,7 +16,6 @@ from jax import vmap
 from torch.utils.data import DataLoader
 
 import wandb
-from gns_jax.configs import NestedLoader, cli_arguments
 from gns_jax.data import H5Dataset, numpy_collate
 from gns_jax.utils import (
     Linear,
@@ -63,12 +62,17 @@ def train(
     with open(os.path.join(ckp_dir, "config.yaml"), "w") as f:
         yaml.dump(vars(args.config), f)
 
+    # wandb doesn't like Namespace objects
+    args_ = copy.copy(args)
+    args_.config = vars(args.config)
+    args_.info = vars(args.info)
+
     if args.config.wandb:
         wandb.init(
             project=args.config.wandb_project,
             entity="segnn-sph",
             name=args.info.run_name,
-            config=args,
+            config=args_,
             save_code=True,
         )
 
@@ -260,20 +264,7 @@ def infer(
     print(averaged_metrics(eval_metrics))
 
 
-if __name__ == "__main__":
-    # priority to command line arguments
-    cli_args = cli_arguments()
-    if "config" in cli_args:
-        config_path = cli_args["config"]
-    elif "model_dir" in cli_args:
-        config_path = os.path.join(cli_args["model_dir"], "config.yaml")
-
-    with open(config_path, "r") as f:
-        args = yaml.load(f, NestedLoader)
-
-    # cli arguments have priority
-    args.update(cli_args)
-    args = Namespace(config=Namespace(**args), info=Namespace())
+def run(args):
 
     args.info.dataset_name = os.path.basename(args.config.data_dir.split("/")[-1])
     if args.config.ckp_dir is not None:

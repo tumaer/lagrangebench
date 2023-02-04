@@ -12,6 +12,7 @@ lr_decay_steps: 3.e+5
 
 mode: train
 eval_num_trajs: 1
+
 wandb: True
 wandb_project: tgv
 
