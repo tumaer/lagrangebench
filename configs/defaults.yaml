@@ -40,6 +40,8 @@ isotropic_norm: False
 # Dataset settings
 # Dataset directory
 data_dir:
+# Number of rollout steps. If "-1", then defaults to sequence_length - input_seq_len.
+num_rollout_steps: -1
 # Whether to use magnitudes or not
 magnitudes: False
 # Method to aggregate velocity. avg, sum, last, all

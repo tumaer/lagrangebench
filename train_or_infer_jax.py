@@ -209,7 +209,7 @@ def train(
                     state=state,
                     neighbors=nbrs,
                     loader_valid=loader_valid,
-                    num_rollout_steps=args.info.num_rollout_steps
+                    num_rollout_steps=args.config.num_rollout_steps
                     + 1,  # +1 not training
                     num_trajs=args.config.eval_num_trajs,
                     rollout_dir=args.config.rollout_dir,
@@ -253,7 +253,7 @@ def infer(
         state=state,
         neighbors=neighbors,
         loader_valid=loader_valid,
-        num_rollout_steps=args.info.num_rollout_steps
+        num_rollout_steps=args.config.num_rollout_steps
         + 1,  # +1 because we are not training
         num_trajs=args.config.eval_num_trajs,
         rollout_dir=args.config.rollout_dir,
@@ -278,9 +278,10 @@ def run(args):
         args.metadata, args.config.isotropic_norm, args.config.noise_std
     )
 
-    args.info.num_rollout_steps = (
-        args.metadata["sequence_length"] - args.config.input_seq_length
-    )
+    if args.config.num_rollout_steps == -1:
+        args.config.num_rollout_steps = (
+            args.metadata["sequence_length"] - args.config.input_seq_length
+        )
 
     # dataloader
     data_train = H5Dataset(
@@ -301,6 +302,9 @@ def run(args):
         dataset=data_valid, batch_size=1, collate_fn=numpy_collate
     )
 
+    args.info.len_train = len(data_train)
+    args.info.len_valid = len(data_valid)
+
     # neighbors search
     bounds = np.array(args.metadata["bounds"])
     args.box = bounds[:, 1] - bounds[:, 0]
@@ -313,7 +317,7 @@ def run(args):
     elif args.info.dataset_name in ["WaterDrop", "WaterDropSample"]:
         particle_dimension = 2
         # node_in = 30, edge_in = 3
-    elif "TGV" in args.info.dataset_name.upper():
+    elif "TGV" in args.info.dataset_name.upper() or "RPF" in args.info.dataset_name:
         particle_dimension = 3
 
     # preprocessing allocate and update functions in the spirit of jax-md"s
