@@ -65,6 +65,13 @@ def cli_arguments() -> Dict:
         help="Logarithmic normalization of input and/or output",
     )
 
+    parser.add_argument(
+        "--oversmooth_norm_hops",
+        type=int,
+        required=False,
+        help="Number of hops for oversmoothing normalization.",
+    )
+
     parser.add_argument("--gpu", type=int, required=False, help="CUDA device to use.")
 
     # segnn arguments
