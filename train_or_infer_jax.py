@@ -29,6 +29,7 @@ from gns_jax.utils import (
     get_num_params,
     load_haiku,
     log_norm_fn,
+    oversmooth_norm,
     save_haiku,
     setup_builder,
     steerable_graph_transform_builder,
@@ -101,6 +102,12 @@ def train(
         target: jnp.ndarray,
         particle_type: jnp.ndarray,
     ):
+
+        if args.config.oversmooth_norm_hops > 0:
+            graph, most_recent_vel_magnitude = oversmooth_norm(
+                graph, args.config.oversmooth_norm_hops, args.config.input_seq_length
+            )
+
         # TODO: not the best place to put the O3 transform function
         if graph_postprocess:
             graph_in = graph_postprocess(graph, particle_type)
@@ -109,6 +116,9 @@ def train(
 
         pred, state = model.apply(params, state, graph_in)
         assert target.shape == pred.shape
+
+        if args.config.oversmooth_norm_hops > 0:
+            pred *= most_recent_vel_magnitude[:, None]
 
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
         num_non_kinematic = non_kinematic_mask.sum()
@@ -215,6 +225,7 @@ def train(
                     rollout_dir=args.config.rollout_dir,
                     out_type=args.config.out_type,
                     graph_postprocess=graph_postprocess,
+                    oversmooth_norm_hops=args.config.oversmooth_norm_hops,
                 )
                 # In the beginning of training, the dynamics ae very random and
                 # we don"t want to influence the training neighbors list by
@@ -260,6 +271,7 @@ def infer(
         out_type=args.config.out_type,
         graph_postprocess=graph_postprocess,
         eval_n_more_steps=args.config.eval_n_more_steps,
+        oversmooth_norm_hops=args.config.oversmooth_norm_hops,
     )
     print(averaged_metrics(eval_metrics))
 

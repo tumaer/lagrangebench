@@ -36,6 +36,8 @@ noise_std: 0.00067
 log_norm: none
 # Whether to normalize inputs and outputs with the same value in x, y, ans z.
 isotropic_norm: False
+# With how many veraging steps to normalize velocities
+oversmooth_norm_hops: 0
 
 # Dataset settings
 # Dataset directory

@@ -594,6 +594,7 @@ def eval_single_rollout(
     input_sequence_length: int,
     graph_postprocess: Callable = None,
     eval_n_more_steps: int = 0,
+    oversmooth_norm_hops: int = 0,
 ) -> Dict:
     pos_input, particle_type = traj_i
 
@@ -625,12 +626,20 @@ def eval_single_rollout(
 
             continue
 
+        if oversmooth_norm_hops > 0:
+            graph, most_recent_vel_magnitude = oversmooth_norm(
+                graph, oversmooth_norm_hops, input_sequence_length
+            )
+
         if graph_postprocess:
             graph_tuple = graph_postprocess(graph, particle_type)
         else:
             graph_tuple = (graph, particle_type)
 
         normalized_acceleration, state = model_apply(params, state, graph_tuple)
+
+        if oversmooth_norm_hops > 0:
+            normalized_acceleration *= most_recent_vel_magnitude[:, None]
 
         next_position = setup.integrate(normalized_acceleration, current_positions)
 
@@ -676,6 +685,7 @@ def eval_rollout(
     out_type: str = "none",
     graph_postprocess: Callable = None,
     eval_n_more_steps: int = 0,
+    oversmooth_norm_hops: int = 0,
 ) -> Tuple[MetricsDict, jnp.ndarray]:
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
@@ -700,6 +710,7 @@ def eval_rollout(
             input_sequence_length=input_sequence_length,
             graph_postprocess=graph_postprocess,
             eval_n_more_steps=eval_n_more_steps,
+            oversmooth_norm_hops=oversmooth_norm_hops,
         )
 
         eval_metrics[f"rollout_{i}"] = metrics
@@ -840,3 +851,28 @@ def get_dataset_normalization(
             "std": np.sqrt(vel_std**2 + noise_std**2),
         },
     }
+
+
+def oversmooth_norm(graph, hops, input_seq_length):
+    isl = input_seq_length
+    # assumes that the last three channels are the most recent velocity
+    most_recent_vel = graph.nodes[:, (isl - 2) * 3 : (isl - 1) * 3]
+    most_recent_vel_magnitude = jnp.linalg.norm(most_recent_vel, axis=1)
+
+    # average over velocity magnitudes to get an estimate of average velocity.
+    for _ in range(hops):
+        most_recent_vel_magnitude = jraph.segment_mean(
+            most_recent_vel_magnitude[graph.senders],
+            graph.receivers,
+            graph.nodes.shape[0],
+        )
+
+    rescaled_vel = jnp.where(
+        most_recent_vel_magnitude[:, None],
+        graph.nodes[:, : (isl - 1) * 3] / most_recent_vel_magnitude[:, None],
+        0,
+    )
+    new_node_features = graph.nodes.at[:, : (isl - 1) * 3].set(rescaled_vel)
+    graph = graph._replace(nodes=new_node_features)
+
+    return graph, most_recent_vel_magnitude
