@@ -14,6 +14,9 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--model", type=str, choices=["gns", "segnn", "lin"], help="Model name."
     )
+    parser.add_argument(
+        "--mode", type=str, choices=["train", "infer"], help="Train or evaluate."
+    )
     parser.add_argument("--batch_size", type=int, required=False, help="Batch size.")
     parser.add_argument(
         "--lr_start", type=float, required=False, help="Starting learning rate."
