@@ -326,15 +326,27 @@ def run(args):
         particle_dimension = 3
         # node_in = 37, edge_in = 4
         args.box *= 1.2
+        external_force_fn = lambda x: jnp.array([0.0, 0.0, -1.0])
     elif args.info.dataset_name in ["WaterDrop", "WaterDropSample"]:
         particle_dimension = 2
         # node_in = 30, edge_in = 3
-    elif "TGV" in args.info.dataset_name.upper() or "RPF" in args.info.dataset_name:
+        external_force_fn = None
+    elif "TGV" in args.info.dataset_name.upper():
         particle_dimension = 3
+        external_force_fn = None
+    elif "RPF" in args.info.dataset_name:
+        particle_dimension = 3
+
+        def external_force_fn(position):
+            return jnp.where(
+                position[1] > 1.0,
+                jnp.array([-1.0, 0.0, 0.0]),
+                jnp.array([1.0, 0.0, 0.0]),
+            )
 
     # preprocessing allocate and update functions in the spirit of jax-md"s
     # `partition.neighbor_list`. And an integration utility with PBC.
-    setup = setup_builder(args)
+    setup = setup_builder(args, external_force_fn)
 
     # first PRNG key
     key = jax.random.PRNGKey(args.config.seed)

@@ -75,6 +75,18 @@ def cli_arguments() -> Dict:
         help="Number of hops for oversmoothing normalization.",
     )
 
+    parser.add_argument(
+        "--out_type",
+        type=str,
+        required=False,
+        choices=["vtk", "pkl", "none"],
+        help="Output type to store rollouts.",
+    )
+
+    parser.add_argument(
+        "--rollout_dir", type=str, required=False, help="Directory to write rollouts."
+    )
+
     parser.add_argument("--gpu", type=int, required=False, help="CUDA device to use.")
 
     # segnn arguments

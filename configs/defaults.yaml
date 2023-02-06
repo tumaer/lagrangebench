@@ -46,6 +46,7 @@ data_dir:
 num_rollout_steps: -1
 # Whether to use magnitudes or not
 magnitudes: False
+# SEGNN only parameters
 # Method to aggregate velocity. avg, sum, last, all
 velocity_aggregate: avg
 # Method to compose attributes. add, concat

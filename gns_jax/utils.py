@@ -154,6 +154,7 @@ def graph_transform_builder(
     pbc: list[bool, bool, bool],
     magnitudes: bool = False,
     log_norm: str = "none",
+    external_force_fn: Callable = None,
 ) -> Callable:
     """Convert raw coordinates to jraph GraphsTuple."""
 
@@ -217,6 +218,10 @@ def graph_transform_builder(
                 distance_to_boundaries / connectivity_radius, -1.0, 1.0
             )
             node_features.append(normalized_clipped_distance_to_boundaries)
+
+        if external_force_fn is not None:
+            external_force_field = vmap(external_force_fn)(most_recent_position)
+            node_features.append(external_force_field)
 
         # Collect edge features.
         edge_features = []
@@ -309,7 +314,7 @@ class SetupFn:
     displacement: Callable = dataclasses.static_field()
 
 
-def setup_builder(args: argparse.Namespace):
+def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
     """Contains essentially everything except the model itself.
 
     Very much inspired by the `partition.neighbor_list` function in JAX-MD.
@@ -324,7 +329,7 @@ def setup_builder(args: argparse.Namespace):
 
     # apply PBC in all directions or not at all
     if np.array(args.metadata["periodic_boundary_conditions"]).any():
-        displacement_fn, shift_fn = space.periodic(side=args.box)
+        displacement_fn, shift_fn = space.periodic(side=np.array(args.box))
     else:
         displacement_fn, shift_fn = space.free()
 
@@ -332,7 +337,7 @@ def setup_builder(args: argparse.Namespace):
 
     neighbor_fn = partition.neighbor_list(
         displacement_fn,
-        args.box,
+        np.array(args.box),
         r_cutoff=args.metadata["default_connectivity_radius"],
         dr_threshold=args.metadata["default_connectivity_radius"] * 0.25,
         capacity_multiplier=1.25,
@@ -348,6 +353,7 @@ def setup_builder(args: argparse.Namespace):
         pbc=args.metadata["periodic_boundary_conditions"],
         magnitudes=args.config.magnitude,
         log_norm=args.config.log_norm,
+        external_force_fn=external_force_fn,
     )
 
     def _compute_target(pos_input, pos_target):
