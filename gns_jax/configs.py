@@ -76,6 +76,10 @@ def cli_arguments() -> Dict:
     )
 
     parser.add_argument(
+        "--isotropic_norm", action="store_true", help="Use isotropic normalization."
+    )
+    
+    parser.add_argument(
         "--out_type",
         type=str,
         required=False,
