@@ -403,12 +403,17 @@ def run(args):
             magnitude_irrep = f"+ {args.config.input_seq_length - 1}x0e"
         else:
             magnitude_irrep = ""
+        if external_force_fn:
+            force_irrep = "+ 1x1o"
+        else:
+            force_irrep = ""
 
         args.info.node_feature_irreps = (
             f"{args.config.input_seq_length - 1}x1o "
             f"{magnitude_irrep} "
-            f"{pbc_irrep} + "
-            f"{NodeType.SIZE}x0e"
+            f"{pbc_irrep}"
+            f"{force_irrep}"
+            f"+ {NodeType.SIZE}x0e"
         )
 
         graph_postprocess = steerable_graph_transform_builder(

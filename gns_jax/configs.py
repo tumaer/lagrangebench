@@ -99,13 +99,13 @@ def cli_arguments() -> Dict:
 
     # segnn arguments
     parser.add_argument(
-        "--lmax-attributes",
+        "--lmax_attributes",
         type=int,
         required=False,
         help="Maximum degree of attributes.",
     )
     parser.add_argument(
-        "--lmax-hidden",
+        "--lmax_hidden",
         type=int,
         required=False,
         help="Maximum degree of hidden layers.",

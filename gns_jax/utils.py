@@ -80,6 +80,8 @@ def steerable_graph_transform_builder(
             if velocity_aggregate == "last":
                 vel = traj[:, -1, :]
 
+        # TODO temp for the forces. Should put in node attributes?
+        # force = graph.nodes[..., -3:]
         rel_pos = graph.edges[..., :3]
 
         edge_attributes = e3nn.spherical_harmonics(
@@ -88,6 +90,9 @@ def steerable_graph_transform_builder(
         vel_embedding = e3nn.spherical_harmonics(
             attribute_irreps, vel, normalize=True, normalization="integral"
         )
+        # force_embedding = e3nn.spherical_harmonics(
+        #     attribute_irreps, force, normalize=True, normalization="integral"
+        # )
         # scatter edge attributes
         sum_n_node = tree.tree_leaves(graph.nodes)[0].shape[0]
 
