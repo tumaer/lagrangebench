@@ -65,6 +65,8 @@ eval_n_more_steps: 0
 seed: 0
 # Cuda device
 gpu: 0
+# Whether to use test or validation split
+test: False
 
 # Logging settings
 # Use wandb for logging

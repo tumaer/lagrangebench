@@ -56,7 +56,7 @@ def cli_arguments() -> Dict:
     )
 
     parser.add_argument(
-        "--magnitude",
+        "--magnitudes",
         action="store_true",
         help="Whether to include velocity magnitudes in node features.",
     )
@@ -78,7 +78,7 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--isotropic_norm", action="store_true", help="Use isotropic normalization."
     )
-    
+
     parser.add_argument(
         "--out_type",
         type=str,
@@ -92,6 +92,10 @@ def cli_arguments() -> Dict:
     )
 
     parser.add_argument("--gpu", type=int, required=False, help="CUDA device to use.")
+
+    parser.add_argument(
+        "--test", action="store_true", help="Run test mode instead of validation."
+    )
 
     # segnn arguments
     parser.add_argument(

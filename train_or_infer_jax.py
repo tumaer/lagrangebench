@@ -307,8 +307,9 @@ def run(args):
         collate_fn=numpy_collate,
         drop_last=True,
     )
+    infer_split = "test" if args.config.test else "valid"
     data_valid = H5Dataset(
-        args.config.data_dir, "valid", args.config.input_seq_length, is_rollout=True
+        args.config.data_dir, infer_split, args.config.input_seq_length, is_rollout=True
     )
     loader_valid = DataLoader(
         dataset=data_valid, batch_size=1, collate_fn=numpy_collate
