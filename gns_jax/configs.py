@@ -76,7 +76,7 @@ def cli_arguments() -> Dict:
     )
 
     parser.add_argument(
-        "--isotropic_norm", action="store_true", help="Use isotropic normalization."
+        "--isotropic_norm", action=argparse.BooleanOptionalAction, help="Use isotropic normalization."
     )
 
     parser.add_argument(
@@ -94,7 +94,7 @@ def cli_arguments() -> Dict:
     parser.add_argument("--gpu", type=int, required=False, help="CUDA device to use.")
 
     parser.add_argument(
-        "--test", action="store_true", help="Run test mode instead of validation."
+        "--test", action=argparse.BooleanOptionalAction, help="Run test mode instead of validation."
     )
 
     # segnn arguments
