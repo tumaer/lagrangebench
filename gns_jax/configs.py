@@ -78,7 +78,7 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--isotropic_norm", action="store_true", help="Use isotropic normalization."
     )
-    
+
     parser.add_argument(
         "--out_type",
         type=str,
@@ -95,13 +95,13 @@ def cli_arguments() -> Dict:
 
     # segnn arguments
     parser.add_argument(
-        "--lmax-attributes",
+        "--lmax_attributes",
         type=int,
         required=False,
         help="Maximum degree of attributes.",
     )
     parser.add_argument(
-        "--lmax-hidden",
+        "--lmax_hidden",
         type=int,
         required=False,
         help="Maximum degree of hidden layers.",
