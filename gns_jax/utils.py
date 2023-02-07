@@ -843,7 +843,7 @@ def get_dataset_normalization(
             "It is only valid if the means of the velocity and acceleration are"
             "isotropic -> we use $max(abs(mean)) < 1% min(std)$ as a heuristic."
         )
-        
+
         acc_mean = np.mean(acc_mean) * np.ones_like(acc_mean)
         acc_std = np.sqrt(np.mean(acc_std**2)) * np.ones_like(acc_std)
         vel_mean = np.mean(vel_mean) * np.ones_like(vel_mean)
