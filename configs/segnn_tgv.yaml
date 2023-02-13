@@ -14,7 +14,7 @@ isotropic_norm: True
 mode: train
 eval_num_trajs: 1
 
-wandb: False
+wandb: True
 wandb_project: tgv
 
 data_dir: /home/atoshev/data/TGV1k12
