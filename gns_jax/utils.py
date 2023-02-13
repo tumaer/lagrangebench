@@ -9,17 +9,14 @@ from collections import defaultdict
 from typing import Callable, Dict, Iterable, List, Tuple
 
 import cloudpickle
-import e3nn_jax as e3nn
 import haiku as hk
 import jax
 import jax.numpy as jnp
-import jax.tree_util as tree
 import jraph
 import numpy as np
 import pyvista
 from jax import lax, vmap
 from jax_md import dataclasses, partition, space
-from segnn_jax import SteerableGraphsTuple
 
 from gns_jax.metrics import MetricsComputer, MetricsDict
 
@@ -34,124 +31,12 @@ class NodeType(enum.IntEnum):
     SIZE = 9
 
 
-# TODO: this is not the right place for this. It's an util for segnn and not gns
-
-
-def steerable_graph_transform_builder(
-    node_features_irreps: e3nn.Irreps,
-    edge_features_irreps: e3nn.Irreps,
-    lmax_attributes: int,
-    velocity_aggregate: str = "avg",
-    attribute_mode: str = "add",
-    pbc: list[bool, bool, bool] = [False, False, False],
-) -> Callable:
-    """
-    Convert the standard gns GraphsTuple into a SteerableGraphsTuple to use in SEGNN.
-    """
-
-    attribute_irreps = e3nn.Irreps.spherical_harmonics(lmax_attributes)
-
-    assert velocity_aggregate in ["avg", "sum", "last", "all"]
-    assert attribute_mode in ["velocity", "add", "concat"]
-
-    # TODO: for now only 1) all directions periodic or 2) none of them
-    if np.array(pbc).any():  # if PBC, no boundary forces
-        num_boundary_entries = 0
-    else:
-        num_boundary_entries = 6
-
-    def graph_transform(
-        graph: jraph.GraphsTuple,
-        particle_type: jnp.ndarray,
-    ) -> SteerableGraphsTuple:
-        n_vels = (graph.nodes.shape[1] - num_boundary_entries) // 3
-        traj = jnp.reshape(
-            graph.nodes[..., : 3 * n_vels],
-            (graph.nodes.shape[0], n_vels, 3),
-        )
-
-        if n_vels == 1 or velocity_aggregate == "all":
-            vel = jnp.squeeze(traj)
-        else:
-            if velocity_aggregate == "avg":
-                vel = jnp.mean(traj, 1)
-            if velocity_aggregate == "sum":
-                vel = jnp.sum(traj, 1)
-            if velocity_aggregate == "last":
-                vel = traj[:, -1, :]
-
-        rel_pos = graph.edges[..., :3]
-
-        edge_attributes = e3nn.spherical_harmonics(
-            attribute_irreps, rel_pos, normalize=True, normalization="integral"
-        )
-        vel_embedding = e3nn.spherical_harmonics(
-            attribute_irreps, vel, normalize=True, normalization="integral"
-        )
-        # scatter edge attributes
-        sum_n_node = tree.tree_leaves(graph.nodes)[0].shape[0]
-
-        if attribute_mode == "velocity":
-            node_attributes = vel_embedding
-        else:
-            scattered_edges = tree.tree_map(
-                lambda e: jraph.segment_mean(e, graph.receivers, sum_n_node),
-                edge_attributes,
-            )
-            if attribute_mode == "concat":
-                node_attributes = e3nn.concatenate(
-                    [scattered_edges, vel_embedding], axis=-1
-                )
-            if attribute_mode == "add":
-                node_attributes = vel_embedding
-                # TODO: a bit ugly
-                if velocity_aggregate == "all":
-                    # transpose for broadcasting
-                    node_attributes.array = jnp.transpose(
-                        (
-                            jnp.transpose(node_attributes.array, (0, 2, 1))
-                            + jnp.expand_dims(scattered_edges.array, -1)
-                        ),
-                        (0, 2, 1),
-                    )
-                else:
-                    node_attributes += scattered_edges
-
-        # scalar attribute to 1 by default
-        node_attributes.array = node_attributes.array.at[:, 0].set(1.0)
-
-        return SteerableGraphsTuple(
-            graph=jraph.GraphsTuple(
-                nodes=e3nn.IrrepsArray(
-                    node_features_irreps,
-                    jnp.concatenate(
-                        [graph.nodes, jax.nn.one_hot(particle_type, NodeType.SIZE)],
-                        axis=-1,
-                    ),
-                ),
-                edges=None,
-                senders=graph.senders,
-                receivers=graph.receivers,
-                n_node=graph.n_node,
-                n_edge=graph.n_edge,
-                globals=graph.globals,
-            ),
-            node_attributes=node_attributes,
-            edge_attributes=edge_attributes,
-            additional_message_features=e3nn.IrrepsArray(
-                edge_features_irreps, graph.edges
-            ),
-        )
-
-    return graph_transform
-
-
 def graph_transform_builder(
     bounds: list,
     normalization_stats: dict,
     connectivity_radius: float,
     displacement_fn: Callable,
-    pbc: list[bool, bool, bool],
+    pbc: bool = False,
     magnitudes: bool = False,
     log_norm: str = "none",
 ) -> Callable:
@@ -200,7 +85,7 @@ def graph_transform_builder(
             # node_features.append(vel_mag_seq_mean_tile)
 
         # TODO: for now just disable it completely if any periodicity applies
-        if not np.array(pbc).any():
+        if not pbc:
             # Normalized clipped distances to lower and upper boundaries.
             # boundaries are an array of shape [num_dimensions, 2], where the
             # second axis, provides the lower/upper boundaries.
@@ -345,7 +230,7 @@ def setup_builder(args: argparse.Namespace):
         normalization_stats=normalization_stats,
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
-        pbc=args.metadata["periodic_boundary_conditions"],
+        pbc=any(args.metadata["periodic_boundary_conditions"]),
         magnitudes=args.config.magnitude,
         log_norm=args.config.log_norm,
     )

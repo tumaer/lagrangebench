@@ -16,8 +16,12 @@ model_dir:
 lmax_attributes: 1
 # Level of the hidden layer
 lmax_hidden: 1
-# Normalization. instance, batch, none
-norm: instance
+# SEGNN normalization. instance, batch, none
+segnn_norm: instance
+# Number of attention layers. 0 for linear layer
+attention_blocks: 0
+# Wether to use the last velocity as steerable attribute in the embedding
+right_attribute: False
 
 # Optimization settings
 # Batch size

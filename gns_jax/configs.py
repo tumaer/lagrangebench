@@ -12,7 +12,10 @@ def cli_arguments() -> Dict:
     group.add_argument("--model_dir", type=str, help="Path to the model checkpoint.")
 
     parser.add_argument(
-        "--model", type=str, choices=["gns", "segnn", "lin"], help="Model name."
+        "--model",
+        type=str,
+        choices=["gns", "segnn", "segnn_attention", "segnn_rewind", "lin"],
+        help="Model name.",
     )
     parser.add_argument("--batch_size", type=int, required=False, help="Batch size.")
     parser.add_argument(
@@ -65,7 +68,9 @@ def cli_arguments() -> Dict:
         help="Logarithmic normalization of input and/or output",
     )
 
-    parser.add_argument("--gpu", type=int, required=False, help="CUDA device to use.")
+    parser.add_argument(
+        "--gpu", type=int, required=False, help="CUDA device ID to use."
+    )
 
     # segnn arguments
     parser.add_argument(
@@ -91,7 +96,7 @@ def cli_arguments() -> Dict:
         "--velocity_aggregate",
         type=str,
         required=False,
-        choices=["avg", "sum", "last"],
+        choices=["avg", "sum", "last", "all"],
         help="Velocity aggregation function for node attributes.",
     )
     parser.add_argument(
@@ -100,6 +105,19 @@ def cli_arguments() -> Dict:
         required=False,
         choices=["add", "concat", "velocity"],
         help="How to combine node attributes.",
+    )
+
+    parser.add_argument(
+        "--right_attribute",
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="Whether to use last velocity to steer the attribute embedding.",
+    )
+    parser.add_argument(
+        "--attention_blocks",
+        required=False,
+        type=int,
+        help="Number of attention layers.",
     )
 
     # only keep passed arguments to avoid overwriting config
