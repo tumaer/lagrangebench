@@ -1,0 +1,88 @@
+# Model settings
+# Model architecture name. gns, segnn, segnn_attention, segnn_rewind
+model:
+# Length of the position input sequence
+input_seq_length: 6
+# Number of message passing steps
+num_mp_steps: 10
+# Number of MLP layers
+num_mlp_layers: 2
+# Hidden dimension
+latent_dim: 128
+# Load checkpointed model from this directory
+model_dir:
+# SEGNN only parameters
+# Steerable attributes level
+lmax_attributes: 1
+# Level of the hidden layer
+lmax_hidden: 1
+# SEGNN normalization. instance, batch, none
+segnn_norm: instance
+# Number of attention layers. 0 for linear layer
+attention_blocks: 0
+# Wether to use the last velocity as steerable attribute in the embedding
+right_attribute: False
+
+# Optimization settings
+# Batch size
+batch_size: 2
+# Starting learning rate
+lr_start: 1.e-4
+# Final learning rate after decay
+lr_final: 1.e-6
+# Rate of learning rate decay
+lr_decay_rate: 0.1
+# Number of steps for the learning rate to decay
+lr_decay_steps: 5.e+6
+# Standard deviation for the additive noise
+noise_std: 0.00067
+# Logarithmic normalization. none, input, output, both
+log_norm: none
+# Whether to normalize inputs and outputs with the same value in x, y, ans z.
+isotropic_norm: False
+
+# Dataset settings
+# Dataset directory
+data_dir:
+# Number of rollout steps. If "-1", then defaults to sequence_length - input_seq_len.
+num_rollout_steps: -1
+# Whether to use magnitudes or not
+magnitudes: False
+# Method to aggregate velocity. avg, sum, last, all
+velocity_aggregate: avg
+# Method to compose attributes. add, concat
+attribute_mode: add
+
+# Run settings
+# train, eval
+mode:
+# Max steps
+step_max: 2.e+7
+# Number of evaluation trajectories
+eval_num_trajs: 5
+# Number of extrapolation steps
+eval_n_more_steps: 0
+# Seed
+seed: 0
+# Cuda device
+gpu: 0
+
+# Logging settings
+# Use wandb for logging
+wandb: false
+wandb_project: False
+# Number of steps between training logging
+log_steps: 1000
+# Number of steps between evaluation
+eval_steps: 5000
+# Number of steps between checkpoints
+save_steps: 5000
+# Checkpoint directory
+ckp_dir: ckp
+# Rollout/metrics directory
+rollout_dir:
+# Rollout storage format. vtk, pkl, none
+out_type: none
+# List of metrics. mse, mae, sinkhorn, emd, e_kin
+metrics:
+  - mse

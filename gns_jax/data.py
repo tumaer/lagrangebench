@@ -1,5 +1,4 @@
 import bisect
-import json
 import os
 
 import h5py
@@ -30,11 +29,16 @@ class H5Dataset(Dataset):
         self.file_path = os.path.join(dataset_path, split + ".h5")
         self.input_sequence_length = input_sequence_length
 
-        with open(os.path.join(dataset_path, "metadata.json"), "r") as fp:
-            metadata = json.loads(fp.read())
-
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())
+
+            sequence_length = f["0000/position"].shape[0]
+
+            # # the true sequence length is not the one in the metadata file. The
+            # # very first frame is needed to compute the velocity.
+            # with open(os.path.join(dataset_path, "metadata.json"), "r") as fp:
+            #     metadata = json.loads(fp.read())
+            # sequence_length = metadata["sequence_length"] + 1
 
             # For some datasets the number of particles per trajectory varies.
             # For the purpose of batching we need to pad the trajectories to
@@ -52,9 +56,7 @@ class H5Dataset(Dataset):
             self.getter = self.get_trajectory
             self.num_samples = len(self.traj_keys)
         else:
-            # the true sequence length is not the one in the metadata file. The
-            # very first frame is needed to compute the velocity.
-            sequence_length = metadata["sequence_length"] + 1
+
             samples_per_traj = sequence_length - self.input_sequence_length
             keylens = [samples_per_traj for _ in range(len(self.traj_keys))]
             self._keylen_cumulative = np.cumsum(keylens).tolist()

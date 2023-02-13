@@ -70,6 +70,7 @@ ARGS = {
 device = "cuda"
 with open(os.path.join(DATA_DIR, "metadata.json"), "rt") as f:
     metadata = json.loads(f.read())
+# TODO: metadata["sequence_length"] is not valid vor RPF
 num_steps = metadata["sequence_length"] - INPUT_SEQUENCE_LENGTH
 normalization_stats = {
     "acceleration": {
