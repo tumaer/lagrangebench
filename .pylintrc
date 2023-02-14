@@ -59,6 +59,7 @@ disable=C0114, # module docstring
         W0108, # unnecessary lambda
         W0621, # redifining from outer scope
         C0103, # bad function names
+        C0412, # non-grouped imports
         W0102, # default being a list
         R1729, # use a generator
         W0640,

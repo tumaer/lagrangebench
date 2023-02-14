@@ -32,8 +32,8 @@ from gns_jax.utils import (
     oversmooth_norm,
     save_haiku,
     setup_builder,
-    steerable_graph_transform_builder,
 )
+from segnn_experiments.utils import steerable_graph_transform_builder
 
 
 def train(
@@ -375,7 +375,7 @@ def run(args):
     elif args.config.model == "lin":
         model = lambda x: Linear(dim_out=3)(x)
         graph_postprocess = None
-    else:
+    elif "segnn" in args.config.model:
         from e3nn_jax import Irreps
         from segnn_jax import SEGNN, weight_balanced_irreps
 
@@ -386,35 +386,73 @@ def run(args):
             use_sh=True,
             lmax=args.config.lmax_hidden,
         )
-        model = lambda x: SEGNN(
-            hidden_irreps=hidden_irreps,
-            output_irreps=Irreps("1x1o"),
-            num_layers=args.config.num_mp_steps,
-            task="node",
-            blocks_per_layer=args.config.num_mlp_layers,
-            norm=args.config.norm,
-        )(x)
-        pbc = args.metadata["periodic_boundary_conditions"]
-        if np.array(pbc).any():
-            pbc_irrep = ""
-        else:
-            pbc_irrep = "+ 2x1o"
-        if args.config.magnitude:
-            magnitude_irrep = f"+ {args.config.input_seq_length - 1}x0e"
-        else:
-            magnitude_irrep = ""
-        if external_force_fn:
-            force_irrep = "+ 1x1o"
-        else:
-            force_irrep = ""
+        if args.config.model == "segnn":
+            model = lambda x: SEGNN(
+                hidden_irreps=hidden_irreps,
+                output_irreps=Irreps("1x1o"),
+                num_layers=args.config.num_mp_steps,
+                task="node",
+                blocks_per_layer=args.config.num_mlp_layers,
+                norm=args.config.segnn_norm,
+            )(x)
+        elif args.config.model == "segnn_rewind":
+            from segnn_experiments.rsegnn import RSEGNN
 
-        args.info.node_feature_irreps = (
-            f"{args.config.input_seq_length - 1}x1o "
-            f"{magnitude_irrep} "
-            f"{pbc_irrep}"
-            f"{force_irrep}"
-            f"+ {NodeType.SIZE}x0e"
-        )
+            assert (
+                args.config.num_mp_steps == args.config.input_seq_length - 1
+            ), "The number of layers must be the same size of the history"
+            assert (
+                args.config.velocity_aggregate == "all"
+            ), "SEGNN with rewind is supposed to have all historical velocities"
+
+            model = lambda x: RSEGNN(
+                hidden_irreps=hidden_irreps,
+                output_irreps=Irreps("1x1o"),
+                num_layers=args.config.num_mp_steps,
+                task="node",
+                blocks_per_layer=args.config.num_mlp_layers,
+                norm=args.config.segnn_norm,
+            )(x)
+        elif args.config.model == "segnn_attention":
+            from segnn_experiments.asegnn import AttentionSEGNN
+
+            assert (
+                args.config.velocity_aggregate == "all"
+            ), "SEGNN with attention is supposed to have all historical velocities"
+
+            model = lambda x: AttentionSEGNN(
+                hidden_irreps=hidden_irreps,
+                output_irreps=Irreps("1x1o"),
+                num_layers=args.config.num_mp_steps,
+                task="node",
+                blocks_per_layer=args.config.num_mlp_layers,
+                norm=args.config.segnn_norm,
+                right_attribute=args.config.right_attribute,
+                attribute_embedding_blocks=args.config.attention_blocks,
+            )(x)
+
+        args.info.node_feature_irreps = []
+
+        args.info.node_feature_irreps.append(f"{args.config.input_seq_length - 1}x1o")
+
+        pbc = any(args.metadata["periodic_boundary_conditions"])
+        homogeneous_particles = particle_type.max() == particle_type.min()
+
+        if not pbc:
+            args.info.node_feature_irreps.append("2x1o")
+
+        if external_force_fn:
+            args.info.node_feature_irreps.append("1x1o")
+
+        if args.config.magnitudes:
+            args.info.node_feature_irreps.append(
+                f"{args.config.input_seq_length - 1}x0e"
+            )
+
+        if not homogeneous_particles:
+            args.info.node_feature_irreps.append(f"{NodeType.SIZE}x0e")
+
+        args.info.node_feature_irreps = "+".join(args.info.node_feature_irreps)
 
         graph_postprocess = steerable_graph_transform_builder(
             node_features_irreps=Irreps(
@@ -424,7 +462,8 @@ def run(args):
             lmax_attributes=args.config.lmax_attributes,
             velocity_aggregate=args.config.velocity_aggregate,
             attribute_mode=args.config.attribute_mode,
-            pbc=pbc,
+            n_vels=args.config.input_seq_length - 1,
+            homogeneous_particles=homogeneous_particles,
         )
 
     # transform core simulator outputting accelerations.
