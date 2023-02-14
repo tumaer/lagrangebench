@@ -368,7 +368,9 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
         # Use an Euler integrator to go from acceleration to position, assuming
         # a dt=1 corresponding to the size of the finite difference.
         most_recent_position = position_sequence[:, -1]
-        most_recent_velocity = most_recent_position - position_sequence[:, -2]
+        most_recent_velocity = displacement_fn_set(
+            most_recent_position, position_sequence[:, -2]
+        )
 
         new_velocity = most_recent_velocity + acceleration  # * dt = 1
         # use the shift function by jax-md to compute the new position
