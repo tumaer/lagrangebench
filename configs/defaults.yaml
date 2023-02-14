@@ -40,6 +40,8 @@ noise_std: 0.00067
 log_norm: none
 # Whether to normalize inputs and outputs with the same value in x, y, ans z.
 isotropic_norm: False
+# With how many veraging steps to normalize velocities
+oversmooth_norm_hops: 0
 
 # Dataset settings
 # Dataset directory
@@ -48,6 +50,7 @@ data_dir:
 num_rollout_steps: -1
 # Whether to use magnitudes or not
 magnitudes: False
+# SEGNN only parameters
 # Method to aggregate velocity. avg, sum, last, all
 velocity_aggregate: avg
 # Method to compose attributes. add, concat
@@ -66,6 +69,8 @@ eval_n_more_steps: 0
 seed: 0
 # Cuda device
 gpu: 0
+# Whether to use test or validation split
+test: False
 
 # Logging settings
 # Use wandb for logging

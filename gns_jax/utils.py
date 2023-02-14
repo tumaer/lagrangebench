@@ -6,7 +6,7 @@ import pickle
 import time
 import warnings
 from collections import defaultdict
-from typing import Callable, Dict, Iterable, List, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 import cloudpickle
 import haiku as hk
@@ -31,34 +31,91 @@ class NodeType(enum.IntEnum):
     SIZE = 9
 
 
-def graph_transform_builder(
+def gns_graph_transform_builder() -> Callable:
+    """Convert physical features to jraph GraphsTuple for gns."""
+
+    def graph_transform(
+        features: Dict[str, jnp.ndarray],
+        particle_type: jnp.ndarray,
+    ) -> Tuple[jraph.GraphsTuple, jnp.ndarray]:
+        """Convert physical features to jraph GraphsTuple for gns."""
+
+        n_total_points = features["vel_hist"].shape[0]
+        node_features = [
+            features[k]
+            for k in ["vel_hist", "vel_mag", "bound", "force"]
+            if k in features
+        ]
+        edge_features = [features[k] for k in ["rel_disp", "rel_dist"] if k in features]
+
+        graph = jraph.GraphsTuple(
+            nodes=jnp.concatenate(node_features, axis=-1),
+            edges=jnp.concatenate(edge_features, axis=-1),
+            receivers=features["receivers"],
+            senders=features["senders"],
+            n_node=jnp.array([n_total_points]),
+            n_edge=jnp.array([len(features["senders"])]),
+            globals=None,
+        )
+
+        return graph, particle_type
+
+    return graph_transform
+
+
+def physical_feature_builder(
     bounds: list,
     normalization_stats: dict,
     connectivity_radius: float,
     displacement_fn: Callable,
-    pbc: bool = False,
+    pbc: List[bool],
     magnitudes: bool = False,
     log_norm: str = "none",
+    external_force_fn: Optional[Callable] = None,
 ) -> Callable:
-    """Convert raw coordinates to jraph GraphsTuple."""
+    """Feature engineering builder. Transform raw coordinates to
+        - Historical velocity sequence
+        - Velocity magnitudes
+        - Distance to boundaries
+        - Relative displacement vectors
+    Parameters:
+        bounds: Each sublist contains the lower and upper bound of a dimension.
+        normalization_stats: Dict containing mean and std of velocities and targets
+        connectivity_radius: Radius of the connectivity graph.
+        displacement_fn: Displacement function.
+        pbc: Wether to use periodic boundary conditions.
+        magnitudes: Whether to include the magnitude of the velocity.
+        log_norm: Whether to apply log normalization.
+        external_force_fn: Function that returns the external force field (optional).
+    """
 
-    def graph_transform(
+    displacement_fn_vmap = vmap(displacement_fn, in_axes=(0, 0))
+    displacement_fn_dvmap = vmap(displacement_fn_vmap, in_axes=(0, 0))
+
+    velocity_stats = normalization_stats["velocity"]
+
+    def feature_transform(
         pos_input: jnp.ndarray,
         nbrs: partition.NeighborList,
-    ) -> jraph.GraphsTuple:
-        """Convert raw coordinates to jraph GraphsTuple."""
+    ) -> Dict[str, jnp.ndarray]:
+        """Feature engineering.
+        Returns:
+            Dict of features, with possible keys
+                - "vel_hist"
+                - "vel_mag"
+                - "bound"
+                - "force"
+                - "rel_disp"
+                - "rel_dist"
+        """
+
+        features = {}
 
         n_total_points = pos_input.shape[0]
         most_recent_position = pos_input[:, -1]  # (n_nodes, 2)
-        displacement_fn_vmap = vmap(displacement_fn, in_axes=(0, 0))
-        displacement_fn_dvmap = vmap(displacement_fn_vmap, in_axes=(0, 0))
         # pos_input.shape = (n_nodes, n_timesteps, dim)
         velocity_sequence = displacement_fn_dvmap(pos_input[:, 1:], pos_input[:, :-1])
-        # senders and receivers are integers of shape (E,)
-        senders, receivers = nbrs.idx
-        node_features = []
         # Normalized velocity sequence, merging spatial an time axis.
-        velocity_stats = normalization_stats["velocity"]
         normalized_velocity_sequence = (
             velocity_sequence - velocity_stats["mean"]
         ) / velocity_stats["std"]
@@ -68,14 +125,15 @@ def graph_transform_builder(
         # log normalization
         if log_norm in ["input", "both"]:
             flat_velocity_sequence = log_norm_fn(flat_velocity_sequence)
-        node_features.append(flat_velocity_sequence)
+
+        features["vel_hist"] = flat_velocity_sequence
 
         if magnitudes:
             # append the magnitude of the velocity of each particle to the node features
             velocity_magnitude_sequence = jnp.linalg.norm(
                 normalized_velocity_sequence, axis=-1
             )
-            node_features.append(velocity_magnitude_sequence)
+            features["vel_mag"] = velocity_magnitude_sequence
             # node features shape = (n_nodes, (input_sequence_length - 1) * (dim + 1))
 
             # # append the average velocity over all particles to the node features
@@ -85,7 +143,7 @@ def graph_transform_builder(
             # node_features.append(vel_mag_seq_mean_tile)
 
         # TODO: for now just disable it completely if any periodicity applies
-        if not pbc:
+        if not any(pbc):
             # Normalized clipped distances to lower and upper boundaries.
             # boundaries are an array of shape [num_dimensions, 2], where the
             # second axis, provides the lower/upper boundaries.
@@ -101,10 +159,16 @@ def graph_transform_builder(
             normalized_clipped_distance_to_boundaries = jnp.clip(
                 distance_to_boundaries / connectivity_radius, -1.0, 1.0
             )
-            node_features.append(normalized_clipped_distance_to_boundaries)
+            features["bound"] = normalized_clipped_distance_to_boundaries
 
-        # Collect edge features.
-        edge_features = []
+        if external_force_fn is not None:
+            external_force_field = vmap(external_force_fn)(most_recent_position)
+            features["force"] = external_force_field
+
+        # senders and receivers are integers of shape (E,)
+        senders, receivers = nbrs.idx
+        features["senders"] = senders
+        features["receivers"] = receivers
 
         # Relative displacement and distances normalized to radius
         # (E, 2)
@@ -112,24 +176,16 @@ def graph_transform_builder(
             most_recent_position[senders], most_recent_position[receivers]
         )
         normalized_relative_displacements = displacement / connectivity_radius
-        edge_features.append(normalized_relative_displacements)
+        features["rel_disp"] = normalized_relative_displacements
 
         normalized_relative_distances = space.distance(
             normalized_relative_displacements
         )
-        edge_features.append(normalized_relative_distances[:, None])
+        features["rel_dist"] = normalized_relative_distances[:, None]
 
-        return jraph.GraphsTuple(
-            nodes=jnp.concatenate(node_features, axis=-1),
-            edges=jnp.concatenate(edge_features, axis=-1),
-            receivers=receivers,
-            senders=senders,
-            globals=None,
-            n_node=jnp.array([n_total_points]),
-            n_edge=jnp.array([len(senders)]),
-        )
+        return jax.tree_map(lambda f: f, features)
 
-    return graph_transform
+    return feature_transform
 
 
 def get_kinematic_mask(particle_type):
@@ -194,7 +250,7 @@ class SetupFn:
     displacement: Callable = dataclasses.static_field()
 
 
-def setup_builder(args: argparse.Namespace):
+def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
     """Contains essentially everything except the model itself.
 
     Very much inspired by the `partition.neighbor_list` function in JAX-MD.
@@ -209,7 +265,7 @@ def setup_builder(args: argparse.Namespace):
 
     # apply PBC in all directions or not at all
     if np.array(args.metadata["periodic_boundary_conditions"]).any():
-        displacement_fn, shift_fn = space.periodic(side=args.box)
+        displacement_fn, shift_fn = space.periodic(side=np.array(args.box))
     else:
         displacement_fn, shift_fn = space.free()
 
@@ -217,7 +273,7 @@ def setup_builder(args: argparse.Namespace):
 
     neighbor_fn = partition.neighbor_list(
         displacement_fn,
-        args.box,
+        np.array(args.box),
         r_cutoff=args.metadata["default_connectivity_radius"],
         dr_threshold=args.metadata["default_connectivity_radius"] * 0.25,
         capacity_multiplier=1.25,
@@ -225,14 +281,15 @@ def setup_builder(args: argparse.Namespace):
         format=partition.Sparse,
     )
 
-    graph_transform = graph_transform_builder(
+    feature_transform = physical_feature_builder(
         bounds=args.metadata["bounds"],
         normalization_stats=normalization_stats,
         connectivity_radius=args.metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
-        pbc=any(args.metadata["periodic_boundary_conditions"]),
-        magnitudes=args.config.magnitude,
+        pbc=args.metadata["periodic_boundary_conditions"],
+        magnitudes=args.config.magnitudes,
         log_norm=args.config.log_norm,
+        external_force_fn=external_force_fn,
     )
 
     def _compute_target(pos_input, pos_target):
@@ -273,15 +330,15 @@ def setup_builder(args: argparse.Namespace):
         else:
             neighbors = neighbors.update(most_recent_position)
 
-        # encode desired features and generate jraph graph.
-        graph = graph_transform(pos_input, neighbors)
+        # selected features
+        features = feature_transform(pos_input, neighbors)
 
         if mode == "train":
             # compute target acceleration. Inverse of postprocessing step.
             normalized_acceleration = _compute_target(pos_input, pos_target)
-            return key, graph, normalized_acceleration, neighbors
+            return key, features, normalized_acceleration, neighbors
         elif mode == "eval":
-            return graph, neighbors
+            return features, neighbors
 
     def allocate_fn(key, sample, noise_std=0.0):
         return _preprocess(sample, key=key, noise_std=noise_std, is_allocate=True)
@@ -477,8 +534,9 @@ def eval_single_rollout(
     traj_i: Tuple[jnp.ndarray, jnp.ndarray],
     num_rollout_steps: int,
     input_sequence_length: int,
-    graph_postprocess: Callable = None,
+    graph_preprocess: Callable,
     eval_n_more_steps: int = 0,
+    oversmooth_norm_hops: int = 0,
 ) -> Dict:
     pos_input, particle_type = traj_i
 
@@ -500,7 +558,7 @@ def eval_single_rollout(
     step = 0
     while step < num_rollout_steps + eval_n_more_steps:
         sample = (current_positions, particle_type)
-        graph, neighbors = setup.preprocess_eval(sample, neighbors)
+        features, neighbors = setup.preprocess_eval(sample, neighbors)
 
         if neighbors.did_buffer_overflow is True:
             edges_ = neighbors.idx.shape
@@ -510,12 +568,19 @@ def eval_single_rollout(
 
             continue
 
-        if graph_postprocess:
-            graph_tuple = graph_postprocess(graph, particle_type)
-        else:
-            graph_tuple = (graph, particle_type)
+        graph = graph_preprocess(features, particle_type)
 
-        normalized_acceleration, state = model_apply(params, state, graph_tuple)
+        # TODO oversmooth for SEGNN  (now fails because of graph.graph)
+        if oversmooth_norm_hops > 0:
+            graph, most_recent_vel_magnitude = oversmooth_norm(
+                graph, oversmooth_norm_hops, input_sequence_length
+            )
+
+        # predict
+        normalized_acceleration, state = model_apply(params, state, graph)
+
+        if oversmooth_norm_hops > 0:
+            normalized_acceleration *= most_recent_vel_magnitude[:, None]
 
         next_position = setup.integrate(normalized_acceleration, current_positions)
 
@@ -558,9 +623,10 @@ def eval_rollout(
     num_rollout_steps: int,
     num_trajs: int,
     rollout_dir: str,
+    graph_preprocess: Callable,
     out_type: str = "none",
-    graph_postprocess: Callable = None,
     eval_n_more_steps: int = 0,
+    oversmooth_norm_hops: int = 0,
 ) -> Tuple[MetricsDict, jnp.ndarray]:
 
     input_sequence_length = loader_valid.dataset.input_sequence_length
@@ -583,8 +649,9 @@ def eval_rollout(
             traj_i=traj_i,
             num_rollout_steps=num_rollout_steps,
             input_sequence_length=input_sequence_length,
-            graph_postprocess=graph_postprocess,
+            graph_preprocess=graph_preprocess,
             eval_n_more_steps=eval_n_more_steps,
+            oversmooth_norm_hops=oversmooth_norm_hops,
         )
 
         eval_metrics[f"rollout_{i}"] = metrics
@@ -663,8 +730,7 @@ class Linear(hk.Module):
     def __call__(
         self, input_: Tuple[jraph.GraphsTuple, np.ndarray]
     ) -> jraph.GraphsTuple:
-        graph, _ = input_
-        return jax.vmap(self.mlp)(graph.nodes)
+        return jax.vmap(self.mlp)(jnp.concatenate(input_, axis=-1))
 
 
 # Normalization utils
@@ -707,9 +773,6 @@ def get_dataset_normalization(
             "isotropic -> we use $max(abs(mean)) < 1% min(std)$ as a heuristic."
         )
 
-        assert np.max(np.abs(acc_mean)) < 0.01 * np.min(acc_std)
-        assert np.max(np.abs(vel_mean)) < 0.01 * np.min(vel_std)
-
         acc_mean = np.mean(acc_mean) * np.ones_like(acc_mean)
         acc_std = np.sqrt(np.mean(acc_std**2)) * np.ones_like(acc_std)
         vel_mean = np.mean(vel_mean) * np.ones_like(vel_mean)
@@ -725,3 +788,28 @@ def get_dataset_normalization(
             "std": np.sqrt(vel_std**2 + noise_std**2),
         },
     }
+
+
+def oversmooth_norm(graph, hops, input_seq_length):
+    isl = input_seq_length
+    # assumes that the last three channels are the most recent velocity
+    most_recent_vel = graph.nodes[:, (isl - 2) * 3 : (isl - 1) * 3]
+    most_recent_vel_magnitude = jnp.linalg.norm(most_recent_vel, axis=1)
+
+    # average over velocity magnitudes to get an estimate of average velocity.
+    for _ in range(hops):
+        most_recent_vel_magnitude = jraph.segment_mean(
+            most_recent_vel_magnitude[graph.senders],
+            graph.receivers,
+            graph.nodes.shape[0],
+        )
+
+    rescaled_vel = jnp.where(
+        most_recent_vel_magnitude[:, None],
+        graph.nodes[:, : (isl - 1) * 3] / most_recent_vel_magnitude[:, None],
+        0,
+    )
+    new_node_features = graph.nodes.at[:, : (isl - 1) * 3].set(rescaled_vel)
+    graph = graph._replace(nodes=new_node_features)
+
+    return graph, most_recent_vel_magnitude

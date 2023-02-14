@@ -17,6 +17,9 @@ def cli_arguments() -> Dict:
         choices=["gns", "segnn", "segnn_attention", "segnn_rewind", "lin"],
         help="Model name.",
     )
+    parser.add_argument(
+        "--mode", type=str, choices=["train", "infer"], help="Train or evaluate."
+    )
     parser.add_argument("--batch_size", type=int, required=False, help="Batch size.")
     parser.add_argument(
         "--lr_start", type=float, required=False, help="Starting learning rate."
@@ -56,7 +59,7 @@ def cli_arguments() -> Dict:
     )
 
     parser.add_argument(
-        "--magnitude",
+        "--magnitudes",
         action="store_true",
         help="Whether to include velocity magnitudes in node features.",
     )
@@ -69,18 +72,49 @@ def cli_arguments() -> Dict:
     )
 
     parser.add_argument(
+        "--oversmooth_norm_hops",
+        type=int,
+        required=False,
+        help="Number of hops for oversmoothing normalization.",
+    )
+
+    parser.add_argument(
+        "--isotropic_norm",
+        action=argparse.BooleanOptionalAction,
+        help="Use isotropic normalization.",
+    )
+
+    parser.add_argument(
+        "--out_type",
+        type=str,
+        required=False,
+        choices=["vtk", "pkl", "none"],
+        help="Output type to store rollouts.",
+    )
+
+    parser.add_argument(
+        "--rollout_dir", type=str, required=False, help="Directory to write rollouts."
+    )
+
+    parser.add_argument(
         "--gpu", type=int, required=False, help="CUDA device ID to use."
+    )
+
+    parser.add_argument(
+        "--test",
+        action=argparse.BooleanOptionalAction,
+        help="Run test mode instead of validation.",
     )
 
     # segnn arguments
     parser.add_argument(
-        "--lmax-attributes",
+        "--lmax_attributes",
         type=int,
         required=False,
         help="Maximum degree of attributes.",
     )
     parser.add_argument(
-        "--lmax-hidden",
+        "--lmax_hidden",
         type=int,
         required=False,
         help="Maximum degree of hidden layers.",

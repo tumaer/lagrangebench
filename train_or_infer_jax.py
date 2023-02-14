@@ -3,7 +3,7 @@
 import copy
 import json
 import os
-from typing import Tuple
+from typing import Dict, Tuple
 
 import haiku as hk
 import jax
@@ -29,10 +29,10 @@ from gns_jax.utils import (
     get_num_params,
     load_haiku,
     log_norm_fn,
+    oversmooth_norm,
     save_haiku,
     setup_builder,
 )
-from segnn_experiments.utils import steerable_graph_transform_builder
 
 
 def train(
@@ -43,7 +43,7 @@ def train(
     loader_train,
     loader_valid,
     setup,
-    graph_postprocess,
+    graph_preprocess,
     args,
 ):
 
@@ -97,18 +97,23 @@ def train(
     def loss_fn(
         params: hk.Params,
         state: hk.State,
-        graph: jraph.GraphsTuple,
+        features: Dict[str, jnp.ndarray],
         target: jnp.ndarray,
         particle_type: jnp.ndarray,
     ):
-        # TODO: not the best place to put the O3 transform function
-        if graph_postprocess:
-            graph_in = graph_postprocess(graph, particle_type)
-        else:
-            graph_in = (graph, particle_type)
+        graph = graph_preprocess(features, particle_type)
 
-        pred, state = model.apply(params, state, graph_in)
+        # TODO oversmooth for SEGNN (now fails because of graph.graph)
+        if args.config.oversmooth_norm_hops > 0:
+            graph, most_recent_vel_magnitude = oversmooth_norm(
+                graph, args.config.oversmooth_norm_hops, args.config.input_seq_length
+            )
+
+        pred, state = model.apply(params, state, graph)
         assert target.shape == pred.shape
+
+        if args.config.oversmooth_norm_hops > 0:
+            pred *= most_recent_vel_magnitude[:, None]
 
         non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
         num_non_kinematic = non_kinematic_mask.sum()
@@ -128,7 +133,7 @@ def train(
     def train_step(
         params: hk.Module,
         state: hk.State,
-        graph_batch: Tuple[jraph.GraphsTuple, ...],
+        features_batch: Tuple[jraph.GraphsTuple, ...],
         target_batch: Tuple[jnp.ndarray, ...],
         particle_type_batch: Tuple[jnp.ndarray, ...],
         opt_state: optax.OptState,
@@ -138,7 +143,7 @@ def train(
             jax.value_and_grad(loss_fn, has_aux=True), in_axes=(None, None, 0, 0, 0)
         )
         (loss, state), grads = value_and_grad_vmap(
-            params, state, graph_batch, target_batch, particle_type_batch
+            params, state, features_batch, target_batch, particle_type_batch
         )
 
         # aggregate over the first (batch) dimension of each leave element
@@ -164,7 +169,7 @@ def train(
         for raw_batch in loader_train:
             # pos_input, particle_type, pos_target = raw_batch
 
-            keys, graph_batch, target_batch, neighbors_batch = preprocess_vmap(
+            keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
                 keys, raw_batch, args.config.noise_std, neighbors_batch
             )
 
@@ -187,7 +192,7 @@ def train(
             loss, params, state, opt_state = train_step(
                 params=params,
                 state=state,
-                graph_batch=graph_batch,
+                features_batch=features_batch,
                 target_batch=target_batch,
                 particle_type_batch=raw_batch[1],
                 opt_state=opt_state,
@@ -213,8 +218,9 @@ def train(
                     + 1,  # +1 not training
                     num_trajs=args.config.eval_num_trajs,
                     rollout_dir=args.config.rollout_dir,
+                    graph_preprocess=graph_preprocess,
                     out_type=args.config.out_type,
-                    graph_postprocess=graph_postprocess,
+                    oversmooth_norm_hops=args.config.oversmooth_norm_hops,
                 )
                 # In the beginning of training, the dynamics ae very random and
                 # we don"t want to influence the training neighbors list by
@@ -241,9 +247,7 @@ def train(
                 break
 
 
-def infer(
-    model, params, state, neighbors, loader_valid, setup, graph_postprocess, args
-):
+def infer(model, params, state, neighbors, loader_valid, setup, graph_preprocess, args):
 
     model_apply = jax.jit(model.apply)
     eval_metrics, _ = eval_rollout(
@@ -257,9 +261,10 @@ def infer(
         + 1,  # +1 because we are not training
         num_trajs=args.config.eval_num_trajs,
         rollout_dir=args.config.rollout_dir,
+        graph_preprocess=graph_preprocess,
         out_type=args.config.out_type,
-        graph_postprocess=graph_postprocess,
         eval_n_more_steps=args.config.eval_n_more_steps,
+        oversmooth_norm_hops=args.config.oversmooth_norm_hops,
     )
     print(averaged_metrics(eval_metrics))
 
@@ -295,8 +300,9 @@ def run(args):
         collate_fn=numpy_collate,
         drop_last=True,
     )
+    infer_split = "test" if args.config.test else "valid"
     data_valid = H5Dataset(
-        args.config.data_dir, "valid", args.config.input_seq_length, is_rollout=True
+        args.config.data_dir, infer_split, args.config.input_seq_length, is_rollout=True
     )
     loader_valid = DataLoader(
         dataset=data_valid, batch_size=1, collate_fn=numpy_collate
@@ -314,15 +320,31 @@ def run(args):
         particle_dimension = 3
         # node_in = 37, edge_in = 4
         args.box *= 1.2
+        args.info.has_external_force = True
+        external_force_fn = lambda x: jnp.array([0.0, 0.0, -1.0])
     elif args.info.dataset_name in ["WaterDrop", "WaterDropSample"]:
         particle_dimension = 2
         # node_in = 30, edge_in = 3
-    elif "TGV" in args.info.dataset_name.upper() or "RPF" in args.info.dataset_name:
+        args.info.has_external_force = False
+        external_force_fn = None
+    elif "TGV" in args.info.dataset_name.upper():
         particle_dimension = 3
+        args.info.has_external_force = False
+        external_force_fn = None
+    elif "RPF" in args.info.dataset_name:
+        particle_dimension = 3
+        args.info.has_external_force = True
+
+        def external_force_fn(position):
+            return jnp.where(
+                position[1] > 1.0,
+                jnp.array([-1.0, 0.0, 0.0]),
+                jnp.array([1.0, 0.0, 0.0]),
+            )
 
     # preprocessing allocate and update functions in the spirit of jax-md"s
     # `partition.neighbor_list`. And an integration utility with PBC.
-    setup = setup_builder(args)
+    setup = setup_builder(args, external_force_fn)
 
     # first PRNG key
     key = jax.random.PRNGKey(args.config.seed)
@@ -331,12 +353,15 @@ def run(args):
     # the torch loader give a whole batch. We take only the first sample.
     sample = (pos_input[0], particle_type[0], pos_target[0])
     # initialize setup
-    key, graph, _, neighbors = setup.allocate(key, sample)
+    key, features, _, neighbors = setup.allocate(key, sample)
     # initialize model
     key, subkey = jax.random.split(key, 2)
 
+    args.info.homogeneous_particles = particle_type.max() == particle_type.min()
+
     if args.config.model == "gns":
         from gns_jax.gns import GNS
+        from gns_jax.utils import gns_graph_transform_builder
 
         model = lambda x: GNS(
             particle_dimension=particle_dimension,
@@ -346,13 +371,19 @@ def run(args):
             num_particle_types=NodeType.SIZE,
             particle_type_embedding_size=16,
         )(x)
-        graph_postprocess = None
+        graph_preprocess = gns_graph_transform_builder()
+
     elif args.config.model == "lin":
         model = lambda x: Linear(dim_out=3)(x)
-        graph_postprocess = None
+        graph_preprocess = lambda f: [
+            f[k] for k in ["vel_hist", "vel_mag", "bound", "force"] if k in f
+        ]
+
     elif "segnn" in args.config.model:
         from e3nn_jax import Irreps
         from segnn_jax import SEGNN, weight_balanced_irreps
+
+        from segnn_experiments.utils import node_irreps, segnn_graph_transform_builder
 
         hidden_irreps = weight_balanced_irreps(
             scalar_units=args.config.latent_dim,
@@ -406,45 +437,24 @@ def run(args):
                 attribute_embedding_blocks=args.config.attention_blocks,
             )(x)
 
-        args.info.node_feature_irreps = []
+        args.info.node_feature_irreps = node_irreps(args)
 
-        args.info.node_feature_irreps.append(f"{args.config.input_seq_length - 1}x1o")
-
-        pbc = any(args.metadata["periodic_boundary_conditions"])
-        homogeneous_particles = particle_type.max() == particle_type.min()
-
-        if not pbc:
-            args.info.node_feature_irreps.append("2x1o")
-
-        if args.config.magnitudes:
-            args.info.node_feature_irreps.append(
-                f"{args.config.input_seq_length - 1}x0e"
-            )
-
-        if not homogeneous_particles:
-            args.info.node_feature_irreps.append(f"{NodeType.SIZE}x0e")
-
-        args.info.node_feature_irreps = "+".join(args.info.node_feature_irreps)
-
-        graph_postprocess = steerable_graph_transform_builder(
+        graph_preprocess = segnn_graph_transform_builder(
             node_features_irreps=Irreps(
                 args.info.node_feature_irreps
             ),  # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
             edge_features_irreps=Irreps("1x1o + 1x0e"),  # 1o displacement, 0e distance
             lmax_attributes=args.config.lmax_attributes,
+            n_vels=(args.config.input_seq_length - 1),
             velocity_aggregate=args.config.velocity_aggregate,
             attribute_mode=args.config.attribute_mode,
-            n_vels=args.config.input_seq_length - 1,
-            homogeneous_particles=homogeneous_particles,
+            homogeneous_particles=args.info.homogeneous_particles,
         )
 
     # transform core simulator outputting accelerations.
     model = hk.without_apply_rng(hk.transform_with_state(model))
 
-    if graph_postprocess:
-        graph_tuple = graph_postprocess(graph, particle_type[0])
-    else:
-        graph_tuple = (graph, particle_type[0])
+    graph_tuple = graph_preprocess(features, particle_type[0])
 
     params, state = model.init(subkey, graph_tuple)
 
@@ -470,7 +480,7 @@ def run(args):
             loader_train,
             loader_valid,
             setup,
-            graph_postprocess,
+            graph_preprocess,
             args,
         )
     elif args.config.mode == "infer":
@@ -481,6 +491,6 @@ def run(args):
             neighbors,
             loader_valid,
             setup,
-            graph_postprocess,
+            graph_preprocess,
             args,
         )
