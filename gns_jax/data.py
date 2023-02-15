@@ -13,7 +13,7 @@ class H5Dataset(Dataset):
         self,
         dataset_path: str,
         split: str,
-        input_sequence_length: int = 6,
+        input_seq_length: int = 6,
         is_rollout: bool = False,
     ):
         """
@@ -27,7 +27,7 @@ class H5Dataset(Dataset):
 
         self.dataset_path = dataset_path
         self.file_path = os.path.join(dataset_path, split + ".h5")
-        self.input_sequence_length = input_sequence_length
+        self.input_seq_length = input_seq_length
 
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())
@@ -56,8 +56,7 @@ class H5Dataset(Dataset):
             self.getter = self.get_trajectory
             self.num_samples = len(self.traj_keys)
         else:
-
-            samples_per_traj = sequence_length - self.input_sequence_length
+            samples_per_traj = sequence_length - self.input_seq_length - 1
             keylens = [samples_per_traj for _ in range(len(self.traj_keys))]
             self._keylen_cumulative = np.cumsum(keylens).tolist()
             self.num_samples = sum(keylens)
@@ -101,14 +100,12 @@ class H5Dataset(Dataset):
         # Get a pointer to the positions of the traj. Still nothing in memory.
         traj_pos = traj["position"]
         # Load only a slice of the positions. Now, this is an array in memory.
-        pos_input = traj_pos[el_idx : el_idx + self.input_sequence_length]
-        pos_input = pos_input.transpose((1, 0, 2))
-        # the target is the next position
-        pos_target = traj_pos[el_idx + self.input_sequence_length]
+        pos_input_and_target = traj_pos[el_idx : el_idx + self.input_seq_length + 1]
+        pos_input_and_target = pos_input_and_target.transpose((1, 0, 2))
 
         particle_type = traj["particle_type"][:]
 
-        return pos_input, particle_type, pos_target
+        return pos_input_and_target, particle_type
 
     def __getitem__(self, idx: int):
         return self.getter(idx)

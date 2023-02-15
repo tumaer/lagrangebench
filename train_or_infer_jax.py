@@ -30,6 +30,8 @@ from gns_jax.utils import (
     load_haiku,
     log_norm_fn,
     oversmooth_norm,
+    push_forward_build,
+    push_forward_sample_steps,
     save_haiku,
     setup_builder,
 )
@@ -155,7 +157,10 @@ def train(
         new_params = optax.apply_updates(params, updates)
         return loss, new_params, state, opt_state
 
-    preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0))
+    preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0, None))
+
+    push_forward = push_forward_build(graph_preprocess, model_apply, setup)
+    push_forward_vmap = jax.vmap(push_forward, in_axes=(0, 0, 0, 0, None, None))
 
     # prepare for batch training.
     key = jax.random.PRNGKey(args.config.seed)
@@ -167,11 +172,28 @@ def train(
     while step < args.config.step_max:
 
         for raw_batch in loader_train:
-            # pos_input, particle_type, pos_target = raw_batch
+            # pos_input_and_target, particle_type = raw_batch
 
-            keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-                keys, raw_batch, args.config.noise_std, neighbors_batch
+            key, unroll_steps = push_forward_sample_steps(
+                key, step, args.config.pushforward_steps
             )
+
+            # The target computation incorporates the sampled number pushforward steps
+            keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
+                keys, raw_batch, args.config.noise_std, neighbors_batch, unroll_steps
+            )
+
+            # unroll for push-forward steps
+            _current_pos = raw_batch[0][:, :, : args.config.input_seq_length]
+            for _ in range(unroll_steps):
+                _current_pos, neighbors_batch, features_batch = push_forward_vmap(
+                    features_batch,
+                    _current_pos,
+                    raw_batch[1],
+                    neighbors_batch,
+                    params,
+                    state,
+                )
 
             if neighbors_batch.did_buffer_overflow.sum() > 0:
                 # check if the neighbor list is too small for any of the
@@ -193,7 +215,7 @@ def train(
                 params=params,
                 state=state,
                 features_batch=features_batch,
-                target_batch=target_batch,
+                target_batch=target_batch["acc"],
                 particle_type_batch=raw_batch[1],
                 opt_state=opt_state,
             )
@@ -289,8 +311,9 @@ def run(args):
         )
 
     # dataloader
+    train_seq_length = args.config.input_seq_length + len(args.config.pushforward_steps)
     data_train = H5Dataset(
-        args.config.data_dir, "train", args.config.input_seq_length, is_rollout=False
+        args.config.data_dir, "train", train_seq_length, is_rollout=False
     )
     loader_train = DataLoader(
         dataset=data_train,
@@ -349,9 +372,9 @@ def run(args):
     # first PRNG key
     key = jax.random.PRNGKey(args.config.seed)
     # get an example to initialize the setup and model
-    pos_input, particle_type, pos_target = next(iter(loader_train))
+    pos_input_and_target, particle_type = next(iter(loader_train))
     # the torch loader give a whole batch. We take only the first sample.
-    sample = (pos_input[0], particle_type[0], pos_target[0])
+    sample = (pos_input_and_target[0], particle_type[0])
     # initialize setup
     key, features, _, neighbors = setup.allocate(key, sample)
     # initialize model

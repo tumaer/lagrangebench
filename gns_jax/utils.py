@@ -134,7 +134,7 @@ def physical_feature_builder(
                 normalized_velocity_sequence, axis=-1
             )
             features["vel_mag"] = velocity_magnitude_sequence
-            # node features shape = (n_nodes, (input_sequence_length - 1) * (dim + 1))
+            # node features shape = (n_nodes, (input_seq_length - 1) * (dim + 1))
 
             # # append the average velocity over all particles to the node features
             # # we hope that this feature can be used like layer normalization
@@ -223,20 +223,26 @@ def _get_random_walk_noise_for_pos_sequence(
     return key, position_sequence_noise
 
 
-def _add_gns_noise(key, pos_input, particle_type, pos_target, noise_std, shift_fn):
+def _add_gns_noise(
+    key, pos_input, particle_type, input_seq_length, noise_std, shift_fn
+):
+    isl = input_seq_length
     # add noise to the input and adjust the target accordingly
     key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
         key, pos_input, noise_std_last_step=noise_std
     )
     kinematic_mask = get_kinematic_mask(particle_type)
     pos_input_noise = jnp.where(kinematic_mask[:, None, None], 0.0, pos_input_noise)
+    # adjust targets based on the noise from the last input position
+    pos_input_noise = pos_input_noise.at[:, isl:].set(
+        pos_input_noise[:, isl - 1][:, None, :]
+    )
 
     shift_vmap = vmap(shift_fn, in_axes=(0, 0))
     shift_dvmap = vmap(shift_vmap, in_axes=(0, 0))
     pos_input_noisy = shift_dvmap(pos_input, pos_input_noise)
-    pos_target_adjusted = shift_vmap(pos_target, pos_input_noise[:, -1])
 
-    return key, pos_input_noisy, pos_target_adjusted
+    return key, pos_input_noisy
 
 
 @dataclasses.dataclass
@@ -292,17 +298,24 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
         external_force_fn=external_force_fn,
     )
 
-    def _compute_target(pos_input, pos_target):
+    input_seq_length = args.config.input_seq_length
+
+    def _compute_target(pos_input):
         # displacement(r1, r2) = r1-r2  # without PBC
 
-        current_velocity = displacement_fn_set(pos_input[:, -1], pos_input[:, -2])
-        next_velocity = displacement_fn_set(pos_target, pos_input[:, -1])
+        current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
+        next_velocity = displacement_fn_set(pos_input[:, 2], pos_input[:, 1])
         current_acceleration = next_velocity - current_velocity
+
         acc_stats = normalization_stats["acceleration"]
         normalized_acceleration = (
             current_acceleration - acc_stats["mean"]
         ) / acc_stats["std"]
-        return normalized_acceleration
+
+        vel_stats = normalization_stats["velocity"]
+        normalized_velocity = (next_velocity - vel_stats["mean"]) / vel_stats["std"]
+
+        return {"acc": normalized_acceleration, "vel": normalized_velocity}
 
     def _preprocess(
         sample,
@@ -312,40 +325,54 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
         **kwargs,  # key, noise_std
     ):
 
+        pos_input, particle_type = sample
+        pos_input, particle_type = jnp.asarray(pos_input), jnp.asarray(particle_type)
+
         if mode == "train":
-            pos_input, particle_type, pos_target = sample
-            pos_input, pos_target = jnp.array(pos_input), jnp.array(pos_target)
             key, noise_std = kwargs["key"], kwargs["noise_std"]
+            unroll_steps = kwargs["unroll_steps"]
             if pos_input.shape[1] > 1:
-                key, pos_input, pos_target = _add_gns_noise(
-                    key, pos_input, particle_type, pos_target, noise_std, shift_fn
+                key, pos_input = _add_gns_noise(
+                    key, pos_input, particle_type, input_seq_length, noise_std, shift_fn
                 )
-        elif mode == "eval":
-            pos_input, particle_type = sample
 
         # allocate the neighbor list
-        most_recent_position = pos_input[:, -1]
+        most_recent_position = pos_input[:, input_seq_length - 1]
         if is_allocate:
             neighbors = neighbor_fn.allocate(most_recent_position)
         else:
             neighbors = neighbors.update(most_recent_position)
 
         # selected features
-        features = feature_transform(pos_input, neighbors)
+        features = feature_transform(pos_input[:, :input_seq_length], neighbors)
 
         if mode == "train":
             # compute target acceleration. Inverse of postprocessing step.
-            normalized_acceleration = _compute_target(pos_input, pos_target)
-            return key, features, normalized_acceleration, neighbors
+            # the "-2" is needed because we need the most recent position and one before
+            slice_begin = (0, input_seq_length - 2 + unroll_steps, 0)
+            slice_size = (pos_input.shape[0], 3, pos_input.shape[2])
+
+            target_dict = _compute_target(
+                jax.lax.dynamic_slice(pos_input, slice_begin, slice_size)
+            )
+            return key, features, target_dict, neighbors
         elif mode == "eval":
             return features, neighbors
 
-    def allocate_fn(key, sample, noise_std=0.0):
-        return _preprocess(sample, key=key, noise_std=noise_std, is_allocate=True)
+    def allocate_fn(key, sample, noise_std=0.0, unroll_steps=0):
+        return _preprocess(
+            sample,
+            key=key,
+            noise_std=noise_std,
+            unroll_steps=unroll_steps,
+            is_allocate=True,
+        )
 
     @jax.jit
-    def preprocess_fn(key, sample, noise_std, neighbors):
-        return _preprocess(sample, neighbors, key=key, noise_std=noise_std)
+    def preprocess_fn(key, sample, noise_std, neighbors, unroll_steps=0):
+        return _preprocess(
+            sample, neighbors, key=key, noise_std=noise_std, unroll_steps=unroll_steps
+        )
 
     def allocate_eval_fn(sample):
         return _preprocess(sample, is_allocate=True, mode="eval")
@@ -535,7 +562,7 @@ def eval_single_rollout(
     neighbors: jnp.ndarray,
     traj_i: Tuple[jnp.ndarray, jnp.ndarray],
     num_rollout_steps: int,
-    input_sequence_length: int,
+    input_seq_length: int,
     graph_preprocess: Callable,
     eval_n_more_steps: int = 0,
     oversmooth_norm_hops: int = 0,
@@ -543,9 +570,9 @@ def eval_single_rollout(
     pos_input, particle_type = traj_i
 
     # (n_nodes, t_window, dim)
-    initial_positions = pos_input[:, 0:input_sequence_length]
+    initial_positions = pos_input[:, 0:input_seq_length]
     # (n_nodes, traj_len - t_window, dim)
-    ground_truth_positions = pos_input[:, input_sequence_length:]
+    ground_truth_positions = pos_input[:, input_seq_length:]
 
     current_positions = initial_positions  # (n_nodes, t_window, dim)
 
@@ -575,7 +602,7 @@ def eval_single_rollout(
         # TODO oversmooth for SEGNN  (now fails because of graph.graph)
         if oversmooth_norm_hops > 0:
             graph, most_recent_vel_magnitude = oversmooth_norm(
-                graph, oversmooth_norm_hops, input_sequence_length
+                graph, oversmooth_norm_hops, input_seq_length
             )
 
         # predict
@@ -631,7 +658,7 @@ def eval_rollout(
     oversmooth_norm_hops: int = 0,
 ) -> Tuple[MetricsDict, jnp.ndarray]:
 
-    input_sequence_length = loader_valid.dataset.input_sequence_length
+    input_seq_length = loader_valid.dataset.input_seq_length
     eval_metrics = {}
 
     if rollout_dir is not None:
@@ -650,7 +677,7 @@ def eval_rollout(
             neighbors=neighbors,
             traj_i=traj_i,
             num_rollout_steps=num_rollout_steps,
-            input_sequence_length=input_sequence_length,
+            input_seq_length=input_seq_length,
             graph_preprocess=graph_preprocess,
             eval_n_more_steps=eval_n_more_steps,
             oversmooth_norm_hops=oversmooth_norm_hops,
@@ -660,7 +687,7 @@ def eval_rollout(
 
         if rollout_dir is not None:
             pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
-            initial_positions = pos_input[:input_sequence_length]
+            initial_positions = pos_input[:input_seq_length]
             example_full = np.concatenate([initial_positions, example_rollout], axis=0)
             example_rollout = {
                 "predicted_rollout": example_full,  # (t, nodes, dim)
@@ -815,3 +842,34 @@ def oversmooth_norm(graph, hops, input_seq_length):
     graph = graph._replace(nodes=new_node_features)
 
     return graph, most_recent_vel_magnitude
+
+
+# push-forward utils
+
+
+def push_forward_sample_steps(key, step, pushforward_steps):
+    unroll_steps = 0
+    if len(pushforward_steps) > 0:
+        unroll_steps_max = np.sum(step >= np.array(pushforward_steps))
+        key, key_unroll = jax.random.split(key, 2)
+        unroll_steps = jax.random.choice(key_unroll, jnp.arange(unroll_steps_max + 1))
+    return key, unroll_steps
+
+
+def push_forward_build(graph_preprocess, model_apply, setup):
+    @jax.jit
+    def push_forward(features, current_pos, particle_type, neighbors, params, state):
+        # no buffer overflow check here, since push forward acts on later epochs
+        graph = graph_preprocess(features, particle_type)
+        normalized_acceleration, _ = model_apply(params, state, graph)
+        next_pos = setup.integrate(normalized_acceleration, current_pos)
+        current_pos = jnp.concatenate(
+            [current_pos[:, 1:], next_pos[:, None, :]], axis=1
+        )
+
+        features, neighbors = setup.preprocess_eval(
+            (current_pos, particle_type), neighbors
+        )
+        return current_pos, neighbors, features
+
+    return push_forward
