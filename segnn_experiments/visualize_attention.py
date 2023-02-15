@@ -30,4 +30,7 @@ if __name__ == "__main__":
     ax = sns.heatmap(w, annot=True)
     ax.set_title("Attention Weights")
     ax.vlines([(w.columns.max() + 1) // 2], *ax.get_ylim())
-    ax.figure.savefig(f"attention_weights_{args.model_dir.split('_')[-1]}.png", dpi=300)
+    ax.figure.savefig(
+        f"attention_weights_{args.model_dir.replace('/best', '').split('_')[-1]}.png",
+        dpi=300,
+    )

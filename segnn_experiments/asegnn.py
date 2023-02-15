@@ -1,6 +1,7 @@
 from typing import Optional, Tuple
 
 import e3nn_jax as e3nn
+import haiku as hk
 import jax.numpy as jnp
 import jraph
 from jax.tree_util import Partial
@@ -11,6 +12,22 @@ from segnn_jax import (
     SEGNNLayer,
     SteerableGraphsTuple,
 )
+
+
+def avg_initialization(
+    name: str,
+    path_shape: Tuple[int, ...],
+    weight_std: float,
+    dtype: jnp.dtype = jnp.float32,
+):
+    _ = weight_std
+    # initialize all params with uniform (also biases)
+    return hk.get_parameter(
+        name,
+        shape=path_shape,
+        dtype=dtype,
+        init=hk.initializers.Constant(1 / jnp.prod(jnp.array(path_shape))),
+    )
 
 
 def HistoryEmbeddingBlock(
@@ -33,13 +50,14 @@ def HistoryEmbeddingBlock(
     # steer either with ones or with the last attribute
     right = attributes[:, -1, :] if right_attribute else None
     # NOTE: no biases in the embedding
-    for i in range(blocks):
+    for i in range(blocks - 1):
         attribute_emb = O3TensorProductGate(
             attribute_emb,
             right,
             output_irreps=hidden_irreps,
             biases=False,
             name=f"{where}_attribute_embedding_{name}_{i}",
+            init_fn=avg_initialization,
         )
     return O3TensorProduct(
         x=attribute_emb,
@@ -47,6 +65,7 @@ def HistoryEmbeddingBlock(
         output_irreps=embed_irreps,
         biases=False,
         name=f"{where}_attribute_embedding_{name}",
+        init_fn=avg_initialization,
     )
 
 
@@ -54,7 +73,7 @@ def AttentionEmbedding(
     embed_irreps: e3nn.Irreps,
     name: str,
     hidden_irreps: Optional[e3nn.Irreps],
-    blocks: int = 1,
+    blocks: int = 2,
     right_attribute: bool = False,
     embed_msg_features: bool = False,
 ):

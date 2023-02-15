@@ -1,0 +1,24 @@
+includes: defaults.yaml
+
+model: segnn
+num_mp_steps: 5
+latent_dim: 16
+
+batch_size: 128
+lr_start: 1.e-4
+lr_final: 1.e-6
+noise_std: 5.e-4
+lr_decay_steps: 3.e+5
+isotropic_norm: True
+velocity_aggregate: avg
+
+mode: train
+eval_num_trajs: 1
+
+log_steps: 100
+eval_steps: 200
+
+wandb: False
+wandb_project: tgv
+
+data_dir: /home/atoshev/data/LJ_debug
