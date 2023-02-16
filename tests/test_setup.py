@@ -12,9 +12,6 @@ from torch.utils.data import DataLoader
 from gns_jax.data import H5Dataset, numpy_collate
 from gns_jax.utils import broadcast_from_batch, eval_single_rollout, setup_builder
 
-# from jax.config import config
-# config.update('jax_enable_x64', True)
-
 
 class TestSetupBuilder:
     """Class for unit testing the setup functions."""
