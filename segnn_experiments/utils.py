@@ -138,10 +138,10 @@ def node_irreps(args) -> str:
     irreps = []
     irreps.append(f"{args.config.input_seq_length - 1}x1o")
     if not any(args.metadata["periodic_boundary_conditions"]):
-        args.info.node_feature_irreps.append("2x1o")
+        irreps.append("2x1o")
 
     if args.info.has_external_force:
-        args.info.node_feature_irreps.append("1x1o")
+        irreps.append("1x1o")
 
     if args.config.magnitudes:
         irreps.append(f"{args.config.input_seq_length - 1}x0e")
