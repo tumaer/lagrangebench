@@ -336,5 +336,5 @@ class TestInferBuilder:
 
 
 if __name__ == "__main__":
-    # TestSetupBuilder().run()
+    TestSetupBuilder().run()
     TestInferBuilder().run()
