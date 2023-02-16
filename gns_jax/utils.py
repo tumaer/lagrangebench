@@ -234,9 +234,10 @@ def _add_gns_noise(
     kinematic_mask = get_kinematic_mask(particle_type)
     pos_input_noise = jnp.where(kinematic_mask[:, None, None], 0.0, pos_input_noise)
     # adjust targets based on the noise from the last input position
-    pos_input_noise = pos_input_noise.at[:, isl:].set(
-        pos_input_noise[:, isl - 1][:, None, :]
-    )
+    num_potential_targets = pos_input_noise[:, isl:].shape[1]
+    pos_target_noise = pos_input_noise[:, isl - 1][:, None, :]
+    pos_target_noise = jnp.tile(pos_target_noise, (1, num_potential_targets, 1))
+    pos_input_noise = pos_input_noise.at[:, isl:].set(pos_target_noise)
 
     shift_vmap = vmap(shift_fn, in_axes=(0, 0))
     shift_dvmap = vmap(shift_vmap, in_axes=(0, 0))
@@ -281,7 +282,6 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
         displacement_fn,
         np.array(args.box),
         r_cutoff=args.metadata["default_connectivity_radius"],
-        dr_threshold=args.metadata["default_connectivity_radius"] * 0.25,
         capacity_multiplier=1.25,
         mask_self=False,
         format=partition.Sparse,

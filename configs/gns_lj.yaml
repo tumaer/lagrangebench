@@ -1,0 +1,24 @@
+includes: defaults.yaml
+
+model: gns
+num_mp_steps: 3
+num_mlp_layers: 1
+latent_dim: 16
+
+batch_size: 100
+lr_start: 5.e-4
+lr_final: 1.e-6
+noise_std: 1.e-7
+lr_decay_steps: 3.e+5
+pushforward_steps: [500, 1000]
+
+mode: train
+eval_num_trajs: 1
+
+wandb: False
+wandb_project: lj
+
+data_dir: /home/atoshev/data/LJ_debug
+
+log_steps: 10
+eval_steps: 100

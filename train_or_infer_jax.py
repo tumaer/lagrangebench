@@ -365,6 +365,11 @@ def run(args):
                 jnp.array([1.0, 0.0, 0.0]),
             )
 
+    elif "LJ" in args.info.dataset_name:
+        particle_dimension = 3
+        args.info.has_external_force = False
+        external_force_fn = None
+
     # preprocessing allocate and update functions in the spirit of jax-md"s
     # `partition.neighbor_list`. And an integration utility with PBC.
     setup = setup_builder(args, external_force_fn)
