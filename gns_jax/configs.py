@@ -155,12 +155,12 @@ def cli_arguments() -> Dict:
     )
 
     parser.add_argument(
-        "--f64", 
+        "--f64",
         required=False,
         action=argparse.BooleanOptionalAction,
         help="Whether to use double precision.",
-        )
-    
+    )
+
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 

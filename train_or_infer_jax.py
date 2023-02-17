@@ -33,6 +33,7 @@ from gns_jax.utils import (
     push_forward_build,
     push_forward_sample_steps,
     save_haiku,
+    set_seed_from_config,
     setup_builder,
 )
 
@@ -183,26 +184,6 @@ def train(
                 keys, raw_batch, args.config.noise_std, neighbors_batch, unroll_steps
             )
 
-            # # TODO: there is a systematic error in dimension y!
-            # keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-            #     keys, raw_batch, 0.0, neighbors_batch, 0
-            # )
-            # pos = raw_batch[0][0,0] # particle zero
-            # vel = pos[1:] - pos[:-1]
-            # acc = vel[1:] - vel[:-1]
-            # acc_norm = (acc - args.normalization["acceleration"]["mean"] ) / args.normalization["acceleration"]["std"]
-            # assert jnp.isclose(acc_norm[1], target_batch["acc"][0,0]).all()
-
-            # keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-            #     keys, raw_batch, 0.0, neighbors_batch, 1
-            # )
-            # assert jnp.isclose(acc_norm[2], target_batch["acc"][0,0]).all()
-
-            # keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-            #     keys, raw_batch, 0.0, neighbors_batch, 2
-            # )
-            # assert jnp.isclose(acc_norm[3], target_batch["acc"][0,0]).all()
-
             # unroll for push-forward steps
             _current_pos = raw_batch[0][:, :, : args.config.input_seq_length]
             for _ in range(unroll_steps):
@@ -313,12 +294,8 @@ def infer(model, params, state, neighbors, loader_valid, setup, graph_preprocess
 
 def run(args):
 
-    np.random.seed(args.config.seed)
-    import torch
-    torch.manual_seed(args.config.seed)
-    import random
-    random.seed(args.config.seed)
-    
+    seed_worker, generator = set_seed_from_config(args.config.seed)
+
     args.info.dataset_name = os.path.basename(args.config.data_dir.split("/")[-1])
     if args.config.ckp_dir is not None:
         os.makedirs(args.config.ckp_dir, exist_ok=True)
@@ -337,13 +314,6 @@ def run(args):
         )
 
     # dataloader
-    def seed_worker(worker_id):
-        worker_seed = torch.initial_seed() % 2 ** 32
-        np.random.seed(worker_seed)
-        random.seed(worker_seed)
-    g = torch.Generator()
-    g.manual_seed(args.config.seed)
-    
     train_seq_length = args.config.input_seq_length + len(args.config.pushforward_steps)
     data_train = H5Dataset(
         args.config.data_dir, "train", train_seq_length, is_rollout=False
@@ -356,18 +326,18 @@ def run(args):
         collate_fn=numpy_collate,
         drop_last=True,
         worker_init_fn=seed_worker,
-        generator=g,
+        generator=generator,
     )
     infer_split = "test" if args.config.test else "valid"
     data_valid = H5Dataset(
         args.config.data_dir, infer_split, args.config.input_seq_length, is_rollout=True
     )
     loader_valid = DataLoader(
-        dataset=data_valid, 
-        batch_size=1, 
-        collate_fn=numpy_collate, 
+        dataset=data_valid,
+        batch_size=1,
+        collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
-        generator=g,
+        generator=generator,
     )
 
     args.info.len_train = len(data_train)

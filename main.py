@@ -27,6 +27,7 @@ if __name__ == "__main__":
 
     if args.config.f64:
         from jax.config import config
+
         config.update("jax_enable_x64", True)
 
     from train_or_infer_jax import run

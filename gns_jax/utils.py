@@ -874,3 +874,34 @@ def push_forward_build(graph_preprocess, model_apply, setup):
         return current_pos, neighbors, features
 
     return push_forward
+
+
+# Reproducibility utils
+
+
+def set_seed_from_config(seed):
+    """Set seeds for numpy, random and torch."""
+
+    import random
+
+    import torch
+
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+
+    # those below are not used by the jax models
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+    # dataloader-related seeds
+    def seed_worker(_):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+
+    return seed_worker, generator
