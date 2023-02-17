@@ -1,0 +1,26 @@
+includes: defaults.yaml
+
+model: gns
+num_mp_steps: 2
+num_mlp_layers: 1
+latent_dim: 4
+input_seq_length: 3
+
+batch_size: 100
+lr_start: 5.e-4
+lr_final: 1.e-6
+lr_decay_steps: 3.e+5
+noise_std: 0.0
+pushforward_steps: [500, 1000]
+
+mode: train
+eval_num_trajs: 1
+f64: True
+
+wandb: False
+wandb_project: hook
+
+data_dir: /home/atoshev/data/Hook2_debug
+
+log_steps: 10
+eval_steps: 50

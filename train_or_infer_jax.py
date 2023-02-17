@@ -30,7 +30,10 @@ from gns_jax.utils import (
     load_haiku,
     log_norm_fn,
     oversmooth_norm,
+    push_forward_build,
+    push_forward_sample_steps,
     save_haiku,
+    set_seed_from_config,
     setup_builder,
 )
 
@@ -156,7 +159,10 @@ def train(
 
         return loss, new_params, state, opt_state
 
-    preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0))
+    preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0, None))
+
+    push_forward = push_forward_build(graph_preprocess, model_apply, setup)
+    push_forward_vmap = jax.vmap(push_forward, in_axes=(0, 0, 0, 0, None, None))
 
     # prepare for batch training.
     key = jax.random.PRNGKey(args.config.seed)
@@ -168,11 +174,28 @@ def train(
     while step < args.config.step_max:
 
         for raw_batch in loader_train:
-            # pos_input, particle_type, pos_target = raw_batch
+            # pos_input_and_target, particle_type = raw_batch
 
-            keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-                keys, raw_batch, args.config.noise_std, neighbors_batch
+            key, unroll_steps = push_forward_sample_steps(
+                key, step, args.config.pushforward_steps
             )
+
+            # The target computation incorporates the sampled number pushforward steps
+            keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
+                keys, raw_batch, args.config.noise_std, neighbors_batch, unroll_steps
+            )
+
+            # unroll for push-forward steps
+            _current_pos = raw_batch[0][:, :, : args.config.input_seq_length]
+            for _ in range(unroll_steps):
+                _current_pos, neighbors_batch, features_batch = push_forward_vmap(
+                    features_batch,
+                    _current_pos,
+                    raw_batch[1],
+                    neighbors_batch,
+                    params,
+                    state,
+                )
 
             if neighbors_batch.did_buffer_overflow.sum() > 0:
                 # check if the neighbor list is too small for any of the
@@ -194,7 +217,7 @@ def train(
                 params=params,
                 state=state,
                 features_batch=features_batch,
-                target_batch=target_batch,
+                target_batch=target_batch["acc"],
                 particle_type_batch=raw_batch[1],
                 opt_state=opt_state,
             )
@@ -272,6 +295,8 @@ def infer(model, params, state, neighbors, loader_valid, setup, graph_preprocess
 
 def run(args):
 
+    seed_worker, generator = set_seed_from_config(args.config.seed)
+
     args.info.dataset_name = os.path.basename(args.config.data_dir.split("/")[-1])
     if args.config.ckp_dir is not None:
         os.makedirs(args.config.ckp_dir, exist_ok=True)
@@ -290,8 +315,9 @@ def run(args):
         )
 
     # dataloader
+    train_seq_length = args.config.input_seq_length + len(args.config.pushforward_steps)
     data_train = H5Dataset(
-        args.config.data_dir, "train", args.config.input_seq_length, is_rollout=False
+        args.config.data_dir, "train", train_seq_length, is_rollout=False
     )
     loader_train = DataLoader(
         dataset=data_train,
@@ -300,13 +326,19 @@ def run(args):
         num_workers=2,
         collate_fn=numpy_collate,
         drop_last=True,
+        worker_init_fn=seed_worker,
+        generator=generator,
     )
     infer_split = "test" if args.config.test else "valid"
     data_valid = H5Dataset(
         args.config.data_dir, infer_split, args.config.input_seq_length, is_rollout=True
     )
     loader_valid = DataLoader(
-        dataset=data_valid, batch_size=1, collate_fn=numpy_collate
+        dataset=data_valid,
+        batch_size=1,
+        collate_fn=numpy_collate,
+        worker_init_fn=seed_worker,
+        generator=generator,
     )
 
     args.info.len_train = len(data_train)
@@ -343,7 +375,7 @@ def run(args):
                 jnp.array([1.0, 0.0, 0.0]),
             )
 
-    elif "LJ" in args.info.dataset_name.upper():
+    elif "Hook" in args.info.dataset_name:
         particle_dimension = 3
         args.info.has_external_force = False
         external_force_fn = None
@@ -355,9 +387,9 @@ def run(args):
     # first PRNG key
     key = jax.random.PRNGKey(args.config.seed)
     # get an example to initialize the setup and model
-    pos_input, particle_type, pos_target = next(iter(loader_train))
+    pos_input_and_target, particle_type = next(iter(loader_train))
     # the torch loader give a whole batch. We take only the first sample.
-    sample = (pos_input[0], particle_type[0], pos_target[0])
+    sample = (pos_input_and_target[0], particle_type[0])
     # initialize setup
     key, features, _, neighbors = setup.allocate(key, sample)
     # initialize model

@@ -36,6 +36,9 @@ lr_decay_rate: 0.1
 lr_decay_steps: 5.e+6
 # Standard deviation for the additive noise
 noise_std: 0.00067
+# Parameters related to the push-forward trick
+# At which step to introduce 2 step loss, 3 step loss, etc.
+pushforward_steps: [ ]
 # Logarithmic normalization. none, input, output, both
 log_norm: none
 # Whether to normalize inputs and outputs with the same value in x, y, ans z.
@@ -71,6 +74,8 @@ seed: 0
 gpu: 0
 # Whether to use test or validation split
 test: False
+# Double precision everywhere other than the ML model
+f64: False
 
 # Logging settings
 # Use wandb for logging
