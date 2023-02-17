@@ -268,6 +268,7 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
         integrate - Semi-implicit Euler respecting periodic boundary conditions
     """
 
+    dtype = jnp.float64 if args.config.f64 else np.float32
     normalization_stats = args.normalization
 
     # apply PBC in all directions or not at all
@@ -325,8 +326,8 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
         **kwargs,  # key, noise_std
     ):
 
-        pos_input, particle_type = sample
-        pos_input, particle_type = jnp.asarray(pos_input), jnp.asarray(particle_type)
+        pos_input = jnp.asarray(sample[0], dtype=dtype)
+        particle_type = jnp.asarray(sample[1])
 
         if mode == "train":
             key, noise_std = kwargs["key"], kwargs["noise_std"]

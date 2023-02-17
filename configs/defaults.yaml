@@ -74,6 +74,8 @@ seed: 0
 gpu: 0
 # Whether to use test or validation split
 test: False
+# Double precision everywhere other than the ML model
+f64: False
 
 # Logging settings
 # Use wandb for logging

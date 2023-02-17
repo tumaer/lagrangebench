@@ -25,6 +25,10 @@ if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.config.gpu)
 
+    if args.config.f64:
+        from jax.config import config
+        config.update("jax_enable_x64", True)
+
     from train_or_infer_jax import run
 
     run(args)
