@@ -26,6 +26,7 @@ class MetricsComputer:
         active_metrics: List,
         dist: Callable,
         metadata: Dict,
+        input_seq_length: int,
         stride: int = 10,
     ):
         assert all([hasattr(self, metric) for metric in active_metrics])
@@ -33,6 +34,7 @@ class MetricsComputer:
         self._dist = dist
         self._dist_vmap = jax.vmap(dist, in_axes=(0, 0))
         self._dist_dvmap = jax.vmap(self._dist_vmap, in_axes=(0, 0))
+        self._input_seq_length = input_seq_length
         self._stride = stride
         self._metadata = metadata
 
@@ -47,6 +49,12 @@ class MetricsComputer:
                     metrics[metric_name] = jax.vmap(metric_fn)(
                         pred_rollout, target_rollout
                     )
+                    isl = self._input_seq_length
+                    for slice_len in [5, 10, 20, 50, 100]:
+                        metrics[metric_name + str(slice_len)] = jax.vmap(metric_fn)(
+                            pred_rollout[isl:slice_len], target_rollout[isl:slice_len]
+                        )
+
                 elif metric_name in ["e_kin"]:
                     dt = self._metadata["dt"]
                     dx = self._metadata["dx"]

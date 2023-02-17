@@ -407,9 +407,12 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
         return new_position
 
     def metrics_computer(predictions, ground_truth):
-        return MetricsComputer(args.config.metrics, displacement_fn, args.metadata)(
-            predictions, ground_truth
-        )
+        return MetricsComputer(
+            args.config.metrics,
+            displacement_fn,
+            args.metadata,
+            args.config.input_seq_length,
+        )(predictions, ground_truth)
 
     return SetupFn(
         allocate_fn,
