@@ -94,9 +94,6 @@ def train(
     # Precompile model for evaluation
     model_apply = jax.jit(model.apply)
 
-    # TODO
-    args.config.gamma_embedding = 10.0
-
     def loss_fn(
         params: hk.Params,
         state: hk.State,
@@ -154,26 +151,9 @@ def train(
         state = jax.tree_map(lambda x: x.sum(axis=0), state)
         loss = jax.tree_map(lambda x: x.mean(axis=0), loss)
 
-        embedding_keys = [k for k in grads.keys() if "attribute_embedding" in k]
-        if len(embedding_keys) > 0:
-            gamma = args.config.gamma_embedding
-            for k in embedding_keys:
-                for w in grads[k].keys():
-                    grads[k][w] = gamma * grads[k][w]
-
         updates, opt_state = opt_update(grads, opt_state, params)
-
         new_params = optax.apply_updates(params, updates)
 
-        # attribute embeddings polyak averaging
-        # embedding_keys = [k for k in new_params.keys() if "attribute_embedding" in k]
-        # if len(embedding_keys) > 0:
-        #     gamma = args.config.gamma_embedding
-        #     for k in embedding_keys:
-        #         for w in new_params[k].keys():
-        #             upd = new_params[k][w]
-        #             old = params[k][w]
-        #             new_params[k][w] = (1 - gamma) * upd + gamma * old
         return loss, new_params, state, opt_state
 
     preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0))

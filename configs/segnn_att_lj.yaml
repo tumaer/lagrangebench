@@ -10,7 +10,7 @@ lr_final: 1.e-6
 noise_std: 5.e-4
 lr_decay_steps: 3.e+5
 isotropic_norm: True
-attention_blocks: 2 # non-linear
+attention_blocks: 1 # non-linear
 velocity_aggregate: all
 
 segnn_norm: none

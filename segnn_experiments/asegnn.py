@@ -20,13 +20,14 @@ def avg_initialization(
     weight_std: float,
     dtype: jnp.dtype = jnp.float32,
 ):
-    _ = weight_std
-    # initialize all params with uniform (also biases)
+    # initialize all params with averaged
     return hk.get_parameter(
         name,
         shape=path_shape,
         dtype=dtype,
-        init=hk.initializers.Constant(1 / jnp.prod(jnp.array(path_shape))),
+        init=hk.initializers.RandomNormal(
+            weight_std, 1 / jnp.prod(jnp.array(path_shape))
+        ),
     )
 
 

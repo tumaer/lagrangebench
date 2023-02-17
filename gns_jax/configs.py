@@ -120,7 +120,7 @@ def cli_arguments() -> Dict:
         help="Maximum degree of hidden layers.",
     )
     parser.add_argument(
-        "--norm",
+        "--segnn_norm",
         type=str,
         required=False,
         choices=["instance", "batch", "none"],
