@@ -52,7 +52,8 @@ class MetricsComputer:
                     isl = self._input_seq_length
                     for slice_len in [5, 10, 20, 50, 100]:
                         metrics[metric_name + str(slice_len)] = jax.vmap(metric_fn)(
-                            pred_rollout[isl:slice_len], target_rollout[isl:slice_len]
+                            pred_rollout[isl : isl + slice_len],
+                            target_rollout[isl : isl + slice_len],
                         )
 
                 elif metric_name in ["e_kin"]:
