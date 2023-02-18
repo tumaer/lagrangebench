@@ -8,6 +8,7 @@ from typing import Dict, Tuple
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import jmp
 import jraph
 import numpy as np
 import optax
@@ -177,7 +178,7 @@ def train(
             # pos_input_and_target, particle_type = raw_batch
 
             key, unroll_steps = push_forward_sample_steps(
-                key, step, args.config.pushforward_steps
+                key, step, args.config.pushforward
             )
 
             # The target computation incorporates the sampled number pushforward steps
@@ -315,10 +316,8 @@ def run(args):
         )
 
     # dataloader
-    train_seq_length = args.config.input_seq_length + len(args.config.pushforward_steps)
-    data_train = H5Dataset(
-        args.config.data_dir, "train", train_seq_length, is_rollout=False
-    )
+    train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
+    data_train = H5Dataset(args.config.data_dir, "train", train_seq_l, is_rollout=False)
     loader_train = DataLoader(
         dataset=data_train,
         batch_size=args.config.batch_size,
@@ -401,6 +400,7 @@ def run(args):
         from gns_jax.gns import GNS
         from gns_jax.utils import gns_graph_transform_builder
 
+        MODEL = GNS
         model = lambda x: GNS(
             particle_dimension=particle_dimension,
             latent_size=args.config.latent_dim,
@@ -412,6 +412,7 @@ def run(args):
         graph_preprocess = gns_graph_transform_builder()
 
     elif args.config.model == "lin":
+        MODEL = Linear
         model = lambda x: Linear(dim_out=3)(x)
         graph_preprocess = lambda f: [
             f[k] for k in ["vel_hist", "vel_mag", "bound", "force"] if k in f
@@ -431,6 +432,7 @@ def run(args):
             lmax=args.config.lmax_hidden,
         )
         if args.config.model == "segnn":
+            MODEL = SEGNN
             model = lambda x: SEGNN(
                 hidden_irreps=hidden_irreps,
                 output_irreps=Irreps("1x1o"),
@@ -442,6 +444,7 @@ def run(args):
         elif args.config.model == "segnn_rewind":
             from segnn_experiments.rsegnn import RSEGNN
 
+            MODEL = RSEGNN
             assert (
                 args.config.num_mp_steps == args.config.input_seq_length - 1
             ), "The number of layers must be the same size of the history"
@@ -460,6 +463,7 @@ def run(args):
         elif args.config.model == "segnn_attention":
             from segnn_experiments.asegnn import AttentionSEGNN
 
+            MODEL = AttentionSEGNN
             assert (
                 args.config.velocity_aggregate == "all"
             ), "SEGNN with attention is supposed to have all historical velocities"
@@ -494,6 +498,11 @@ def run(args):
     model = hk.without_apply_rng(hk.transform_with_state(model))
 
     graph_tuple = graph_preprocess(features, particle_type[0])
+
+    # mixed precision training based on this reference:
+    # https://github.com/deepmind/dm-haiku/blob/main/examples/imagenet/train.py
+    policy = jmp.get_policy("params=float32,compute=float32,output=float32")
+    hk.mixed_precision.set_policy(MODEL, policy)
 
     params, state = model.init(subkey, graph_tuple)
 

@@ -10,7 +10,12 @@ from jax_md import space
 from torch.utils.data import DataLoader
 
 from gns_jax.data import H5Dataset, numpy_collate
-from gns_jax.utils import broadcast_from_batch, eval_single_rollout, setup_builder
+from gns_jax.utils import (
+    broadcast_from_batch,
+    eval_single_rollout,
+    push_forward_sample_steps,
+    setup_builder,
+)
 
 
 class TestSetupBuilder:
@@ -332,6 +337,43 @@ class TestInferBuilder:
         self.test_rollout()
 
 
+class TestPushForward:
+    """Class for unit testing the push-forward functions."""
+
+    def __init__(self):
+
+        self.pf = {
+            "steps": [-1, 20000, 50000, 100000],
+            "unrolls": [0, 1, 3, 20],
+            "probs": [4.05, 4.05, 1.0, 1.0],
+        }
+
+        self.key = jax.random.PRNGKey(42)
+
+    def test_push_forward_sample_steps(self):
+        samples = 1000
+        steps_list = [1, 60000]
+        probs_ref = [np.array([1.0]), np.array([0.45, 0.45, 0.1])]
+        steps_ref = [np.array([0]), np.array([0, 1, 3])]
+
+        for i, s in enumerate(steps_list):
+            dump = []
+            for _ in range(samples):
+                self.key, unroll_steps = push_forward_sample_steps(self.key, s, self.pf)
+                dump.append(unroll_steps)
+
+            # Note: np.unique returns sorted array
+            unique, counts = np.unique(dump, return_counts=True)
+            assert (unique == steps_ref[i]).all()
+            assert np.allclose(counts / samples, probs_ref[i], atol=0.05)
+
+        print("test_push_forward_sample_steps passed!")
+
+    def run(self):
+        self.test_push_forward_sample_steps()
+
+
 if __name__ == "__main__":
     TestSetupBuilder().run()
     TestInferBuilder().run()
+    TestPushForward().run()

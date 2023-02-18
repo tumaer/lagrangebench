@@ -14,6 +14,8 @@ ipykernel
 
 jax-md==0.2.3
 jax[cuda11_cudnn82]
+# mixed precision jax library
+jmp
 matplotlib
 optax
 pandas
