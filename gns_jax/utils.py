@@ -851,12 +851,21 @@ def oversmooth_norm(graph, hops, input_seq_length):
 # push-forward utils
 
 
-def push_forward_sample_steps(key, step, pushforward_steps):
-    unroll_steps = 0
-    if len(pushforward_steps) > 0:
-        unroll_steps_max = np.sum(step >= np.array(pushforward_steps))
-        key, key_unroll = jax.random.split(key, 2)
-        unroll_steps = jax.random.choice(key_unroll, jnp.arange(unroll_steps_max + 1))
+def push_forward_sample_steps(key, step, pushforward):
+    key, key_unroll = jax.random.split(key, 2)
+
+    # steps needs to be an ordered list
+    steps = np.array(pushforward["steps"])
+    assert all(steps[i] <= steps[i + 1] for i in range(len(steps) - 1))
+
+    # until which index to sample from
+    idx = (step > steps).sum()
+
+    unroll_steps = jax.random.choice(
+        key_unroll,
+        a=jnp.array(pushforward["unrolls"][:idx]),
+        p=jnp.array(pushforward["probs"][:idx]),
+    )
     return key, unroll_steps
 
 

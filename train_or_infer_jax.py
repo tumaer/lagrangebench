@@ -177,7 +177,7 @@ def train(
             # pos_input_and_target, particle_type = raw_batch
 
             key, unroll_steps = push_forward_sample_steps(
-                key, step, args.config.pushforward_steps
+                key, step, args.config.pushforward
             )
 
             # The target computation incorporates the sampled number pushforward steps
@@ -315,10 +315,8 @@ def run(args):
         )
 
     # dataloader
-    train_seq_length = args.config.input_seq_length + len(args.config.pushforward_steps)
-    data_train = H5Dataset(
-        args.config.data_dir, "train", train_seq_length, is_rollout=False
-    )
+    train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
+    data_train = H5Dataset(args.config.data_dir, "train", train_seq_l, is_rollout=False)
     loader_train = DataLoader(
         dataset=data_train,
         batch_size=args.config.batch_size,
