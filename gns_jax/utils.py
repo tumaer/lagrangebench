@@ -425,7 +425,7 @@ def setup_builder(args: argparse.Namespace, external_force_fn: Callable):
     )
 
 
-# Bathing utilities for JAX pytrees
+# Batching utilities for JAX pytrees
 
 
 def broadcast_to_batch(sample, batch_size: int):
