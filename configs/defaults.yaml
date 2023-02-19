@@ -20,7 +20,7 @@ lmax_hidden: 1
 segnn_norm: instance
 # Number of attention layers. 0 for linear layer
 attention_blocks: 0
-# Wether to use the last velocity as steerable attribute in the embedding
+# Whether to use the last velocity as steerable attribute in the embedding
 right_attribute: False
 
 # Optimization settings

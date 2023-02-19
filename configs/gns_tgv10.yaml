@@ -1,20 +1,19 @@
 includes: defaults.yaml
 
 model: gns
-num_mp_steps: 5
+num_mp_steps: 10
 num_mlp_layers: 1
-latent_dim: 128
+latent_dim: 64
 
 batch_size: 1
 lr_start: 5.e-4
-lr_final: 1.e-6
-noise_std: 1.e-4
 lr_decay_steps: 1.e+5
+noise_std: 1.e-4
 
 mode: train
 eval_num_trajs: 1
 
 wandb: True
-wandb_project: rpf
+wandb_project: tgv10
 
-data_dir: /home/atoshev/data/RPF100k1every10
+data_dir: /home/atoshev/data/TGV1k100every10
