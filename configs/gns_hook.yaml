@@ -17,7 +17,8 @@ pushforward:
   probs: [1]
 
 mode: train
-eval_num_trajs: 1
+eval_num_trajs: 5
+split_valid_traj_into_n: 5
 
 wandb: False
 wandb_project: hook
