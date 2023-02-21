@@ -576,17 +576,13 @@ def eval_single_rollout(
     # (n_nodes, t_window, dim)
     initial_positions = pos_input[:, 0:input_seq_length]
     # (n_nodes, traj_len - t_window, dim)
-    ground_truth_positions = pos_input[:, input_seq_length:]
-
+    ground_truth_positions = pos_input[
+        :, input_seq_length : input_seq_length + num_rollout_steps + eval_n_more_steps
+    ]
     current_positions = initial_positions  # (n_nodes, t_window, dim)
 
-    if eval_n_more_steps == 0:
-        # the number of predictions is the number of ground truth positions
-        predictions = jnp.zeros_like(ground_truth_positions).transpose(1, 0, 2)
-    else:
-        num_predictions = num_rollout_steps + eval_n_more_steps
-        num_nodes, _, dim = ground_truth_positions.shape
-        predictions = jnp.zeros((num_predictions, num_nodes, dim))
+    num_nodes, _, dim = ground_truth_positions.shape
+    predictions = jnp.zeros((num_rollout_steps + eval_n_more_steps, num_nodes, dim))
 
     step = 0
     while step < num_rollout_steps + eval_n_more_steps:
@@ -736,15 +732,24 @@ def eval_rollout(
 
 def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
     """Averages the metrics over the rollouts."""
-    small_metrics = defaultdict(lambda: 0.0)
+    # create a dictionary with the same keys as the metrics, but empty list as values
+    trajectory_averages = defaultdict(list)
     for rollout in eval_metrics.values():
-        for k, m in rollout.items():
+        for k, v in rollout.items():
             if k == "e_kin":
                 continue
             if k in ["mse", "mae"]:
                 k = "loss"
-            small_metrics[f"val/{k}"] += float(jnp.mean(m)) / len(eval_metrics)
-    return dict(small_metrics)
+            trajectory_averages[k].append(jnp.mean(v).item())
+
+    # mean and std values accross rollouts
+    small_metrics = {}
+    for k, v in trajectory_averages.items():
+        small_metrics[f"val/{k}"] = float(np.mean(v))
+    for k, v in trajectory_averages.items():
+        small_metrics[f"val/std{k}"] = float(np.std(v))
+
+    return small_metrics
 
 
 # Unit Test utils

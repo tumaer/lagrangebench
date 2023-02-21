@@ -65,6 +65,8 @@ def train(
     # save config file
     with open(os.path.join(ckp_dir, "config.yaml"), "w") as f:
         yaml.dump(vars(args.config), f)
+    with open(os.path.join(ckp_dir, "best", "config.yaml"), "w") as f:
+        yaml.dump(vars(args.config), f)
 
     # wandb doesn't like Namespace objects
     args_ = copy.copy(args)
@@ -239,8 +241,7 @@ def train(
                     state=state,
                     neighbors=nbrs,
                     loader_valid=loader_valid,
-                    num_rollout_steps=args.config.num_rollout_steps
-                    + 1,  # +1 not training
+                    num_rollout_steps=args.config.num_rollout_steps,
                     num_trajs=args.config.eval_num_trajs,
                     rollout_dir=args.config.rollout_dir,
                     graph_preprocess=graph_preprocess,
@@ -282,8 +283,7 @@ def infer(model, params, state, neighbors, loader_valid, setup, graph_preprocess
         state=state,
         neighbors=neighbors,
         loader_valid=loader_valid,
-        num_rollout_steps=args.config.num_rollout_steps
-        + 1,  # +1 because we are not training
+        num_rollout_steps=args.config.num_rollout_steps,
         num_trajs=args.config.eval_num_trajs,
         rollout_dir=args.config.rollout_dir,
         graph_preprocess=graph_preprocess,
@@ -310,11 +310,6 @@ def run(args):
         args.metadata, args.config.isotropic_norm, args.config.noise_std
     )
 
-    if args.config.num_rollout_steps == -1:
-        args.config.num_rollout_steps = (
-            args.metadata["sequence_length"] - args.config.input_seq_length
-        )
-
     # dataloader
     train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
     data_train = H5Dataset(args.config.data_dir, "train", train_seq_l, is_rollout=False)
@@ -322,15 +317,18 @@ def run(args):
         dataset=data_train,
         batch_size=args.config.batch_size,
         shuffle=True,
-        num_workers=2,
+        num_workers=4,
         collate_fn=numpy_collate,
         drop_last=True,
         worker_init_fn=seed_worker,
         generator=generator,
     )
-    infer_split = "test" if args.config.test else "valid"
     data_valid = H5Dataset(
-        args.config.data_dir, infer_split, args.config.input_seq_length, is_rollout=True
+        dataset_path=args.config.data_dir,
+        split="test" if args.config.test else "valid",
+        input_seq_length=args.config.input_seq_length,
+        split_valid_traj_into_n=args.config.split_valid_traj_into_n,
+        is_rollout=True,
     )
     loader_valid = DataLoader(
         dataset=data_valid,
@@ -342,6 +340,22 @@ def run(args):
 
     args.info.len_train = len(data_train)
     args.info.len_valid = len(data_valid)
+
+    assert (
+        args.config.num_rollout_steps
+        <= data_valid.subsequence_length - args.config.input_seq_length
+    ), (
+        "If you want to evaluate the loss on more than the ground truth traj length, "
+        "then use the --eval_n_more_steps argument."
+    )
+    assert args.config.eval_num_trajs <= len(
+        loader_valid
+    ), "eval_num_trajs must be <= len(loader_valid)"
+
+    if args.config.num_rollout_steps == -1:
+        args.config.num_rollout_steps = (
+            data_valid.subsequence_length - args.config.input_seq_length
+        )
 
     # neighbors search
     bounds = np.array(args.metadata["bounds"])

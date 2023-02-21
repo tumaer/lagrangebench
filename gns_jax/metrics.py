@@ -40,6 +40,9 @@ class MetricsComputer:
 
     def __call__(self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray) -> Dict:
         # assert pred_rollout.shape[0] == target_rollout.shape[0]
+
+        # both pred_rollout and target_rollout are of shape
+        # (traj_len-input_seq_length, num_particles, dim)
         metrics = {}
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -49,12 +52,9 @@ class MetricsComputer:
                     metrics[metric_name] = jax.vmap(metric_fn)(
                         pred_rollout, target_rollout
                     )
-                    isl = self._input_seq_length
-                    for slice_len in [5, 10, 20, 50, 100]:
-                        metrics[metric_name + str(slice_len)] = jax.vmap(metric_fn)(
-                            pred_rollout[isl : isl + slice_len],
-                            target_rollout[isl : isl + slice_len],
-                        )
+
+                    for span in [5, 10, 20, 50, 100]:
+                        metrics[metric_name + str(span)] = metrics[metric_name][:span]
 
                 elif metric_name in ["e_kin"]:
                     dt = self._metadata["dt"]
