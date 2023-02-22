@@ -14,9 +14,13 @@ right_attribute: False
 attention_blocks: 1 # 1 corresponds to linear
 velocity_aggregate: all
 segnn_norm: none
+pushforward:
+  steps: [-1, 100000, 125000, 150000, 175000, 200000]
+  unrolls: [0, 1, 2, 3, 4, 5]
+  probs: [16, 2, 1, 1, 1, 1]
 
 mode: train
-eval_num_trajs: 1
+eval_num_trajs: 10
 
 wandb: True
 wandb_project: tgv10

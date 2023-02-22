@@ -39,10 +39,13 @@ class TestSetupBuilder:
             "default_connectivity_radius": 0.3,
             "bounds": [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]],
         }
-        args.config = Namespace()
-        args.config.magnitudes = False
-        args.config.log_norm = False
-        args.config.input_seq_length = 3  # one past velocity
+        args.config = Namespace(
+            magnitudes=False,
+            log_norm=False,
+            input_seq_length=3,  # one past velocity
+            f64=True,
+        )
+
         bounds = np.array(args.metadata["bounds"])
         args.box = bounds[:, 1] - bounds[:, 0]
 
@@ -233,14 +236,15 @@ class TestInferBuilder:
         with open(os.path.join(data_dir, "metadata.json"), "r") as f:
             args.metadata = json.loads(f.read())
 
-        args.config = Namespace()
-        args.config.data_dir = data_dir
-        args.config.magnitudes = False
-        args.config.log_norm = False
-        args.config.input_seq_length = 3  # one past velocity
-        args.config.metrics = ["mse"]
-        args.config.num_rollout_steps = (
-            args.metadata["sequence_length"] - args.config.input_seq_length
+        input_seq_length = 3
+        args.config = Namespace(
+            data_dir=data_dir,
+            magnitudes=False,
+            log_norm=False,
+            input_seq_length=input_seq_length,  # one past velocity
+            metrics=["mse"],
+            num_rollout_steps=args.metadata["sequence_length"] - input_seq_length,
+            f64=True,
         )
 
         bounds = np.array(args.metadata["bounds"])
