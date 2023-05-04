@@ -8,6 +8,7 @@ from typing import Dict, Tuple
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import jmp
 import jraph
 import numpy as np
 import optax
@@ -30,7 +31,10 @@ from gns_jax.utils import (
     load_haiku,
     log_norm_fn,
     oversmooth_norm,
+    push_forward_build,
+    push_forward_sample_steps,
     save_haiku,
+    set_seed_from_config,
     setup_builder,
 )
 
@@ -60,6 +64,8 @@ def train(
 
     # save config file
     with open(os.path.join(ckp_dir, "config.yaml"), "w") as f:
+        yaml.dump(vars(args.config), f)
+    with open(os.path.join(ckp_dir, "best", "config.yaml"), "w") as f:
         yaml.dump(vars(args.config), f)
 
     # wandb doesn't like Namespace objects
@@ -153,9 +159,13 @@ def train(
 
         updates, opt_state = opt_update(grads, opt_state, params)
         new_params = optax.apply_updates(params, updates)
+
         return loss, new_params, state, opt_state
 
-    preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0))
+    preprocess_vmap = jax.vmap(setup.preprocess, in_axes=(0, 0, None, 0, None))
+
+    push_forward = push_forward_build(graph_preprocess, model_apply, setup)
+    push_forward_vmap = jax.vmap(push_forward, in_axes=(0, 0, 0, 0, None, None))
 
     # prepare for batch training.
     key = jax.random.PRNGKey(args.config.seed)
@@ -167,11 +177,28 @@ def train(
     while step < args.config.step_max:
 
         for raw_batch in loader_train:
-            # pos_input, particle_type, pos_target = raw_batch
+            # pos_input_and_target, particle_type = raw_batch
 
-            keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-                keys, raw_batch, args.config.noise_std, neighbors_batch
+            key, unroll_steps = push_forward_sample_steps(
+                key, step, args.config.pushforward
             )
+
+            # The target computation incorporates the sampled number pushforward steps
+            keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
+                keys, raw_batch, args.config.noise_std, neighbors_batch, unroll_steps
+            )
+
+            # unroll for push-forward steps
+            _current_pos = raw_batch[0][:, :, : args.config.input_seq_length]
+            for _ in range(unroll_steps):
+                _current_pos, neighbors_batch, features_batch = push_forward_vmap(
+                    features_batch,
+                    _current_pos,
+                    raw_batch[1],
+                    neighbors_batch,
+                    params,
+                    state,
+                )
 
             if neighbors_batch.did_buffer_overflow.sum() > 0:
                 # check if the neighbor list is too small for any of the
@@ -193,7 +220,7 @@ def train(
                 params=params,
                 state=state,
                 features_batch=features_batch,
-                target_batch=target_batch,
+                target_batch=target_batch["acc"],
                 particle_type_batch=raw_batch[1],
                 opt_state=opt_state,
             )
@@ -214,8 +241,7 @@ def train(
                     state=state,
                     neighbors=nbrs,
                     loader_valid=loader_valid,
-                    num_rollout_steps=args.config.num_rollout_steps
-                    + 1,  # +1 not training
+                    num_rollout_steps=args.config.num_rollout_steps,
                     num_trajs=args.config.eval_num_trajs,
                     rollout_dir=args.config.rollout_dir,
                     graph_preprocess=graph_preprocess,
@@ -257,8 +283,7 @@ def infer(model, params, state, neighbors, loader_valid, setup, graph_preprocess
         state=state,
         neighbors=neighbors,
         loader_valid=loader_valid,
-        num_rollout_steps=args.config.num_rollout_steps
-        + 1,  # +1 because we are not training
+        num_rollout_steps=args.config.num_rollout_steps,
         num_trajs=args.config.eval_num_trajs,
         rollout_dir=args.config.rollout_dir,
         graph_preprocess=graph_preprocess,
@@ -270,6 +295,8 @@ def infer(model, params, state, neighbors, loader_valid, setup, graph_preprocess
 
 
 def run(args):
+
+    seed_worker, generator = set_seed_from_config(args.config.seed)
 
     args.info.dataset_name = os.path.basename(args.config.data_dir.split("/")[-1])
     if args.config.ckp_dir is not None:
@@ -283,33 +310,52 @@ def run(args):
         args.metadata, args.config.isotropic_norm, args.config.noise_std
     )
 
-    if args.config.num_rollout_steps == -1:
-        args.config.num_rollout_steps = (
-            args.metadata["sequence_length"] - args.config.input_seq_length
-        )
-
     # dataloader
-    data_train = H5Dataset(
-        args.config.data_dir, "train", args.config.input_seq_length, is_rollout=False
-    )
+    train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
+    data_train = H5Dataset(args.config.data_dir, "train", train_seq_l, is_rollout=False)
     loader_train = DataLoader(
         dataset=data_train,
         batch_size=args.config.batch_size,
         shuffle=True,
-        num_workers=2,
+        num_workers=4,
         collate_fn=numpy_collate,
         drop_last=True,
+        worker_init_fn=seed_worker,
+        generator=generator,
     )
-    infer_split = "test" if args.config.test else "valid"
     data_valid = H5Dataset(
-        args.config.data_dir, infer_split, args.config.input_seq_length, is_rollout=True
+        dataset_path=args.config.data_dir,
+        split="test" if args.config.test else "valid",
+        input_seq_length=args.config.input_seq_length,
+        split_valid_traj_into_n=args.config.split_valid_traj_into_n,
+        is_rollout=True,
     )
     loader_valid = DataLoader(
-        dataset=data_valid, batch_size=1, collate_fn=numpy_collate
+        dataset=data_valid,
+        batch_size=1,
+        collate_fn=numpy_collate,
+        worker_init_fn=seed_worker,
+        generator=generator,
     )
 
     args.info.len_train = len(data_train)
     args.info.len_valid = len(data_valid)
+
+    assert (
+        args.config.num_rollout_steps
+        <= data_valid.subsequence_length - args.config.input_seq_length
+    ), (
+        "If you want to evaluate the loss on more than the ground truth traj length, "
+        "then use the --eval_n_more_steps argument."
+    )
+    assert args.config.eval_num_trajs <= len(
+        loader_valid
+    ), "eval_num_trajs must be <= len(loader_valid)"
+
+    if args.config.num_rollout_steps == -1:
+        args.config.num_rollout_steps = (
+            data_valid.subsequence_length - args.config.input_seq_length
+        )
 
     # neighbors search
     bounds = np.array(args.metadata["bounds"])
@@ -342,6 +388,11 @@ def run(args):
                 jnp.array([1.0, 0.0, 0.0]),
             )
 
+    elif "Hook" in args.info.dataset_name:
+        particle_dimension = 3
+        args.info.has_external_force = False
+        external_force_fn = None
+
     # preprocessing allocate and update functions in the spirit of jax-md"s
     # `partition.neighbor_list`. And an integration utility with PBC.
     setup = setup_builder(args, external_force_fn)
@@ -349,9 +400,9 @@ def run(args):
     # first PRNG key
     key = jax.random.PRNGKey(args.config.seed)
     # get an example to initialize the setup and model
-    pos_input, particle_type, pos_target = next(iter(loader_train))
+    pos_input_and_target, particle_type = next(iter(loader_train))
     # the torch loader give a whole batch. We take only the first sample.
-    sample = (pos_input[0], particle_type[0], pos_target[0])
+    sample = (pos_input_and_target[0], particle_type[0])
     # initialize setup
     key, features, _, neighbors = setup.allocate(key, sample)
     # initialize model
@@ -363,6 +414,7 @@ def run(args):
         from gns_jax.gns import GNS
         from gns_jax.utils import gns_graph_transform_builder
 
+        MODEL = GNS
         model = lambda x: GNS(
             particle_dimension=particle_dimension,
             latent_size=args.config.latent_dim,
@@ -374,6 +426,7 @@ def run(args):
         graph_preprocess = gns_graph_transform_builder()
 
     elif args.config.model == "lin":
+        MODEL = Linear
         model = lambda x: Linear(dim_out=3)(x)
         graph_preprocess = lambda f: [
             f[k] for k in ["vel_hist", "vel_mag", "bound", "force"] if k in f
@@ -393,6 +446,7 @@ def run(args):
             lmax=args.config.lmax_hidden,
         )
         if args.config.model == "segnn":
+            MODEL = SEGNN
             model = lambda x: SEGNN(
                 hidden_irreps=hidden_irreps,
                 output_irreps=Irreps("1x1o"),
@@ -404,6 +458,7 @@ def run(args):
         elif args.config.model == "segnn_rewind":
             from segnn_experiments.rsegnn import RSEGNN
 
+            MODEL = RSEGNN
             assert (
                 args.config.num_mp_steps == args.config.input_seq_length - 1
             ), "The number of layers must be the same size of the history"
@@ -422,6 +477,7 @@ def run(args):
         elif args.config.model == "segnn_attention":
             from segnn_experiments.asegnn import AttentionSEGNN
 
+            MODEL = AttentionSEGNN
             assert (
                 args.config.velocity_aggregate == "all"
             ), "SEGNN with attention is supposed to have all historical velocities"
@@ -430,6 +486,7 @@ def run(args):
                 hidden_irreps=hidden_irreps,
                 output_irreps=Irreps("1x1o"),
                 num_layers=args.config.num_mp_steps,
+                lmax_latent=args.config.lmax_attributes,
                 task="node",
                 blocks_per_layer=args.config.num_mlp_layers,
                 norm=args.config.segnn_norm,
@@ -455,6 +512,11 @@ def run(args):
     model = hk.without_apply_rng(hk.transform_with_state(model))
 
     graph_tuple = graph_preprocess(features, particle_type[0])
+
+    # mixed precision training based on this reference:
+    # https://github.com/deepmind/dm-haiku/blob/main/examples/imagenet/train.py
+    policy = jmp.get_policy("params=float32,compute=float32,output=float32")
+    hk.mixed_precision.set_policy(MODEL, policy)
 
     params, state = model.init(subkey, graph_tuple)
 

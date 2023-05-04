@@ -120,7 +120,7 @@ def cli_arguments() -> Dict:
         help="Maximum degree of hidden layers.",
     )
     parser.add_argument(
-        "--norm",
+        "--segnn_norm",
         type=str,
         required=False,
         choices=["instance", "batch", "none"],
@@ -152,6 +152,13 @@ def cli_arguments() -> Dict:
         required=False,
         type=int,
         help="Number of attention layers.",
+    )
+
+    parser.add_argument(
+        "--f64",
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="Whether to use double precision.",
     )
 
     # only keep passed arguments to avoid overwriting config
