@@ -1,8 +1,8 @@
 includes: defaults.yaml
 
 model: segnn_attention
-num_mp_steps: 7
-latent_dim: 32
+num_mp_steps: 10
+latent_dim: 64
 
 batch_size: 1
 lr_start: 5.e-4

@@ -1,14 +1,21 @@
 includes: defaults.yaml
 
 model: segnn
-num_mp_steps: 7
-latent_dim: 32
+num_mp_steps: 10
+latent_dim: 64
 
 batch_size: 1
-lr_start: 5.e-4
+lr_start: 1.e-3
+lr_final: 1.e-6
 lr_decay_steps: 1.e+5
 noise_std: 3.e-5
 isotropic_norm: True
+pushforward:
+  steps: [-1, 100000, 125000, 150000, 175000, 200000]
+  unrolls: [0, 1, 2, 3, 4, 5]
+  probs: [16, 2, 1, 1, 1, 1]
+
+segnn_norm: instance
 
 mode: train
 eval_num_trajs: 10
