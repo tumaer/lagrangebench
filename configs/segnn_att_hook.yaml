@@ -1,0 +1,34 @@
+includes: defaults.yaml
+
+model: segnn_attention
+num_mp_steps: 3
+latent_dim: 6
+input_seq_length: 3
+
+batch_size: 100
+lr_start: 5.e-4
+lr_final: 1.e-6
+lr_decay_steps: 3.e+5
+noise_std: 0.0
+segnn_norm: none
+pushforward:
+  steps: [-1, 500, 1000]
+  unrolls: [0, 1, 2]
+  probs: [1, 1, 1]
+
+
+attention_blocks: 1 # non-linear
+right_attribute: False
+velocity_aggregate: all
+
+mode: train
+eval_num_trajs: 1
+f64: True
+
+wandb: False
+wandb_project: hook
+
+data_dir: /home/atoshev/data/Hook2_debug
+
+log_steps: 10
+eval_steps: 50
