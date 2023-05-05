@@ -2,7 +2,7 @@ import bisect
 import os
 
 import h5py
-import numpy as np
+import jax.numpy as jnp
 from torch.utils.data import Dataset
 
 
@@ -31,28 +31,12 @@ class H5Dataset(Dataset):
         self.input_seq_length = input_seq_length
         self.split_valid_traj_into_n = split_valid_traj_into_n
 
+        self.db_hdf5 = None
+
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())
 
             self.sequence_length = f["0000/position"].shape[0]
-
-            # # the true sequence length is not the one in the metadata file. The
-            # # very first frame is needed to compute the velocity.
-            # with open(os.path.join(dataset_path, "metadata.json"), "r") as fp:
-            #     metadata = json.loads(fp.read())
-            # sequence_length = metadata["sequence_length"] + 1
-
-            # For some datasets the number of particles per trajectory varies.
-            # For the purpose of batching we need to pad the trajectories to
-            # the maximum number of particles. This is done in the dataloader.
-            # The following lines are for debugging purposes only and were used
-            # for experimenting without padding.
-            # self.traj_num_nodes = [
-            #     f[f"{k}/position"].shape[1] for k in f.keys()]
-            # tmp = np.array(sorted(self.traj_num_nodes))
-            # print(f"bs=2, worst case: {tmp[len(tmp)//2] + tmp[-1]} nodes")
-            # print(f"Number of nodes min={tmp.min()}, max={tmp.max()}, "
-            #       f"mean={tmp.mean()}")
 
         # Subsequence is used to split one long validation trajectory into multiple
         self.subsequence_length = self.sequence_length // split_valid_traj_into_n
@@ -62,19 +46,18 @@ class H5Dataset(Dataset):
             self.num_samples = split_valid_traj_into_n * len(self.traj_keys)
         else:
             samples_per_traj = self.sequence_length - self.input_seq_length - 1
-            keylens = [samples_per_traj for _ in range(len(self.traj_keys))]
-            self._keylen_cumulative = np.cumsum(keylens).tolist()
+            keylens = jnp.array([samples_per_traj for _ in range(len(self.traj_keys))])
+            self._keylen_cumulative = jnp.cumsum(keylens).tolist()
             self.num_samples = sum(keylens)
 
             self.getter = self.get_window
 
-    def open_hdf5(self):
-        self.db_hdf5 = h5py.File(self.file_path, "r")
+    def open_hdf5(self) -> h5py.File:
+        return h5py.File(self.file_path, "r")
 
     def get_trajectory(self, idx: int):
         # Open the database file
-        if not hasattr(self, "db_hdf5"):
-            self.open_hdf5()
+        self.db_hdf5 = self.open_hdf5()
 
         if self.split_valid_traj_into_n > 1:
             traj_idx = idx // self.split_valid_traj_into_n
@@ -106,8 +89,7 @@ class H5Dataset(Dataset):
         assert el_idx >= 0
 
         # Open the database file
-        if not hasattr(self, "db_hdf5"):
-            self.open_hdf5()
+        self.db_hdf5 = self.open_hdf5()
 
         # Get a pointer to the trajectory. That is not yet the real trajectory.
         traj = self.db_hdf5[f"{self.traj_keys[traj_idx]}"]
@@ -126,17 +108,3 @@ class H5Dataset(Dataset):
 
     def __len__(self):
         return self.num_samples
-
-
-def numpy_collate(batch):
-    """
-    Source:
-    https://jax.readthedocs.io/en/latest/notebooks/Neural_Network_and_Data_Loading.html
-    """
-    if isinstance(batch[0], np.ndarray):
-        return np.stack(batch)  # TODO: JAX
-    elif isinstance(batch[0], (tuple, list)):
-        transposed = zip(*batch)
-        return [numpy_collate(samples) for samples in transposed]
-    else:
-        return np.array(batch)  # TODO: JAX

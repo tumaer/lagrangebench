@@ -62,8 +62,11 @@ disable=C0114, # module docstring
         C0412, # non-grouped imports
         W0102, # default being a list
         R1729, # use a generator
-        W0640,
+        W0640, # cell var from outer scope
         C0415, # import outside toplevel
+        W1514, # using open without context
+        C3001, # lambda to variable
+        W0212, # protected access
         abstract-method,
         apply-builtin,
         arguments-differ,

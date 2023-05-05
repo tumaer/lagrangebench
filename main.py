@@ -3,11 +3,9 @@ from argparse import Namespace
 
 import yaml
 
-from gns_jax.configs import NestedLoader, cli_arguments
+from equisph.configs import NestedLoader, cli_arguments
 
 if __name__ == "__main__":
-
-    # priority to command line arguments
     cli_args = cli_arguments()
     if "config" in cli_args:
         config_path = cli_args["config"]
@@ -17,7 +15,7 @@ if __name__ == "__main__":
     with open(config_path, "r") as f:
         args = yaml.load(f, NestedLoader)
 
-    # cli arguments have priority
+    # priority to command line arguments
     args.update(cli_args)
     args = Namespace(config=Namespace(**args), info=Namespace())
 
@@ -30,6 +28,6 @@ if __name__ == "__main__":
 
         config.update("jax_enable_x64", True)
 
-    from train_or_infer_jax import run
+    from equisph.run import train_or_infer
 
-    run(args)
+    train_or_infer(args)

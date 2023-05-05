@@ -1,38 +1,25 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
 
-# Torch reference implementation
---extra-index-url https://download.pytorch.org/whl/cu117
+--find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
--f https://data.pyg.org/whl/torch-1.13.0+cu117.html
-
-# Core of this project
--f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# Data
 cloudpickle
-dm-tree
-h5py
-# Utilities
-ipykernel
 
-jax-md==0.2.3
-jax[cuda11_cudnn82]
-# mixed precision jax library
-jmp
-matplotlib
-optax
-pandas
-POT
-pre-commit
-pyg-lib
+# JAX
+dm_haiku==0.0.9
+e3nn_jax==0.17.0
+h5py
+jax[cuda]==0.4.7
+jax_md==0.2.5
+jaxlib[cuda]==0.4.7
+jmp==0.0.4
+jraph==0.0.6.dev0
+
+# Misc
+numpy
+optax==0.1.3
+pot
 pyvista
-# segnn jax implementation
-segnn-jax
-# TF dataloader from the reference implementation
-tensorflow
-tensorflow-datasets
-tfrecord
-torch
-torch-cluster
-torch-geometric
-torch-scatter
-torch-sparse
-torch-spline-conv
+PyYAML
+torch==1.13.0+cpu
 wandb

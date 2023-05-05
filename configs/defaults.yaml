@@ -44,12 +44,8 @@ lr_decay_steps: 5.e+6
 noise_std: 0.00067
 # Whether to use magnitudes or not
 magnitudes: False
-# Logarithmic normalization. none, input, output, both
-log_norm: none
 # Whether to normalize inputs and outputs with the same value in x, y, ans z.
 isotropic_norm: False
-# With how many veraging steps to normalize velocities
-oversmooth_norm_hops: 0
 # Parameters related to the push-forward trick
 pushforward:
   # At which training step to introduce next unroll stage, e.g. [-1, 20000, 50000]
@@ -65,14 +61,14 @@ mode:
 # Dataset directory
 data_dir:
 # Number of rollout steps. If "-1", then defaults to sequence_length - input_seq_len.
-# num_rollout_steps must be <= ground truth len. For extrapolation use eval_n_more_steps
-num_rollout_steps: -1
+# n_rollout_steps must be <= ground truth len. For extrapolation use n_extrap_steps
+n_rollout_steps: -1
 # Into how many parts to split each validation trajectory for inference
 split_valid_traj_into_n: 1
 # Number of evaluation trajectories
-eval_num_trajs: 5
+eval_n_trajs: 5
 # Number of extrapolation steps
-eval_n_more_steps: 0
+n_extrap_steps: 0
 # Whether to use test or validation split
 test: False
 # Seed

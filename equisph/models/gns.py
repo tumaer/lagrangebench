@@ -1,23 +1,10 @@
-from typing import Dict, Union
+from typing import Dict, Tuple
 
 import haiku as hk
 import jax.numpy as jnp
 import jraph
 
-
-def build_mlp(latent_size, output_size, num_layers, is_layer_norm=True, **kwds: Dict):
-    """MLP generation helper using Haiku"""
-    network = hk.nets.MLP(
-        [latent_size] * num_layers + [output_size],
-        **kwds,
-        activate_final=False,
-        name="MLP",
-    )
-    if is_layer_norm:
-        l_norm = hk.LayerNorm(axis=-1, create_scale=True, create_offset=True)
-        return hk.Sequential([network, l_norm])
-    else:
-        return network
+from .utils import build_mlp
 
 
 class GNS(hk.Module):
@@ -107,11 +94,34 @@ class GNS(hk.Module):
             self._latent_size, self._output_size, self._num_layers, is_layer_norm=False
         )(graph.nodes)
 
-    def __call__(
-        self,
-        sample: Union[jraph.GraphsTuple, jnp.array],
+    def _transform(
+        self, features: Dict[str, jnp.ndarray], particle_type: jnp.ndarray
     ) -> jraph.GraphsTuple:
-        graph, particle_type = sample
+        """Convert physical features to jraph.GraphsTuple for gns."""
+        n_total_points = features["vel_hist"].shape[0]
+        node_features = [
+            features[k]
+            for k in ["vel_hist", "vel_mag", "bound", "force"]
+            if k in features
+        ]
+        edge_features = [features[k] for k in ["rel_disp", "rel_dist"] if k in features]
+
+        graph = jraph.GraphsTuple(
+            nodes=jnp.concatenate(node_features, axis=-1),
+            edges=jnp.concatenate(edge_features, axis=-1),
+            receivers=features["receivers"],
+            senders=features["senders"],
+            n_node=jnp.array([n_total_points]),
+            n_edge=jnp.array([len(features["senders"])]),
+            globals=None,
+        )
+
+        return graph, particle_type
+
+    def __call__(
+        self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
+    ) -> jraph.GraphsTuple:
+        graph, particle_type = self._transform(*sample)
 
         if self._num_particle_types > 1:
             particle_type_embeddings = self._embedding(particle_type)

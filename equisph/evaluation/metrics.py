@@ -1,10 +1,11 @@
-import argparse
 import warnings
+from collections import defaultdict
 from functools import partial
 from typing import Callable, Dict, List
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 MetricsDict = Dict[str, Dict[str, jnp.ndarray]]
 
@@ -18,7 +19,6 @@ class MetricsComputer:
         stride: stride for computing metrics
     """
 
-    # TODO for now
     METRICS = ["mse", "mae", "sinkhorn", "emd", "e_kin"]
 
     def __init__(
@@ -38,7 +38,9 @@ class MetricsComputer:
         self._stride = stride
         self._metadata = metadata
 
-    def __call__(self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray) -> Dict:
+    def __call__(
+        self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray
+    ) -> MetricsDict:
         # assert pred_rollout.shape[0] == target_rollout.shape[0]
 
         # both pred_rollout and target_rollout are of shape
@@ -155,7 +157,6 @@ class MetricsComputer:
         self, x: jnp.ndarray, y: jnp.ndarray, squared=True
     ) -> jnp.ndarray:
         """Euclidean distance matrix."""
-        # TODO maybe distances have to be rescaled/normalized
         dist = lambda a, b: jnp.sum(self._dist(a, b) ** 2)
         if not squared:
             dist = lambda a, b: jnp.sqrt(dist(a, b))
@@ -164,20 +165,26 @@ class MetricsComputer:
     @partial(jax.jit, static_argnums=(0,))
     def e_kin(self, frame: jnp.ndarray):
         """Computes the kinetic energy of a frame"""
-        # TODO: get all relevant physical properties from the args
         return jnp.sum(frame**2)  # * dx ** 3
 
 
-class BuildMetricsList(argparse.Action):
-    """Builds a list of metrics to compute from the command line."""
+def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
+    """Averages the metrics over the rollouts."""
+    # create a dictionary with the same keys as the metrics, but empty list as values
+    trajectory_averages = defaultdict(list)
+    for rollout in eval_metrics.values():
+        for k, v in rollout.items():
+            if k == "e_kin":
+                continue
+            if k in ["mse", "mae"]:
+                k = "loss"
+            trajectory_averages[k].append(jnp.mean(v).item())
 
-    # TODO remove this and use config files
-    def __call__(self, parser, namespace, values, option_string=None):
-        _ = option_string
-        values = values.split(" ")
-        for value in values:
-            if value not in MetricsComputer.METRICS:
-                parser.error(
-                    f"Invalid choice: {value} (choose from {MetricsComputer.METRICS})"
-                )
-        setattr(namespace, self.dest, values)
+    # mean and std values accross rollouts
+    small_metrics = {}
+    for k, v in trajectory_averages.items():
+        small_metrics[f"val/{k}"] = float(np.mean(v))
+    for k, v in trajectory_averages.items():
+        small_metrics[f"val/std{k}"] = float(np.std(v))
+
+    return small_metrics

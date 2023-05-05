@@ -57,27 +57,11 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--latent_dim", type=int, required=False, help="Hidden layer dimension."
     )
-
     parser.add_argument(
         "--magnitudes",
         action="store_true",
         help="Whether to include velocity magnitudes in node features.",
     )
-
-    parser.add_argument(
-        "--log_norm",
-        required=False,
-        choices=["none", "input", "output", "both"],
-        help="Logarithmic normalization of input and/or output",
-    )
-
-    parser.add_argument(
-        "--oversmooth_norm_hops",
-        type=int,
-        required=False,
-        help="Number of hops for oversmoothing normalization.",
-    )
-
     parser.add_argument(
         "--isotropic_norm",
         action=argparse.BooleanOptionalAction,
@@ -91,21 +75,17 @@ def cli_arguments() -> Dict:
         choices=["vtk", "pkl", "none"],
         help="Output type to store rollouts.",
     )
-
     parser.add_argument(
         "--rollout_dir", type=str, required=False, help="Directory to write rollouts."
     )
-
     parser.add_argument(
         "--gpu", type=int, required=False, help="CUDA device ID to use."
     )
-
     parser.add_argument(
         "--test",
         action=argparse.BooleanOptionalAction,
         help="Run test mode instead of validation.",
     )
-
     # segnn arguments
     parser.add_argument(
         "--lmax_attributes",
@@ -140,7 +120,6 @@ def cli_arguments() -> Dict:
         choices=["add", "concat", "velocity"],
         help="How to combine node attributes.",
     )
-
     parser.add_argument(
         "--right_attribute",
         required=False,
@@ -153,7 +132,6 @@ def cli_arguments() -> Dict:
         type=int,
         help="Number of attention layers.",
     )
-
     parser.add_argument(
         "--f64",
         required=False,

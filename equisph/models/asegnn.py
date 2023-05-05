@@ -1,15 +1,12 @@
-from typing import Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import e3nn_jax as e3nn
 import haiku as hk
 import jax.numpy as jnp
-from segnn_jax import (
-    SEGNN,
-    O3TensorProduct,
-    O3TensorProductGate,
-    SEGNNLayer,
-    SteerableGraphsTuple,
-)
+from e3nn_jax import Irreps, IrrepsArray
+
+from .segnn import SEGNN, O3TensorProduct, O3TensorProductGate, SEGNNLayer
+from .utils import SteerableGraphsTuple
 
 
 def avg_initialization(
@@ -30,12 +27,12 @@ def avg_initialization(
 
 
 def HistoryEmbeddingBlock(
-    attributes: e3nn.IrrepsArray,
+    attributes: IrrepsArray,
     name: str,
     where: str,
-    embed_irreps: e3nn.IrrepsArray,
+    embed_irreps: IrrepsArray,
     right_attribute: bool = False,
-    hidden_irreps: Optional[e3nn.Irreps] = None,
+    hidden_irreps: Optional[Irreps] = None,
     blocks: int = 1,
 ):
     if len(attributes.shape) > 2:
@@ -71,9 +68,9 @@ def HistoryEmbeddingBlock(
 
 
 def AttributeAttention(
-    embed_irreps: e3nn.Irreps,
+    embed_irreps: Irreps,
     name: str,
-    hidden_irreps: Optional[e3nn.Irreps],
+    hidden_irreps: Optional[Irreps],
     blocks: int = 2,
     right_attribute: bool = False,
     embed_msg_features: bool = False,
@@ -119,8 +116,8 @@ def AttributeAttention(
 
 
 def AttentionEmbedding(
-    attribute_irreps: e3nn.Irreps,
-    hidden_irreps: e3nn.Irreps,
+    attribute_irreps: Irreps,
+    hidden_irreps: Irreps,
     attribute_attention_blocks: int = 2,
     right_attribute: bool = False,
     embed_msg_features: bool = False,
@@ -145,6 +142,7 @@ def AttentionEmbedding(
         # edge embedding
         if embed_msg_features:
             additional_message_features = O3TensorProduct(
+                hidden_irreps,
                 left_irreps=st_graph.additional_message_features.irreps,
                 right_irreps=attribute_irreps,
                 name="msg_features_embedding",
@@ -163,9 +161,9 @@ def AttentionEmbedding(
 
 
 def AttentionDecoder(
-    attribute_irreps: e3nn.Irreps,
-    output_irreps: e3nn.Irreps,
-    hidden_irreps: e3nn.Irreps,
+    attribute_irreps: Irreps,
+    output_irreps: Irreps,
+    hidden_irreps: Irreps,
     blocks: int = 1,
     attribute_embedding_blocks: int = 1,
     right_attribute: bool = False,
@@ -200,51 +198,58 @@ def AttentionDecoder(
 
 
 class AttentionSEGNN(SEGNN):
-
-    """Steerable E(3) equivariant network with attention mechanism on attributes.
+    """Steerable E(3) equivariant GNN with attention mechanism on historical attributes.
 
     Args:
-        lmax_latent: Maximum spherical harmonics level of the attribute latent space
-        right_attribute: Whether to use the last attribute as the right input
-        attribute_embedding_blocks: Number of hidden layers in the attribute embedding
+        lmax_latent_attribute: Maximum L of the attribute latent space.
+        right_attribute: Whether to use the last attribute as the right input.
+        attribute_embedding_blocks: Number of hidden layers in the attribute embedding.
     """
 
     def __init__(
         self,
         *args,
-        lmax_latent: int = 1,
+        lmax_latent_attribute: int = 1,
         right_attribute: bool = False,
         attribute_embedding_blocks: int = 1,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
-        self._output_irreps = kwargs.get("output_irreps")
-        self._latent_attribute_irreps = e3nn.Irreps.spherical_harmonics(lmax_latent)
+        # transform
+        assert (
+            self._velocity_aggregate == "all"
+        ), "SEGNN with attention is supposed to have all historical velocities."
+
+        # network
+        self._latent_attribute_irreps = Irreps.spherical_harmonics(
+            lmax_latent_attribute
+        )
         self._right_attribute = right_attribute
         self._attribute_embedding_blocks = attribute_embedding_blocks
-
         self._embedding = AttentionEmbedding(
             self._latent_attribute_irreps,
-            hidden_irreps=self._hidden_irreps_units[-1],
+            hidden_irreps=self._hidden_irreps,
             attribute_attention_blocks=self._attribute_embedding_blocks,
             right_attribute=self._right_attribute,
             embed_msg_features=self._embed_msg_features,
         )
-
         self._decoder = AttentionDecoder(
             self._latent_attribute_irreps,
             self._output_irreps,
-            hidden_irreps=self._hidden_irreps_units[-1],
+            hidden_irreps=self._hidden_irreps,
             attribute_embedding_blocks=self._attribute_embedding_blocks,
             right_attribute=self._right_attribute,
             embed_msg_features=self._embed_msg_features,
         )
 
-    def __call__(self, st_graph: SteerableGraphsTuple) -> jnp.ndarray:
+    def __call__(
+        self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
+    ) -> jnp.ndarray:
+        st_graph = self._transform(*sample)
         st_graph = self._embedding(st_graph)
 
         # message passing
-        for n, hidden_irreps in enumerate(self._hidden_irreps_units):
+        for n in range(self._num_layers):
             # layer attribute attributes
             node_attributes_emb, edge_attributes_emb = AttributeAttention(
                 self._latent_attribute_irreps,
@@ -257,6 +262,6 @@ class AttentionSEGNN(SEGNN):
             st_graph = st_graph._replace(
                 node_attributes=node_attributes_emb, edge_attributes=edge_attributes_emb
             )
-            st_graph = SEGNNLayer(hidden_irreps, layer_num=n, norm=self._norm)(st_graph)
+            st_graph = SEGNNLayer(self._hidden_irreps, n, norm=self._norm)(st_graph)
 
         return jnp.squeeze(self._decoder(st_graph).array)
