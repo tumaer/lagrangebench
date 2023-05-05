@@ -1,8 +1,9 @@
+# fallback parameters. Relative path from the config/ directory
 includes: defaults.yaml
 
-model: segnn_attention
-num_mp_steps: 3
-latent_dim: 6
+model: segnn
+num_mp_steps: 2
+latent_dim: 4
 input_seq_length: 3
 
 batch_size: 100
@@ -16,19 +17,14 @@ pushforward:
   unrolls: [0, 1, 2]
   probs: [1, 1, 1]
 
-
-attention_blocks: 1 # non-linear
-right_attribute: False
-velocity_aggregate: all
-
 mode: train
-eval_num_trajs: 1
+eval_n_trajs: 1
 f64: True
 
 wandb: False
 wandb_project: hook
 
-data_dir: /home/atoshev/data/Hook2_debug
+data_dir: datasets/Hook2_debug
 
 log_steps: 10
 eval_steps: 50

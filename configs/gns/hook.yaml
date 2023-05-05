@@ -1,3 +1,4 @@
+# fallback parameters. Relative path from the config/ directory
 includes: defaults.yaml
 
 model: gns
@@ -17,13 +18,13 @@ pushforward:
   probs: [1]
 
 mode: train
-eval_num_trajs: 5
+eval_n_trajs: 5
 split_valid_traj_into_n: 5
 
 wandb: False
 wandb_project: hook
 
-data_dir: /home/atoshev/data/Hook2_debug
+data_dir: datasets/Hook2_debug
 
 log_steps: 10
 eval_steps: 50

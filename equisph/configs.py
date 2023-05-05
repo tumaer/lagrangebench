@@ -8,15 +8,12 @@ import yaml
 def cli_arguments() -> Dict:
     parser = argparse.ArgumentParser()
     group = parser.add_mutually_exclusive_group(required=True)
+
+    # config arguments
     group.add_argument("-c", "--config", type=str, help="Path to the config yaml.")
     group.add_argument("--model_dir", type=str, help="Path to the model checkpoint.")
 
-    parser.add_argument(
-        "--model",
-        type=str,
-        choices=["gns", "segnn", "segnn_attention", "segnn_rewind", "lin"],
-        help="Model name.",
-    )
+    # run arguments
     parser.add_argument(
         "--mode", type=str, choices=["train", "infer"], help="Train or evaluate."
     )
@@ -38,6 +35,22 @@ def cli_arguments() -> Dict:
         type=float,
         required=False,
         help="Additive noise standard deviation.",
+    )
+    parser.add_argument(
+        "--test",
+        action=argparse.BooleanOptionalAction,
+        help="Run test mode instead of validation.",
+    )
+    parser.add_argument(
+        "--data_dir", type=str, help="Absolute/relative path to the dataset."
+    )
+
+    # model arguments
+    parser.add_argument(
+        "--model",
+        type=str,
+        choices=["gns", "segnn", "segnn_attention", "segnn_rewind", "lin"],
+        help="Model name.",
     )
     parser.add_argument(
         "--input_seq_length",
@@ -68,6 +81,7 @@ def cli_arguments() -> Dict:
         help="Use isotropic normalization.",
     )
 
+    # output arguments
     parser.add_argument(
         "--out_type",
         type=str,
@@ -78,15 +92,8 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--rollout_dir", type=str, required=False, help="Directory to write rollouts."
     )
-    parser.add_argument(
-        "--gpu", type=int, required=False, help="CUDA device ID to use."
-    )
-    parser.add_argument(
-        "--test",
-        action=argparse.BooleanOptionalAction,
-        help="Run test mode instead of validation.",
-    )
-    # segnn arguments
+
+    # segnn-specific arguments
     parser.add_argument(
         "--lmax_attributes",
         type=int,
@@ -120,6 +127,7 @@ def cli_arguments() -> Dict:
         choices=["add", "concat", "velocity"],
         help="How to combine node attributes.",
     )
+    # attention-specific arguments
     parser.add_argument(
         "--right_attribute",
         required=False,
@@ -131,6 +139,11 @@ def cli_arguments() -> Dict:
         required=False,
         type=int,
         help="Number of attention layers.",
+    )
+
+    # misc arguments
+    parser.add_argument(
+        "--gpu", type=int, required=False, help="CUDA device ID to use."
     )
     parser.add_argument(
         "--f64",
@@ -146,15 +159,11 @@ def cli_arguments() -> Dict:
 class NestedLoader(yaml.SafeLoader):
     """Load yaml files with nested includes."""
 
-    def __init__(self, stream):
-        self._root = os.path.split(stream.name)[0]
-        super().__init__(stream)
-
     def get_single_data(self):
         parent = {}
         config = super().get_single_data()
         if "includes" in config and (included := config["includes"]):
             del config["includes"]
-            with open(os.path.join(self._root, included), "r") as f:
+            with open(os.path.join("configs", included), "r") as f:
                 parent = yaml.load(f, NestedLoader)
         return {**parent, **config}

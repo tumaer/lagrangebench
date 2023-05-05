@@ -1,23 +1,26 @@
+# fallback parameters. Relative path from the config/ directory
 includes: defaults.yaml
 
-model: gns
+model: segnn
 num_mp_steps: 10
-num_mlp_layers: 1
 latent_dim: 64
 
 batch_size: 1
 lr_start: 5.e-4
 lr_decay_steps: 1.e+5
 noise_std: 1.e-4
+isotropic_norm: True
 pushforward:
   steps: [-1, 100000, 125000, 150000, 175000, 200000]
   unrolls: [0, 1, 2, 3, 4, 5]
   probs: [16, 2, 1, 1, 1, 1]
 
+segnn_norm: none
+
 mode: train
-eval_num_trajs: 10
+eval_n_trajs: 10
 
 wandb: True
 wandb_project: tgv10
 
-data_dir: /home/atoshev/data/TGV1k100every10
+data_dir: datasets/TGV1k100every10

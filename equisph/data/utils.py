@@ -58,6 +58,9 @@ def numpy_collate(batch) -> np.ndarray:
 def setup_data(
     args: Namespace, seed_worker, generator
 ) -> Tuple[Dict, DataLoader, DataLoader, Callable]:
+    if not os.path.isabs(args.config.data_dir):
+        args.config.data_dir = os.path.join(os.getcwd(), args.config.data_dir)
+
     args.info.dataset_name = os.path.basename(args.config.data_dir.split("/")[-1])
     if args.config.ckp_dir is not None:
         os.makedirs(args.config.ckp_dir, exist_ok=True)

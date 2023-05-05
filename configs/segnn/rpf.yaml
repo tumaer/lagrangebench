@@ -1,6 +1,7 @@
+# fallback parameters. Relative path from the config/ directory
 includes: defaults.yaml
 
-model: segnn_attention
+model: segnn
 num_mp_steps: 10
 latent_dim: 64
 
@@ -10,9 +11,6 @@ lr_final: 1.e-6
 lr_decay_steps: 1.e+5
 noise_std: 3.e-5
 isotropic_norm: True
-attention_blocks: 2 # non-linear
-right_attribute: True
-velocity_aggregate: all
 pushforward:
   steps: [-1, 100000, 125000, 150000, 175000, 200000]
   unrolls: [0, 1, 2, 3, 4, 5]
@@ -21,10 +19,10 @@ pushforward:
 segnn_norm: instance
 
 mode: train
-eval_num_trajs: 10
+eval_n_trajs: 10
 split_valid_traj_into_n: 10
 
 wandb: True
 wandb_project: rpf
 
-data_dir: /home/atoshev/data/RPF100k1every10
+data_dir: datasets/RPF100k1every10
