@@ -49,7 +49,7 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--model",
         type=str,
-        choices=["gns", "segnn", "segnn_attention", "segnn_rewind", "lin"],
+        choices=["gns", "segnn", "hae_segnn", "linear"],
         help="Model name.",
     )
     parser.add_argument(
@@ -127,7 +127,7 @@ def cli_arguments() -> Dict:
         choices=["add", "concat", "velocity"],
         help="How to combine node attributes.",
     )
-    # attention-specific arguments
+    # HAE-specific arguments
     parser.add_argument(
         "--right_attribute",
         required=False,
@@ -135,10 +135,10 @@ def cli_arguments() -> Dict:
         help="Whether to use last velocity to steer the attribute embedding.",
     )
     parser.add_argument(
-        "--attention_blocks",
+        "--attribute_embedding_blocks",
         required=False,
         type=int,
-        help="Number of attention layers.",
+        help="Number of embedding layers for the attributes.",
     )
 
     # misc arguments

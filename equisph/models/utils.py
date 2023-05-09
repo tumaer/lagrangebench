@@ -4,7 +4,7 @@ import e3nn_jax as e3nn
 import haiku as hk
 import jraph
 
-from equisph.simulate import NodeType
+from equisph.case_setup import NodeType
 
 
 class SteerableGraphsTuple(NamedTuple):

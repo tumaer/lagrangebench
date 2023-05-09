@@ -4,8 +4,8 @@ import jmp
 import numpy as np
 
 from equisph.data import get_dataset_stats, setup_data
-from equisph.evaluation import MetricsComputer
-from equisph.simulate import NodeType, scenario_builder
+from equisph.evaluate import MetricsComputer
+from equisph.case_setup import NodeType, case_builder
 from equisph.utils import get_num_params, load_haiku, set_seed
 
 
@@ -28,7 +28,7 @@ def train_or_infer(args):
 
     # preprocessing allocate and update functions in the spirit of jax-md"s
     # `partition.neighbor_list`. And an integration utility with PBC.
-    scenario = scenario_builder(args, external_force_fn)
+    scenario = case_builder(args, external_force_fn)
 
     # get an example to initialize the scenario and model
     pos_input_and_target, particle_type = next(iter(loader_train))
@@ -51,7 +51,7 @@ def train_or_infer(args):
             num_particle_types=NodeType.SIZE,
             particle_type_embedding_size=16,
         )(x)
-    elif args.config.model == "lin":
+    elif args.config.model == "linear":
         from equisph.models import Linear
 
         MODEL = Linear
@@ -84,11 +84,11 @@ def train_or_infer(args):
                 blocks_per_layer=args.config.num_mlp_layers,
                 norm=args.config.segnn_norm,
             )(x)
-        elif args.config.model == "segnn_attention":
-            from equisph.models import AttentionSEGNN
+        elif args.config.model == "hae_segnn":
+            from equisph.models import HAESEGNN
 
-            MODEL = AttentionSEGNN
-            model = lambda x: AttentionSEGNN(
+            MODEL = HAESEGNN
+            model = lambda x: HAESEGNN(
                 node_features_irreps=Irreps(args.info.node_feature_irreps),
                 edge_features_irreps=Irreps(args.info.edge_feature_irreps),
                 scalar_units=args.config.latent_dim,
@@ -102,7 +102,7 @@ def train_or_infer(args):
                 blocks_per_layer=args.config.num_mlp_layers,
                 norm=args.config.segnn_norm,
                 right_attribute=args.config.right_attribute,
-                attribute_embedding_blocks=args.config.attention_blocks,
+                attribute_embedding_blocks=args.config.attribute_embedding_blocks,
             )(x)
 
     # transform core simulator outputting accelerations.
@@ -152,7 +152,7 @@ def train_or_infer(args):
             args,
         )
     elif args.config.mode == "infer":
-        from equisph.evaluation import infer
+        from equisph.evaluate import infer
 
         infer(
             model,

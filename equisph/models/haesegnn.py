@@ -46,8 +46,6 @@ def HistoryEmbeddingBlock(
 
     # steer either with ones or with the last attribute
     right = attributes[:, -1, :] if right_attribute else None
-    left_irreps = attribute_emb.irreps
-    right_irreps = right.irreps if right else None
     # NOTE: no biases in the embedding
     for i in range(blocks - 1):
         attribute_emb = O3TensorProductGate(

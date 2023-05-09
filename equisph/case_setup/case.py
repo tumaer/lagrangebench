@@ -10,7 +10,9 @@ from .features import add_gns_noise, physical_feature_builder
 
 
 @dataclass
-class ScenarioSetupFn:
+class CaseSetupFn:
+    """Dataclass that contains all functions required to setup the case and simulate."""
+
     allocate: Callable = static_field()
     preprocess: Callable = static_field()
     allocate_eval: Callable = static_field()
@@ -19,8 +21,8 @@ class ScenarioSetupFn:
     displacement: Callable = static_field()
 
 
-def scenario_builder(args: Namespace, external_force_fn: Callable):
-    """Set up a ScenarioSetupFn that contains every required function besides the model.
+def case_builder(args: Namespace, external_force_fn: Callable):
+    """Set up a CaseSetupFn that contains every required function besides the model.
 
     Inspired by the `partition.neighbor_list` function in JAX-MD.
 
@@ -166,7 +168,7 @@ def scenario_builder(args: Namespace, external_force_fn: Callable):
         new_position = shift_fn(most_recent_position, new_velocity)
         return new_position
 
-    return ScenarioSetupFn(
+    return CaseSetupFn(
         allocate_fn,
         preprocess_fn,
         allocate_eval_fn,

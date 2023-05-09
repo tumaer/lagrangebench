@@ -14,8 +14,8 @@ import yaml
 from jax import vmap
 from torch.utils.data import DataLoader
 
-from equisph.evaluation import MetricsComputer, averaged_metrics, eval_rollout
-from equisph.simulate import ScenarioSetupFn, get_kinematic_mask
+from equisph.evaluate import MetricsComputer, averaged_metrics, eval_rollout
+from equisph.case_setup import CaseSetupFn, get_kinematic_mask
 from equisph.utils import (
     broadcast_from_batch,
     broadcast_to_batch,
@@ -117,7 +117,7 @@ def train(
     neighbors,
     loader_train: DataLoader,
     loader_eval: DataLoader,
-    scenario: ScenarioSetupFn,
+    case: CaseSetupFn,
     metrics_computer: MetricsComputer,
     args: Namespace,
 ):
@@ -172,9 +172,9 @@ def train(
     else:
         opt_state = opt_init(params)
 
-    preprocess_vmap = jax.vmap(scenario.preprocess, in_axes=(0, 0, None, 0, None))
+    preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
 
-    push_forward = push_forward_build(model_apply, scenario)
+    push_forward = push_forward_build(model_apply, case)
     push_forward_vmap = jax.vmap(push_forward, in_axes=(0, 0, 0, 0, None, None))
 
     # prepare for batch training.
@@ -215,7 +215,7 @@ def train(
                 edges_ = neighbors_batch.idx[ind].shape
                 print(f"Reallocate neighbors list {edges_} at step {step}")
                 sample = broadcast_from_batch(raw_batch, index=ind)
-                _, _, _, nbrs = scenario.allocate(keys[0], sample)
+                _, _, _, nbrs = case.allocate(keys[0], sample)
                 print(f"To list {nbrs.idx.shape}")
 
                 neighbors_batch = broadcast_to_batch(nbrs, args.config.batch_size)
@@ -243,7 +243,7 @@ def train(
             if step % args.config.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
                 eval_metrics, nbrs = eval_rollout(
-                    scenario=scenario,
+                    case=case,
                     metrics_computer=metrics_computer,
                     model_apply=model_apply,
                     params=params,

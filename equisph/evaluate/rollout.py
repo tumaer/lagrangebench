@@ -9,13 +9,13 @@ import jax
 import jax.numpy as jnp
 from torch.utils.data import DataLoader
 
-from equisph.evaluation.metrics import MetricsComputer, MetricsDict, averaged_metrics
-from equisph.simulate import ScenarioSetupFn, get_kinematic_mask
+from equisph.evaluate.metrics import MetricsComputer, MetricsDict, averaged_metrics
+from equisph.case_setup import CaseSetupFn, get_kinematic_mask
 from equisph.utils import broadcast_from_batch, write_vtk
 
 
 def eval_single_rollout(
-    scenario: ScenarioSetupFn,
+    case: CaseSetupFn,
     metrics_computer: MetricsComputer,
     model_apply: hk.TransformedWithState,
     params: hk.Params,
@@ -39,12 +39,12 @@ def eval_single_rollout(
     step = 0
     while step < n_rollout_steps + n_extrap_steps:
         sample = (current_positions, particle_type)
-        features, neighbors = scenario.preprocess_eval(sample, neighbors)
+        features, neighbors = case.preprocess_eval(sample, neighbors)
 
         if neighbors.did_buffer_overflow is True:
             edges_ = neighbors.idx.shape
             print(f"(eval) Reallocate neighbors list {edges_} at step {step}")
-            _, neighbors = scenario.allocate_eval(sample)
+            _, neighbors = case.allocate_eval(sample)
             print(f"(eval) To list {neighbors.idx.shape}")
 
             continue
@@ -53,7 +53,7 @@ def eval_single_rollout(
         # TODO update state in evaluation?
         normalized_acc, _ = model_apply(params, state, (features, particle_type))
 
-        next_position = scenario.integrate(normalized_acc, current_positions)
+        next_position = case.integrate(normalized_acc, current_positions)
 
         if n_extrap_steps == 0:
             kinematic_mask = get_kinematic_mask(particle_type)
@@ -85,7 +85,7 @@ def eval_single_rollout(
 
 
 def eval_rollout(
-    scenario: ScenarioSetupFn,
+    case: CaseSetupFn,
     metrics_computer: MetricsComputer,
     model_apply: hk.TransformedWithState,
     params: hk.Params,
@@ -110,7 +110,7 @@ def eval_rollout(
         traj_i = broadcast_from_batch(traj_i, index=0)  # (nodes, t, dim)
 
         example_rollout, metrics, neighbors = eval_single_rollout(
-            scenario=scenario,
+            case=case,
             metrics_computer=metrics_computer,
             model_apply=model_apply,
             params=params,
@@ -174,13 +174,13 @@ def infer(
     state: hk.State,
     neighbors: jnp.ndarray,
     loader_eval: DataLoader,
-    scenario: ScenarioSetupFn,
+    case: CaseSetupFn,
     metrics_computer: MetricsComputer,
     args,
 ):
     model_apply = jax.jit(model.apply)
     eval_metrics, _ = eval_rollout(
-        scenario=scenario,
+        case=case,
         metrics_computer=metrics_computer,
         model_apply=model_apply,
         params=params,
