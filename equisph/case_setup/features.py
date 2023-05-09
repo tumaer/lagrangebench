@@ -6,6 +6,7 @@ import jax.numpy as jnp
 from jax import lax, vmap
 from jax_md import partition, space
 
+
 # TODO remove this before submission
 class NodeType(enum.IntEnum):
     FLUID = 0
@@ -13,6 +14,7 @@ class NodeType(enum.IntEnum):
     MOVING_WALL = 2
     RIGID_BODY = 3
     SIZE = 9
+
 
 # TODO remove this before submission
 def get_kinematic_mask(particle_type):

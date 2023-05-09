@@ -122,10 +122,11 @@ class MetricsComputer:
             jnp.ones((target.shape[0],)) / target.shape[0],
         )
         shape = jax.ShapeDtypeStruct((), dtype=jnp.float32)
+
         # hack to avoid CpuCallback attribute error
-        emd2_ = lambda a, b, loss_matrix: jnp.array(
-            emd2(a, b, loss_matrix, numItermax=50000)
-        )
+        def emd2_(a, b, loss_matrix):
+            return jnp.array(emd2(a, b, loss_matrix, numItermax=50000))
+
         return jax.pure_callback(emd2_, shape, a, b, loss_matrix)
 
     @partial(jax.jit, static_argnums=(0,))
@@ -139,10 +140,13 @@ class MetricsComputer:
         )
         loss_matrix = self._distance_matrix(pred, target)
         shape = jax.ShapeDtypeStruct((), dtype=jnp.float32)
+
         # hack to avoid CpuCallback attribute error
-        sinkhorn2_ = lambda a, b, loss_matrix: jnp.array(
-            sinkhorn2(a, b, loss_matrix, reg=0.1, numItermax=500, stopThr=1e-5)
-        )
+        def sinkhorn2_(a, b, loss_matrix):
+            return jnp.array(
+                sinkhorn2(a, b, loss_matrix, reg=0.1, numItermax=500, stopThr=1e-05)
+            )
+
         return jax.pure_callback(
             sinkhorn2_,
             shape,
@@ -155,9 +159,15 @@ class MetricsComputer:
         self, x: jnp.ndarray, y: jnp.ndarray, squared=True
     ) -> jnp.ndarray:
         """Euclidean distance matrix."""
-        dist = lambda a, b: jnp.sum(self._dist(a, b) ** 2)
+
+        def dist(a, b):
+            return jnp.sum(self._dist(a, b) ** 2)
+
         if not squared:
-            dist = lambda a, b: jnp.sqrt(dist(a, b))
+
+            def dist(a, b):
+                return jnp.sqrt(dist(a, b))
+
         return jnp.array(jax.vmap(lambda a: jax.vmap(lambda b: dist(a, b))(y))(x))
 
     @partial(jax.jit, static_argnums=(0,))

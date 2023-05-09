@@ -3,9 +3,9 @@ import jax
 import jmp
 import numpy as np
 
+from equisph.case_setup import NodeType, case_builder
 from equisph.data import get_dataset_stats, setup_data
 from equisph.evaluate import MetricsComputer
-from equisph.case_setup import NodeType, case_builder
 from equisph.utils import get_num_params, load_haiku, set_seed
 
 
@@ -42,19 +42,25 @@ def train_or_infer(args):
         from equisph.models import GNS
 
         MODEL = GNS
-        model = lambda x: GNS(
-            particle_dimension=args.metadata["dim"],
-            latent_size=args.config.latent_dim,
-            num_mlp_layers=args.config.num_mlp_layers,
-            num_message_passing_steps=args.config.num_mp_steps,
-            num_particle_types=NodeType.SIZE,
-            particle_type_embedding_size=16,
-        )(x)
+
+        def model(x):
+            return GNS(
+                particle_dimension=args.metadata["dim"],
+                latent_size=args.config.latent_dim,
+                num_mlp_layers=args.config.num_mlp_layers,
+                num_message_passing_steps=args.config.num_mp_steps,
+                num_particle_types=NodeType.SIZE,
+                particle_type_embedding_size=16,
+            )(x)
+
     elif args.config.model == "linear":
         from equisph.models import Linear
 
         MODEL = Linear
-        model = lambda x: Linear(dim_out=3)(x)
+
+        def model(x):
+            return Linear(dim_out=3)(x)
+
     elif "segnn" in args.config.model:
         from e3nn_jax import Irreps
 
@@ -69,40 +75,45 @@ def train_or_infer(args):
             from equisph.models import SEGNN
 
             MODEL = SEGNN
-            model = lambda x: SEGNN(
-                node_features_irreps=Irreps(args.info.node_feature_irreps),
-                edge_features_irreps=Irreps(args.info.edge_feature_irreps),
-                scalar_units=args.config.latent_dim,
-                lmax_hidden=args.config.lmax_hidden,
-                lmax_attributes=args.config.lmax_attributes,
-                output_irreps=Irreps("1x1o"),
-                num_layers=args.config.num_mp_steps,
-                n_vels=(args.config.input_seq_length - 1),
-                velocity_aggregate=args.config.velocity_aggregate,
-                homogeneous_particles=args.info.homogeneous_particles,
-                blocks_per_layer=args.config.num_mlp_layers,
-                norm=args.config.segnn_norm,
-            )(x)
+
+            def model(x):
+                return SEGNN(
+                    node_features_irreps=Irreps(args.info.node_feature_irreps),
+                    edge_features_irreps=Irreps(args.info.edge_feature_irreps),
+                    scalar_units=args.config.latent_dim,
+                    lmax_hidden=args.config.lmax_hidden,
+                    lmax_attributes=args.config.lmax_attributes,
+                    output_irreps=Irreps("1x1o"),
+                    num_layers=args.config.num_mp_steps,
+                    n_vels=args.config.input_seq_length - 1,
+                    velocity_aggregate=args.config.velocity_aggregate,
+                    homogeneous_particles=args.info.homogeneous_particles,
+                    blocks_per_layer=args.config.num_mlp_layers,
+                    norm=args.config.segnn_norm,
+                )(x)
+
         elif args.config.model == "hae_segnn":
             from equisph.models import HAESEGNN
 
             MODEL = HAESEGNN
-            model = lambda x: HAESEGNN(
-                node_features_irreps=Irreps(args.info.node_feature_irreps),
-                edge_features_irreps=Irreps(args.info.edge_feature_irreps),
-                scalar_units=args.config.latent_dim,
-                lmax_hidden=args.config.lmax_hidden,
-                lmax_attributes=args.config.lmax_attributes,
-                output_irreps=Irreps("1x1o"),
-                num_layers=args.config.num_mp_steps,
-                n_vels=(args.config.input_seq_length - 1),
-                velocity_aggregate=args.config.velocity_aggregate,
-                homogeneous_particles=args.info.homogeneous_particles,
-                blocks_per_layer=args.config.num_mlp_layers,
-                norm=args.config.segnn_norm,
-                right_attribute=args.config.right_attribute,
-                attribute_embedding_blocks=args.config.attribute_embedding_blocks,
-            )(x)
+
+            def model(x):
+                return HAESEGNN(
+                    node_features_irreps=Irreps(args.info.node_feature_irreps),
+                    edge_features_irreps=Irreps(args.info.edge_feature_irreps),
+                    scalar_units=args.config.latent_dim,
+                    lmax_hidden=args.config.lmax_hidden,
+                    lmax_attributes=args.config.lmax_attributes,
+                    output_irreps=Irreps("1x1o"),
+                    num_layers=args.config.num_mp_steps,
+                    n_vels=args.config.input_seq_length - 1,
+                    velocity_aggregate=args.config.velocity_aggregate,
+                    homogeneous_particles=args.info.homogeneous_particles,
+                    blocks_per_layer=args.config.num_mlp_layers,
+                    norm=args.config.segnn_norm,
+                    right_attribute=args.config.right_attribute,
+                    attribute_embedding_blocks=args.config.attribute_embedding_blocks,
+                )(x)
 
     # transform core simulator outputting accelerations.
     model = hk.without_apply_rng(hk.transform_with_state(model))

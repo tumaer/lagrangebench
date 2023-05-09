@@ -14,8 +14,8 @@ import yaml
 from jax import vmap
 from torch.utils.data import DataLoader
 
-from equisph.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from equisph.case_setup import CaseSetupFn, get_kinematic_mask
+from equisph.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from equisph.utils import (
     broadcast_from_batch,
     broadcast_to_batch,
@@ -73,7 +73,7 @@ def mse(
     assert target.shape == pred.shape
     non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
     num_non_kinematic = non_kinematic_mask.sum()
-    
+
     loss = ((pred - target) ** 2).sum(axis=-1)
     loss = jnp.where(non_kinematic_mask, loss, 0)
     loss = loss.sum() / num_non_kinematic
@@ -165,7 +165,7 @@ def train(
     # loss and update functions
     loss_fn = partial(mse, model_fn=model_apply)
     update_fn = partial(update, loss_fn=loss_fn, opt_update=opt_update)
-    
+
     # continue training from checkpoint or initialize optimizer state
     if args.config.model_dir:
         _, _, opt_state, _ = load_haiku(args.config.model_dir)
@@ -255,7 +255,7 @@ def train(
                     rollout_dir=args.config.rollout_dir,
                     out_type=args.config.out_type,
                 )
-                
+
                 metrics = averaged_metrics(eval_metrics)
                 metadata_ckp = {
                     "step": step,

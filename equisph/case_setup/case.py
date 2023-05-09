@@ -161,7 +161,7 @@ def case_builder(args: Namespace, external_force_fn: Callable):
         )
 
         new_velocity = most_recent_velocity + acceleration  # * dt = 1
-        # jax-md shift function takes case of PBC 
+        # jax-md shift function takes case of PBC
         new_position = shift_fn(most_recent_position, new_velocity)
         return new_position
 

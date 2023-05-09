@@ -29,8 +29,7 @@ repos:
     rev: 23.3.0
     hooks:
       - id: black
-  - repo: https://github.com/pycqa/pylint
-    rev: v3.0.0a6
+  - repo: https://github.com/charliermarsh/ruff-pre-commit
+    rev: 'v0.0.265'
     hooks:
-      - id: pylint
-        args: [ "--rcfile=.pylintrc" ]
+      - id: ruff

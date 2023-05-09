@@ -14,21 +14,42 @@ PyYAML = "^6.0"
 numpy = "^1.24.3"
 wandb = "^0.15.1"
 pyvista = "^0.38.6"
-jax = "0.4.7"
-jaxlib = {url = "https://storage.googleapis.com/jax-releases/cuda11/jaxlib-0.4.7+cuda11.cudnn86-cp39-cp39-manylinux2014_x86_64.whl"}
+jax = { version = "0.4.8", source = "jax" }
 dm-haiku = "0.0.9"
 e3nn-jax = "0.17.0"
 jax-md = "0.2.5"
 jmp = "0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.5"
-torch = {url = "http://download.pytorch.org/whl/cpu/torch-1.13.0%2Bcpu-cp39-cp39-linux_x86_64.whl"}
 pot = "0.9.0"
+torch = { version = "1.13.1", source = "torchcpu" }
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.3.1"
 pytest = "^7.3.1"
 black = "^23.3.0"
+ruff = "0.0.265"
+
+[[tool.poetry.source]]
+name = "jax"
+url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
+default = false
+secondary = true
+
+[[tool.poetry.source]]
+name = "torchcpu"
+url = "https://download.pytorch.org/whl/cpu"
+default = false
+secondary = true
+
+[tool.ruff]
+ignore = ["F811"]
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+]
+line-length = 88
 
 [build-system]
 requires = ["poetry-core"]

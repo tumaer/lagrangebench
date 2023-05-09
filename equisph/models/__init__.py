@@ -1,5 +1,5 @@
-from .haesegnn import HAESEGNN
 from .gns import GNS
+from .haesegnn import HAESEGNN
 from .linear import Linear
 from .segnn import SEGNN
 
