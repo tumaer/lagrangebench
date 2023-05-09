@@ -12,7 +12,7 @@ from e3nn_jax import Irreps, IrrepsArray
 from e3nn_jax._src.tensor_products import naive_broadcast_decorator
 from jax.tree_util import Partial, tree_map
 
-from equisph.simulate import NodeType
+from equisph.case_setup import NodeType
 
 from .utils import SteerableGraphsTuple
 
@@ -35,21 +35,15 @@ class O3TensorProduct(hk.Module):
     """
     O(3) equivariant linear parametrized tensor product layer.
 
-    Attributes:
-        left_irreps: Left input representation
-        right_irreps: Right input representation
-        output_irreps: Output representation
-        get_parameter: Haiku parameter getter and init function
-        tensor_product: Tensor product function
-        biases: Bias wrapper function
+    Functionally the same as O3TensorProductLegacy, but around 5-10% faster.
+    FullyConnectedTensorProduct seems faster than tensor_product + linear:
+    https://github.com/e3nn/e3nn-jax/releases/tag/0.14.0
     """
 
     def __init__(
         self,
-        output_irreps: Irreps,
+        output_irreps: e3nn.Irreps,
         *,
-        left_irreps: Irreps,
-        right_irreps: Optional[Irreps] = None,
         biases: bool = True,
         name: Optional[str] = None,
         init_fn: Optional[Callable] = None,
@@ -60,47 +54,38 @@ class O3TensorProduct(hk.Module):
 
         Args:
             output_irreps: Output representation
-            left_irreps: Left input representation
-            right_irreps: Right input representation (optional, defaults to 1x0e)
             biases: If set ot true will add biases
             name: Name of the linear layer params
             init_fn: Weight initialization function. Default is uniform.
-            gradient_normalization: Gradient normalization method. Default is "path"
-                NOTE: gradient_normalization="element" is default in torch and haiku.
+            gradient_normalization: Gradient normalization method.
             path_normalization: Path normalization method. Default is "element"
         """
         super().__init__(name)
 
-        if not right_irreps:
-            # NOTE: this is equivalent to a linear recombination of the left vectors
-            right_irreps = Irreps("1x0e")
-
-        if not isinstance(output_irreps, Irreps):
-            output_irreps = Irreps(output_irreps)
-        if not isinstance(left_irreps, Irreps):
-            left_irreps = Irreps(left_irreps)
-        if not isinstance(right_irreps, Irreps):
-            right_irreps = Irreps(right_irreps)
-
+        if not isinstance(output_irreps, e3nn.Irreps):
+            output_irreps = e3nn.Irreps(output_irreps)
         self.output_irreps = output_irreps
 
-        self.right_irreps = right_irreps
-        self.left_irreps = left_irreps
-
+        # tp weight init
         if not init_fn:
             init_fn = uniform_init
-
         self.get_parameter = init_fn
 
-        # NOTE FunctionalFullyConnectedTensorProduct appears to be faster than combining
-        #  tensor_product+linear: https://github.com/e3nn/e3nn-jax/releases/tag/0.14.0
-        #  Implementation adapted from e3nn.haiku.FullyConnectedTensorProduct
+        self._gradient_normalization = gradient_normalization
+        self._path_normalization = path_normalization
+
+        self.biases = biases and "0e" in self.output_irreps
+
+    def _build_tensor_product(
+        self, left_irreps: e3nn.Irreps, right_irreps: e3nn.Irreps
+    ) -> Callable:
+        """Build the tensor product function."""
         tp = e3nn.FunctionalFullyConnectedTensorProduct(
             left_irreps,
             right_irreps,
-            output_irreps,
-            gradient_normalization=gradient_normalization,
-            path_normalization=path_normalization,
+            self.output_irreps,
+            gradient_normalization=self._gradient_normalization,
+            path_normalization=self._path_normalization,
         )
         ws = [
             self.get_parameter(
@@ -117,37 +102,36 @@ class O3TensorProduct(hk.Module):
         ]
 
         def tensor_product(x, y, **kwargs):
-            return tp.left_right(ws, x, y, **kwargs)._convert(output_irreps)
+            return tp.left_right(ws, x, y, **kwargs)._convert(self.output_irreps)
 
-        self.tensor_product = naive_broadcast_decorator(tensor_product)
-        self.biases = None
+        return naive_broadcast_decorator(tensor_product)
 
-        if biases and "0e" in self.output_irreps:
-            # add biases
-            b = [
-                self.get_parameter(
-                    f"b[{i_out}] {tp.irreps_out[i_out]}",
-                    path_shape=(mul_ir.dim,),
-                    weight_std=1 / jnp.sqrt(mul_ir.dim),
-                )
-                for i_out, mul_ir in enumerate(output_irreps)
-                if mul_ir.ir.is_scalar()
-            ]
-            b = IrrepsArray(f"{self.output_irreps.count('0e')}x0e", jnp.concatenate(b))
+    def _build_biases(self) -> Callable:
+        """Build the add bias function."""
+        b = [
+            self.get_parameter(
+                f"b[{i_out}] {self.output_irreps}",
+                path_shape=(mul_ir.dim,),
+                weight_std=1 / jnp.sqrt(mul_ir.dim),
+            )
+            for i_out, mul_ir in enumerate(self.output_irreps)
+            if mul_ir.ir.is_scalar()
+        ]
+        b = e3nn.IrrepsArray(f"{self.output_irreps.count('0e')}x0e", jnp.concatenate(b))
 
-            # TODO: could be improved
-            def _wrapper(x: IrrepsArray) -> IrrepsArray:
-                scalars = x.filter("0e")
-                other = x.filter(drop="0e")
-                return e3nn.concatenate(
-                    [scalars + b.broadcast_to(scalars.shape), other], axis=1
-                )
+        # TODO: could be improved
+        def _wrapper(x: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
+            scalars = x.filter("0e")
+            other = x.filter(drop="0e")
+            return e3nn.concatenate(
+                [scalars + b.broadcast_to(scalars.shape), other], axis=1
+            )
 
-            self.biases = _wrapper
+        return _wrapper
 
     def __call__(
-        self, x: IrrepsArray, y: Optional[IrrepsArray] = None, **kwargs
-    ) -> IrrepsArray:
+        self, x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None, **kwargs
+    ) -> e3nn.IrrepsArray:
         """Applies an O(3) equivariant linear parametrized tensor product layer.
 
         Args:
@@ -159,7 +143,7 @@ class O3TensorProduct(hk.Module):
         """
 
         if not y:
-            y = IrrepsArray("1x0e", jnp.ones((1, 1), dtype=x.dtype))
+            y = e3nn.IrrepsArray("1x0e", jnp.ones((1, 1), dtype=x.dtype))
 
         if x.irreps.lmax == 0 and y.irreps.lmax == 0 and self.output_irreps.lmax > 0:
             warnings.warn(
@@ -168,27 +152,20 @@ class O3TensorProduct(hk.Module):
                 "redistributing them into scalars or choose higher orders."
             )
 
-        assert (
-            x.irreps == self.left_irreps
-        ), f"Left irreps do not match. Got {x.irreps}, expected {self.left_irreps}"
-        assert (
-            y.irreps == self.right_irreps
-        ), f"Right irreps do not match. Got {y.irreps}, expected {self.right_irreps}"
-
-        output = self.tensor_product(x, y, **kwargs)
+        tp = self._build_tensor_product(x.irreps, y.irreps)
+        output = tp(x, y, **kwargs)
 
         if self.biases:
             # add biases
-            return self.biases(output)
+            bias_fn = self._build_biases()
+            return bias_fn(output)
 
         return output
 
 
 def O3TensorProductGate(
-    output_irreps: Irreps,
+    output_irreps: e3nn.Irreps,
     *,
-    left_irreps: Irreps,
-    right_irreps: Optional[Irreps] = None,
     biases: bool = True,
     scalar_activation: Optional[Callable] = None,
     gate_activation: Optional[Callable] = None,
@@ -210,15 +187,15 @@ def O3TensorProductGate(
         Function that applies the gated tensor product layer.
     """
 
-    if not isinstance(output_irreps, Irreps):
-        output_irreps = Irreps(output_irreps)
+    if not isinstance(output_irreps, e3nn.Irreps):
+        output_irreps = e3nn.Irreps(output_irreps)
 
     # lift output with gating scalars
-    gate_irreps = Irreps(f"{output_irreps.num_irreps - output_irreps.count('0e')}x0e")
+    gate_irreps = e3nn.Irreps(
+        f"{output_irreps.num_irreps - output_irreps.count('0e')}x0e"
+    )
     tensor_product = O3TensorProduct(
         (gate_irreps + output_irreps).regroup(),
-        left_irreps=left_irreps,
-        right_irreps=right_irreps,
         biases=biases,
         name=name,
         init_fn=init_fn,
@@ -229,8 +206,8 @@ def O3TensorProductGate(
         gate_activation = jax.nn.sigmoid
 
     def _gated_tensor_product(
-        x: IrrepsArray, y: Optional[IrrepsArray] = None, **kwargs
-    ) -> IrrepsArray:
+        x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None, **kwargs
+    ) -> e3nn.IrrepsArray:
         tp = tensor_product(x, y, **kwargs)
         return e3nn.gate(tp, even_act=scalar_activation, odd_gate_act=gate_activation)
 
@@ -257,8 +234,6 @@ def O3Embedding(embed_irreps: Irreps, embed_edges: bool = True) -> Callable:
         graph = st_graph.graph
         nodes = O3TensorProduct(
             embed_irreps,
-            left_irreps=graph.nodes.irreps,
-            right_irreps=st_graph.node_attributes.irreps,
             name="embedding_nodes",
         )(graph.nodes, st_graph.node_attributes)
         st_graph = st_graph._replace(graph=graph._replace(nodes=nodes))
@@ -266,14 +241,9 @@ def O3Embedding(embed_irreps: Irreps, embed_edges: bool = True) -> Callable:
         # NOTE edge embedding is not in the original paper but can get good results
         if embed_edges:
             additional_message_features = O3TensorProduct(
-                embed_irreps,
-                left_irreps=graph.nodes.irreps,
-                right_irreps=st_graph.node_attributes.irreps,
-                name="embedding_msg_features",
-            )(
-                st_graph.additional_message_features,
-                st_graph.edge_attributes,
+                embed_irreps, name="embedding_msg_features"
             )
+            (st_graph.additional_message_features, st_graph.edge_attributes)
             st_graph = st_graph._replace(
                 additional_message_features=additional_message_features
             )
@@ -302,19 +272,13 @@ def O3Decoder(
     def _decoder(st_graph: SteerableGraphsTuple):
         nodes = st_graph.graph.nodes
         for i in range(blocks):
-            nodes = O3TensorProductGate(
-                latent_irreps,
-                left_irreps=nodes.irreps,
-                right_irreps=st_graph.node_attributes.irreps,
-                name=f"readout_{i}",
-            )(nodes, st_graph.node_attributes)
+            nodes = O3TensorProductGate(latent_irreps, name=f"readout_{i}")(
+                nodes, st_graph.node_attributes
+            )
 
-        return O3TensorProduct(
-            output_irreps,
-            left_irreps=nodes.irreps,
-            right_irreps=st_graph.node_attributes.irreps,
-            name="output",
-        )(nodes, st_graph.node_attributes)
+        return O3TensorProduct(output_irreps, name="output")(
+            nodes, st_graph.node_attributes
+        )
 
     return _decoder
 
@@ -369,12 +333,9 @@ class SEGNNLayer(hk.Module):
             msg = e3nn.concatenate([msg, additional_message_features], axis=-1)
         # message mlp (phi_m in the paper) steered by edge attributeibutes
         for i in range(self._blocks):
-            msg = O3TensorProductGate(
-                self._output_irreps,
-                left_irreps=msg.irreps,
-                right_irreps=getattr(edge_attribute, "irreps", None),
-                name=f"tp_{i}",
-            )(msg, edge_attribute)
+            msg = O3TensorProductGate(self._output_irreps, name=f"tp_{i}")(
+                msg, edge_attribute
+            )
         # NOTE: original implementation only applied batch norm to messages
         if self._norm == "batch":
             msg = e3nn.haiku.BatchNorm(irreps=self._output_irreps)(msg)
@@ -394,19 +355,13 @@ class SEGNNLayer(hk.Module):
         x = e3nn.concatenate([nodes, msg], axis=-1)
         # update mlp (phi_f in the paper) steered by node attributeibutes
         for i in range(self._blocks - 1):
-            x = O3TensorProductGate(
-                self._output_irreps,
-                left_irreps=x.irreps,
-                right_irreps=getattr(node_attribute, "irreps", None),
-                name=f"tp_{i}",
-            )(x, node_attribute)
+            x = O3TensorProductGate(self._output_irreps, name=f"tp_{i}")(
+                x, node_attribute
+            )
         # last update layer without activation
-        update = O3TensorProduct(
-            self._output_irreps,
-            left_irreps=x.irreps,
-            right_irreps=getattr(node_attribute, "irreps", None),
-            name=f"tp_{self._blocks - 1}",
-        )(x, node_attribute)
+        update = O3TensorProduct(self._output_irreps, name=f"tp_{self._blocks - 1}")(
+            x, node_attribute
+        )
         # residual connection
         nodes += update
         # message norm

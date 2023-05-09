@@ -1,7 +1,7 @@
 # fallback parameters. Relative path from the config/ directory
 includes: defaults.yaml
 
-model: segnn_attention
+model: hae_segnn
 num_mp_steps: 3
 latent_dim: 6
 input_seq_length: 3
@@ -18,7 +18,7 @@ pushforward:
   probs: [1, 1, 1]
 
 
-attention_blocks: 1 # non-linear
+attribute_embedding_blocks: 1 # non-linear
 right_attribute: False
 velocity_aggregate: all
 
