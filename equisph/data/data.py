@@ -38,7 +38,7 @@ class H5Dataset(Dataset):
 
             self.sequence_length = f["0000/position"].shape[0]
 
-        # Subsequence is used to split one long validation trajectory into multiple
+        # subsequence is used to split one long validation trajectory into multiple
         self.subsequence_length = self.sequence_length // split_valid_traj_into_n
 
         if is_rollout:
@@ -56,7 +56,7 @@ class H5Dataset(Dataset):
         return h5py.File(self.file_path, "r")
 
     def get_trajectory(self, idx: int):
-        # Open the database file
+        # open the database file
         self.db_hdf5 = self.open_hdf5()
 
         if self.split_valid_traj_into_n > 1:
@@ -68,9 +68,9 @@ class H5Dataset(Dataset):
             slice_from = 0
             slice_to = self.sequence_length
 
-        # Get a pointer to the trajectory. That is not yet the real trajectory.
+        # get a pointer to the trajectory. That is not yet the real trajectory.
         traj = self.db_hdf5[f"{self.traj_keys[traj_idx]}"]
-        # Get a pointer to the positions of the traj. Still nothing in memory.
+        # get a pointer to the positions of the traj. Still nothing in memory.
         traj_pos = traj["position"]
         # load and transpose the trajectory
         pos_input = traj_pos[slice_from:slice_to].transpose((1, 0, 2))
@@ -80,22 +80,22 @@ class H5Dataset(Dataset):
         return pos_input, particle_type
 
     def get_window(self, idx: int):
-        # Figure out which trajectory this should be indexed from.
+        # figure out which trajectory this should be indexed from.
         traj_idx = bisect.bisect(self._keylen_cumulative, idx)
-        # Extract index of element within that trajectory.
+        # extract index of element within that trajectory.
         el_idx = idx
         if traj_idx != 0:
             el_idx = idx - self._keylen_cumulative[traj_idx - 1]
         assert el_idx >= 0
 
-        # Open the database file
+        # open the database file
         self.db_hdf5 = self.open_hdf5()
 
-        # Get a pointer to the trajectory. That is not yet the real trajectory.
+        # get a pointer to the trajectory. That is not yet the real trajectory.
         traj = self.db_hdf5[f"{self.traj_keys[traj_idx]}"]
-        # Get a pointer to the positions of the traj. Still nothing in memory.
+        # get a pointer to the positions of the traj. Still nothing in memory.
         traj_pos = traj["position"]
-        # Load only a slice of the positions. Now, this is an array in memory.
+        # load only a slice of the positions. Now, this is an array in memory.
         pos_input_and_target = traj_pos[el_idx : el_idx + self.input_seq_length + 1]
         pos_input_and_target = pos_input_and_target.transpose((1, 0, 2))
 

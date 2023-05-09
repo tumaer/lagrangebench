@@ -6,7 +6,7 @@ import jax.numpy as jnp
 from jax import lax, vmap
 from jax_md import partition, space
 
-
+# TODO remove this before submission
 class NodeType(enum.IntEnum):
     FLUID = 0
     SOLID_WALL = 1
@@ -14,7 +14,7 @@ class NodeType(enum.IntEnum):
     RIGID_BODY = 3
     SIZE = 9
 
-
+# TODO remove this before submission
 def get_kinematic_mask(particle_type):
     """Returns a boolean mask, set to true for all kinematic (obstacle)
     particles"""
@@ -92,15 +92,8 @@ def physical_feature_builder(
                 normalized_velocity_sequence, axis=-1
             )
             features["vel_mag"] = velocity_magnitude_sequence
-            # node features shape = (n_nodes, (input_seq_length - 1) * (dim + 1))
 
-            # # append the average velocity over all particles to the node features
-            # # we hope that this feature can be used like layer normalization
-            # vel_mag_seq_mean = velocity_magnitude_sequence.mean(axis=0, keepdims=True)
-            # vel_mag_seq_mean_tile = jnp.tile(vel_mag_seq_mean, (n_total_points, 1))
-            # node_features.append(vel_mag_seq_mean_tile)
-
-        # TODO: for now just disable it completely if any periodicity applies
+        # TODO remove this before submission (and docstrings)
         if not any(pbc):
             # Normalized clipped distances to lower and upper boundaries.
             # boundaries are an array of shape [num_dimensions, 2], where the
@@ -128,8 +121,7 @@ def physical_feature_builder(
         features["senders"] = senders
         features["receivers"] = receivers
 
-        # Relative displacement and distances normalized to radius
-        # (E, 2)
+        # Relative displacement and distances normalized to radius (E, 2)
         displacement = vmap(displacement_fn)(
             most_recent_position[senders], most_recent_position[receivers]
         )

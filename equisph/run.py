@@ -26,8 +26,7 @@ def train_or_infer(args):
     args.info.len_train = len(loader_train.dataset)
     args.info.len_eval = len(loader_eval.dataset)
 
-    # preprocessing allocate and update functions in the spirit of jax-md"s
-    # `partition.neighbor_list`. And an integration utility with PBC.
+    # setup core functions
     scenario = case_builder(args, external_force_fn)
 
     # get an example to initialize the scenario and model

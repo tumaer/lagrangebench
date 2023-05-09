@@ -41,8 +41,6 @@ class MetricsComputer:
     def __call__(
         self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray
     ) -> MetricsDict:
-        # assert pred_rollout.shape[0] == target_rollout.shape[0]
-
         # both pred_rollout and target_rollout are of shape
         # (traj_len-input_seq_length, num_particles, dim)
         metrics = {}

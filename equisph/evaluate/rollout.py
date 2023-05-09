@@ -27,10 +27,8 @@ def eval_single_rollout(
     n_extrap_steps: int = 0,
 ) -> Tuple[jnp.ndarray, MetricsDict, jnp.ndarray]:
     pos_input, particle_type = traj_i
-    # (n_nodes, t_window, dim)
-    initial_positions = pos_input[:, 0:t_window]
-    traj_len = n_rollout_steps + n_extrap_steps
-    # (n_nodes, traj_len - t_window, dim)
+    initial_positions = pos_input[:, 0:t_window] # (n_nodes, t_window, dim)
+    traj_len = n_rollout_steps + n_extrap_steps # (n_nodes, traj_len - t_window, dim)
     ground_truth_positions = pos_input[:, t_window : t_window + traj_len]
     current_positions = initial_positions  # (n_nodes, t_window, dim)
     n_nodes, _, dim = ground_truth_positions.shape
@@ -50,7 +48,6 @@ def eval_single_rollout(
             continue
 
         # predict
-        # TODO update state in evaluation?
         normalized_acc, _ = model_apply(params, state, (features, particle_type))
 
         next_position = case.integrate(normalized_acc, current_positions)

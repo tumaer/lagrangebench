@@ -148,23 +148,20 @@ def case_builder(args: Namespace, external_force_fn: Callable):
     def integrate_fn(normalized_acceleration, position_sequence):
         """corresponds to `decoder_postprocessor` in the original code."""
 
-        # The model produces the output in normalized space so we apply inverse
-        # normalization.
+        # invert normalization.
         acceleration_stats = normalization_stats["acceleration"]
         acceleration = acceleration_stats["mean"] + (
             normalized_acceleration * acceleration_stats["std"]
         )
 
-        # Use an Euler integrator to go from acceleration to position, assuming
-        # a dt=1 corresponding to the size of the finite difference.
+        # Euler integrator to go from acceleration to position, assuming a dt=1.
         most_recent_position = position_sequence[:, -1]
         most_recent_velocity = displacement_fn_set(
             most_recent_position, position_sequence[:, -2]
         )
 
         new_velocity = most_recent_velocity + acceleration  # * dt = 1
-        # use the shift function by jax-md to compute the new position
-        # this way periodic boundary conditions are automatically taken care of
+        # jax-md shift function takes case of PBC 
         new_position = shift_fn(most_recent_position, new_velocity)
         return new_position
 

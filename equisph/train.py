@@ -42,17 +42,17 @@ def push_forward_sample_steps(key, step, pushforward):
     return key, unroll_steps
 
 
-def push_forward_build(model_apply, setup):
+def push_forward_build(model_apply, case):
     @jax.jit
     def push_forward(features, current_pos, particle_type, neighbors, params, state):
         # no buffer overflow check here, since push forward acts on later epochs
         normalized_acc, _ = model_apply(params, state, (features, particle_type))
-        next_pos = setup.integrate(normalized_acc, current_pos)
+        next_pos = case.integrate(normalized_acc, current_pos)
         current_pos = jnp.concatenate(
             [current_pos[:, 1:], next_pos[:, None, :]], axis=1
         )
 
-        features, neighbors = setup.preprocess_eval(
+        features, neighbors = case.preprocess_eval(
             (current_pos, particle_type), neighbors
         )
         return current_pos, neighbors, features
@@ -73,7 +73,7 @@ def mse(
     assert target.shape == pred.shape
     non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
     num_non_kinematic = non_kinematic_mask.sum()
-    # MSE loss
+    
     loss = ((pred - target) ** 2).sum(axis=-1)
     loss = jnp.where(non_kinematic_mask, loss, 0)
     loss = loss.sum() / num_non_kinematic
@@ -152,8 +152,7 @@ def train(
             save_code=True,
         )
 
-    # Set learning rate to decay from 1e-4 to 1e-6 over 10M steps exponentially
-    # and then keep it at 1e-6
+    # learning rate decays from 1e-4 to 1e-6 over 10M steps exponentially
     lr_scheduler = optax.exponential_decay(
         init_value=args.config.lr_start,
         transition_steps=int(5e6),
@@ -166,6 +165,7 @@ def train(
     # loss and update functions
     loss_fn = partial(mse, model_fn=model_apply)
     update_fn = partial(update, loss_fn=loss_fn, opt_update=opt_update)
+    
     # continue training from checkpoint or initialize optimizer state
     if args.config.model_dir:
         _, _, opt_state, _ = load_haiku(args.config.model_dir)
@@ -192,7 +192,7 @@ def train(
             key, unroll_steps = push_forward_sample_steps(
                 key, step, args.config.pushforward
             )
-            # The target computation incorporates the sampled number pushforward steps
+            # target computation incorporates the sampled number pushforward steps
             keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
                 keys, raw_batch, args.config.noise_std, neighbors_batch, unroll_steps
             )
@@ -209,8 +209,8 @@ def train(
                 )
 
             if neighbors_batch.did_buffer_overflow.sum() > 0:
-                # check if the neighbor list is too small for any of the
-                # samples in the batch. If so, reallocate the neighbor list
+                # check if the neighbor list is too small for any of the samples
+                # if so, reallocate the neighbor list
                 ind = jnp.argmax(neighbors_batch.did_buffer_overflow)
                 edges_ = neighbors_batch.idx[ind].shape
                 print(f"Reallocate neighbors list {edges_} at step {step}")
@@ -255,12 +255,7 @@ def train(
                     rollout_dir=args.config.rollout_dir,
                     out_type=args.config.out_type,
                 )
-                # In the beginning of training, the dynamics ae very random and
-                # we don"t want to influence the training neighbors list by
-                # this extreme case of the dynamics. Therefore, we only update
-                # the neighbors list inside of the eval_rollout function.
-                # neighbors_batch = broadcast_to_batch(nbrs, args.batch_size)
-
+                
                 metrics = averaged_metrics(eval_metrics)
                 metadata_ckp = {
                     "step": step,
