@@ -10,7 +10,7 @@ dm_haiku==0.0.9
 e3nn_jax==0.17.0
 h5py
 jax[cuda]==0.4.7
-jax_md==0.2.5
+jax_md==0.2.3
 jaxlib[cuda]==0.4.7
 jmp==0.0.4
 jraph==0.0.6.dev0

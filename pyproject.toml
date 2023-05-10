@@ -17,7 +17,7 @@ pyvista = "^0.38.6"
 jax = { version = "0.4.8", source = "jax" }
 dm-haiku = "0.0.9"
 e3nn-jax = "0.17.0"
-jax-md = "0.2.5"
+jax-md = "0.2.3"
 jmp = "0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.5"
