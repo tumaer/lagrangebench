@@ -1,5 +1,5 @@
 from argparse import Namespace
-from typing import Callable
+from typing import Callable, Optional, Tuple
 
 import jax.numpy as jnp
 from jax import jit, lax, vmap
@@ -82,10 +82,10 @@ def case_builder(args: Namespace, external_force_fn: Callable):
         return {"acc": normalized_acceleration, "vel": normalized_velocity}
 
     def _preprocess(
-        sample,
-        neighbors=None,
-        is_allocate=False,
-        mode="train",
+        sample: Tuple[jnp.ndarray, jnp.ndarray],
+        neighbors: Optional[partition.NeighborList] = None,
+        is_allocate: bool = False,
+        mode: str = "train",
         **kwargs,  # key, noise_std
     ):
         pos_input = jnp.asarray(sample[0], dtype=dtype)

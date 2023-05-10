@@ -7,13 +7,14 @@ from typing import Callable, Dict, Tuple
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import jax_md.partition as partition
 import jraph
 import optax
-import wandb
 import yaml
 from jax import vmap
 from torch.utils.data import DataLoader
 
+import wandb
 from equisph.case_setup import CaseSetupFn, get_kinematic_mask
 from equisph.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from equisph.utils import (
@@ -112,12 +113,12 @@ def update(
 
 def train(
     model: hk.TransformedWithState,
+    case: CaseSetupFn,
     params: hk.Params,
     state: hk.State,
-    neighbors,
+    neighbors: partition.NeighborList,
     loader_train: DataLoader,
     loader_eval: DataLoader,
-    case: CaseSetupFn,
     metrics_computer: MetricsComputer,
     args: Namespace,
 ):

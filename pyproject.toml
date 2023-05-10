@@ -21,7 +21,6 @@ jax-md = "0.2.3"
 jmp = "0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.5"
-pot = "0.9.0"
 torch = { version = "1.13.1", source = "torchcpu" }
 
 [tool.poetry.group.dev.dependencies]

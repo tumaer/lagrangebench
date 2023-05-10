@@ -7,6 +7,7 @@ from typing import Iterable, Tuple
 import haiku as hk
 import jax
 import jax.numpy as jnp
+import jax_md.partition as partition
 from torch.utils.data import DataLoader
 
 from equisph.case_setup import CaseSetupFn, get_kinematic_mask
@@ -20,7 +21,7 @@ def eval_single_rollout(
     model_apply: hk.TransformedWithState,
     params: hk.Params,
     state: hk.State,
-    neighbors: jnp.ndarray,
+    neighbors: partition.NeighborList,
     traj_i: Tuple[jnp.ndarray, jnp.ndarray],
     n_rollout_steps: int,
     t_window: int,
@@ -82,12 +83,12 @@ def eval_single_rollout(
 
 
 def eval_rollout(
+    model_apply: hk.TransformedWithState,
     case: CaseSetupFn,
     metrics_computer: MetricsComputer,
-    model_apply: hk.TransformedWithState,
     params: hk.Params,
     state: hk.State,
-    neighbors: jnp.ndarray,
+    neighbors: partition.NeighborList,
     loader_eval: Iterable,
     n_rollout_steps: int,
     n_trajs: int,
@@ -167,19 +168,19 @@ def eval_rollout(
 
 def infer(
     model: hk.TransformedWithState,
+    case: CaseSetupFn,
     params: hk.Params,
     state: hk.State,
-    neighbors: jnp.ndarray,
+    neighbors: partition.NeighborList,
     loader_eval: DataLoader,
-    case: CaseSetupFn,
     metrics_computer: MetricsComputer,
     args,
 ):
     model_apply = jax.jit(model.apply)
     eval_metrics, _ = eval_rollout(
+        model_apply=model_apply,
         case=case,
         metrics_computer=metrics_computer,
-        model_apply=model_apply,
         params=params,
         state=state,
         neighbors=neighbors,

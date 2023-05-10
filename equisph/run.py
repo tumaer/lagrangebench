@@ -27,14 +27,14 @@ def train_or_infer(args):
     args.info.len_eval = len(loader_eval.dataset)
 
     # setup core functions
-    scenario = case_builder(args, external_force_fn)
+    case = case_builder(args, external_force_fn)
 
-    # get an example to initialize the scenario and model
+    # get an example to initialize the case and model
     pos_input_and_target, particle_type = next(iter(loader_train))
     # the torch loader give a whole batch. We take only the first sample.
     sample = (pos_input_and_target[0], particle_type[0])
-    # initialize scenario
-    key, features, _, neighbors = scenario.allocate(key, sample)
+    # initialize case
+    key, features, _, neighbors = case.allocate(key, sample)
 
     args.info.homogeneous_particles = particle_type.max() == particle_type.min()
 
@@ -142,7 +142,7 @@ def train_or_infer(args):
 
     metrics_computer = MetricsComputer(
         args.config.metrics,
-        scenario.displacement,
+        case.displacement,
         args.metadata,
         args.config.input_seq_length,
     )
@@ -152,12 +152,12 @@ def train_or_infer(args):
 
         train(
             model,
+            case,
             params,
             state,
             neighbors,
             loader_train,
             loader_eval,
-            scenario,
             metrics_computer,
             args,
         )
@@ -166,11 +166,11 @@ def train_or_infer(args):
 
         infer(
             model,
+            case,
             params,
             state,
             neighbors,
             loader_eval,
-            scenario,
             metrics_computer,
             args,
         )

@@ -94,6 +94,6 @@ ckp_dir: ckp
 rollout_dir:
 # Rollout storage format. vtk, pkl, none
 out_type: none
-# List of metrics. mse, mae, sinkhorn, emd, e_kin
+# List of metrics. mse, mae, sinkhorn, e_kin
 metrics:
   - mse

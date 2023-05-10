@@ -1,12 +1,13 @@
 # experiments
-ckp/
-rollout/
-wandb/
+ckp
+rollout
+wandb
 *.out
-datasets/
+datasets
 # dev
 .vscode
-__pycache__/
+__pycache__
 *.pyc
 venv
-*.egg-info/
+*.egg-info
+.ruff-cache
