@@ -1,24 +1,38 @@
 from argparse import Namespace
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import jax.numpy as jnp
-from jax import jit, lax, vmap
+from jax import jit, lax, random, vmap
 from jax_md import partition, space
 from jax_md.dataclasses import dataclass, static_field
 
-from .features import add_gns_noise, physical_feature_builder
+from .features import FeatureDict, TargetDict, add_gns_noise, physical_feature_builder
+
+TrainCaseOut = Tuple[random.KeyArray, FeatureDict, TargetDict, partition.NeighborList]
+EvalCaseOut = Tuple[FeatureDict, partition.NeighborList]
+SampleIn = Tuple[jnp.ndarray, jnp.ndarray]
+
+AllocateFn = Callable[[random.KeyArray, SampleIn, float, int], TrainCaseOut]
+AllocateEvalFn = Callable[[SampleIn], EvalCaseOut]
+
+PreprocessFn = Callable[
+    [random.KeyArray, SampleIn, float, partition.NeighborList, int], TrainCaseOut
+]
+PreprocessEvalFn = Callable[[SampleIn, partition.NeighborList], EvalCaseOut]
+
+IntegrateFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
 
 @dataclass
 class CaseSetupFn:
     """Dataclass that contains all functions required to setup the case and simulate."""
 
-    allocate: Callable = static_field()
-    preprocess: Callable = static_field()
-    allocate_eval: Callable = static_field()
-    preprocess_eval: Callable = static_field()
-    integrate: Callable = static_field()
-    displacement: Callable = static_field()
+    allocate: AllocateFn = static_field()
+    preprocess: PreprocessFn = static_field()
+    allocate_eval: AllocateEvalFn = static_field()
+    preprocess_eval: PreprocessEvalFn = static_field()
+    integrate: IntegrateFn = static_field()
+    displacement: space.DisplacementFn = static_field()
 
 
 def case_builder(args: Namespace, external_force_fn: Callable):
@@ -64,7 +78,7 @@ def case_builder(args: Namespace, external_force_fn: Callable):
 
     input_seq_length = args.config.input_seq_length
 
-    def _compute_target(pos_input):
+    def _compute_target(pos_input: jnp.ndarray) -> TargetDict:
         # displacement(r1, r2) = r1-r2  # without PBC
 
         current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
@@ -87,7 +101,7 @@ def case_builder(args: Namespace, external_force_fn: Callable):
         is_allocate: bool = False,
         mode: str = "train",
         **kwargs,  # key, noise_std
-    ):
+    ) -> Union[TrainCaseOut, EvalCaseOut]:
         pos_input = jnp.asarray(sample[0], dtype=dtype)
         particle_type = jnp.asarray(sample[1])
 
@@ -146,7 +160,7 @@ def case_builder(args: Namespace, external_force_fn: Callable):
 
     @jit
     def integrate_fn(normalized_acceleration, position_sequence):
-        """corresponds to `decoder_postprocessor` in the original code."""
+        """Euler integrator to get position shift."""
 
         # invert normalization.
         acceleration_stats = normalization_stats["acceleration"]

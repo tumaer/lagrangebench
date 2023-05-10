@@ -1,10 +1,13 @@
 import enum
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import jax
 import jax.numpy as jnp
 from jax import lax, vmap
 from jax_md import partition, space
+
+FeatureDict = Dict[str, jnp.ndarray]
+TargetDict = Dict[str, jnp.ndarray]
 
 
 # TODO remove this before submission
@@ -60,7 +63,7 @@ def physical_feature_builder(
     def feature_transform(
         pos_input: jnp.ndarray,
         nbrs: partition.NeighborList,
-    ) -> Dict[str, jnp.ndarray]:
+    ) -> FeatureDict:
         """Feature engineering.
         Returns:
             Dict of features, with possible keys
@@ -140,7 +143,14 @@ def physical_feature_builder(
     return feature_transform
 
 
-def add_gns_noise(key, pos_input, particle_type, input_seq_length, noise_std, shift_fn):
+def add_gns_noise(
+    key: jax.random.KeyArray,
+    pos_input: jnp.ndarray,
+    particle_type: jnp.ndarray,
+    input_seq_length: int,
+    noise_std: float,
+    shift_fn: space.ShiftFn,
+) -> Tuple[jnp.ndarray, jnp.ndarray]:
     isl = input_seq_length
     # add noise to the input and adjust the target accordingly
     key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
