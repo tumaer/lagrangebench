@@ -80,7 +80,7 @@ f64: True
 
 # Logging settings
 # Use wandb for logging
-wandb: false
+wandb: False
 wandb_project: False
 # Number of steps between training logging
 log_steps: 1000

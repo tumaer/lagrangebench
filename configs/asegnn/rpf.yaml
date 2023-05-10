@@ -25,7 +25,7 @@ mode: train
 eval_n_trajs: 10
 split_valid_traj_into_n: 10
 
-wandb: True
+wandb: False
 wandb_project: rpf
 
 data_dir: datasets/RPF100k1every10

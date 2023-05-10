@@ -23,7 +23,7 @@ pushforward:
 mode: train
 eval_n_trajs: 10
 
-wandb: True
+wandb: False
 wandb_project: tgv10
 
 data_dir: datasets/TGV1k100every10
