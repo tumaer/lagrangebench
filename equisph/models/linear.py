@@ -1,12 +1,15 @@
-from typing import Dict, Tuple
+from argparse import Namespace
+from typing import Dict, Tuple, Type
 
 import haiku as hk
 import jax.numpy as jnp
 import numpy as np
 from jax import vmap
 
+from .base import BaseModel
 
-class Linear(hk.Module):
+
+class Linear(BaseModel):
     """Model defining linear relation between input nodes and targets."""
 
     def __init__(self, dim_out):
@@ -25,3 +28,8 @@ class Linear(hk.Module):
         ] + [particle_type]
         # call
         return vmap(self.mlp)(jnp.concatenate(x, axis=-1))
+
+    @classmethod
+    def setup_model(cls, args: Namespace) -> Tuple["Linear", Type]:
+        _ = args
+        return cls(dim_out=3)

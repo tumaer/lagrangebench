@@ -33,7 +33,7 @@ def node_irreps(args) -> str:
     if not args.info.homogeneous_particles:
         irreps.append(f"{NodeType.SIZE}x0e")
 
-    return "+".join(irreps)
+    return e3nn.Irreps("+".join(irreps))
 
 
 def build_mlp(latent_size, output_size, num_layers, is_layer_norm=True, **kwds: Dict):

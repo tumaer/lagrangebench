@@ -1,13 +1,17 @@
-from typing import Dict, Tuple
+from argparse import Namespace
+from typing import Dict, Tuple, Type
 
 import haiku as hk
 import jax.numpy as jnp
 import jraph
 
+from equisph.case_setup.features import NodeType
+
+from .base import BaseModel
 from .utils import build_mlp
 
 
-class GNS(hk.Module):
+class GNS(BaseModel):
     """Model definition for Graph Network-based Simulator (GNS)"""
 
     def __init__(
@@ -131,3 +135,14 @@ class GNS(hk.Module):
             graph = graph._replace(nodes=new_node_features)
 
         return self._decoder(self._processor(self._encoder(graph)))
+
+    @classmethod
+    def setup_model(cls, args: Namespace) -> Tuple["GNS", Type]:
+        return cls(
+            particle_dimension=args.metadata["dim"],
+            latent_size=args.config.latent_dim,
+            num_mlp_layers=args.config.num_mlp_layers,
+            num_message_passing_steps=args.config.num_mp_steps,
+            num_particle_types=NodeType.SIZE,
+            particle_type_embedding_size=16,
+        )

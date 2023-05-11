@@ -1,7 +1,8 @@
 """Steerable E(3) equivariant GNN. Model + feature transform, everything in one file."""
 import warnings
+from argparse import Namespace
 from math import prod
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
 import e3nn_jax as e3nn
 import haiku as hk
@@ -14,7 +15,8 @@ from jax.tree_util import Partial, tree_map
 
 from equisph.case_setup import NodeType
 
-from .utils import SteerableGraphsTuple
+from .base import BaseModel
+from .utils import SteerableGraphsTuple, node_irreps
 
 
 def uniform_init(
@@ -426,7 +428,7 @@ def weight_balanced_irreps(
     return Irreps(irreps_left)
 
 
-class SEGNN(hk.Module):
+class SEGNN(BaseModel):
     """Steerable E(3) equivariant network.
 
     Original paper https://arxiv.org/abs/2110.02905.
@@ -597,3 +599,25 @@ class SEGNN(hk.Module):
         # readout
         nodes = self._decoder(st_graph)
         return jnp.squeeze(nodes.array)
+
+    @classmethod
+    def setup_model(cls, args: Namespace) -> Tuple["SEGNN", Type]:
+        # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
+        node_feature_irreps = node_irreps(args)
+        # 1o displacement, 0e distance
+        edge_feature_irreps = Irreps("1x1o + 1x0e")
+
+        return cls(
+            node_features_irreps=node_feature_irreps,
+            edge_features_irreps=edge_feature_irreps,
+            scalar_units=args.config.latent_dim,
+            lmax_hidden=args.config.lmax_hidden,
+            lmax_attributes=args.config.lmax_attributes,
+            output_irreps=Irreps("1x1o"),
+            num_layers=args.config.num_mp_steps,
+            n_vels=args.config.input_seq_length - 1,
+            velocity_aggregate=args.config.velocity_aggregate,
+            homogeneous_particles=args.info.homogeneous_particles,
+            blocks_per_layer=args.config.num_mlp_layers,
+            norm=args.config.segnn_norm,
+        )

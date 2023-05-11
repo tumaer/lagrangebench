@@ -1,4 +1,5 @@
-from typing import Dict, Optional, Tuple
+from argparse import Namespace
+from typing import Dict, Optional, Tuple, Type
 
 import e3nn_jax as e3nn
 import haiku as hk
@@ -6,7 +7,7 @@ import jax.numpy as jnp
 from e3nn_jax import Irreps, IrrepsArray
 
 from .segnn import SEGNN, O3TensorProduct, O3TensorProductGate, SEGNNLayer
-from .utils import SteerableGraphsTuple
+from .utils import SteerableGraphsTuple, node_irreps
 
 
 def avg_initialization(
@@ -266,3 +267,27 @@ class HAESEGNN(SEGNN):
             edge_attributes=edge_attributes_full,
         )
         return jnp.squeeze(self._decoder(st_graph).array)
+
+    @classmethod
+    def setup_model(cls, args: Namespace) -> Tuple["HAESEGNN", Type]:
+        # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
+        node_feature_irreps = node_irreps(args)
+        # 1o displacement, 0e distance
+        edge_feature_irreps = Irreps("1x1o + 1x0e")
+
+        return cls(
+            node_features_irreps=node_feature_irreps,
+            edge_features_irreps=edge_feature_irreps,
+            scalar_units=args.config.latent_dim,
+            lmax_hidden=args.config.lmax_hidden,
+            lmax_attributes=args.config.lmax_attributes,
+            output_irreps=Irreps("1x1o"),
+            num_layers=args.config.num_mp_steps,
+            n_vels=args.config.input_seq_length - 1,
+            velocity_aggregate=args.config.velocity_aggregate,
+            homogeneous_particles=args.info.homogeneous_particles,
+            blocks_per_layer=args.config.num_mlp_layers,
+            norm=args.config.segnn_norm,
+            right_attribute=args.config.right_attribute,
+            attribute_embedding_blocks=args.config.attribute_embedding_blocks,
+        )
