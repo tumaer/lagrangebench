@@ -18,7 +18,7 @@ pushforward:
   probs: [1, 1, 1]
 
 
-attribute_embedding_blocks: 1 # non-linear
+attribute_embedding_blocks: 1 # linear
 right_attribute: False
 velocity_aggregate: all
 

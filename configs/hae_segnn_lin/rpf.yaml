@@ -6,24 +6,26 @@ num_mp_steps: 10
 latent_dim: 64
 
 batch_size: 1
-lr_start: 5.e-4
+lr_start: 1.e-3
+lr_final: 1.e-6
 lr_decay_steps: 1.e+5
-noise_std: 1.e-4
+noise_std: 3.e-5
 isotropic_norm: True
-
+attribute_embedding_blocks: 1 # linear
 right_attribute: False
-attribute_embedding_blocks: 1 # 1 corresponds to linear
 velocity_aggregate: all
-segnn_norm: none
 pushforward:
   steps: [-1, 100000, 125000, 150000, 175000, 200000]
   unrolls: [0, 1, 2, 3, 4, 5]
   probs: [16, 2, 1, 1, 1, 1]
 
+segnn_norm: instance
+
 mode: train
 eval_n_trajs: 10
+split_valid_traj_into_n: 10
 
 wandb: False
-wandb_project: tgv10
+wandb_project: rpf
 
-data_dir: datasets/TGV1k100every10
+data_dir: datasets/RPF100k1every10
