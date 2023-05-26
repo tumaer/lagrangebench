@@ -775,21 +775,40 @@ numpy = "*"
 
 [[package]]
 name = "jaxlib"
-version = "0.4.10+cuda12.cudnn88"
+version = "0.4.10+cuda11.cudnn86"
 description = ""
 optional = false
 python-versions = "*"
 files = [
-    {file = "jaxlib-0.4.10+cuda12.cudnn88-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:270d6e49962b76fa81e4fb1c0ae13a5264972bee2233cb8f7a1a5db5397d7d12"},
-    {file = "jaxlib-0.4.10+cuda12.cudnn88-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:229312443629e224204080c44becf2532238cb670851b7a287b8752cff998b08"},
-    {file = "jaxlib-0.4.10+cuda12.cudnn88-cp38-cp38-manylinux2014_x86_64.whl", hash = "sha256:e4cd21748c0a51038c00788e9ef761cdc2910fba7814a9900f45ce39b13aff50"},
-    {file = "jaxlib-0.4.10+cuda12.cudnn88-cp39-cp39-manylinux2014_x86_64.whl", hash = "sha256:b052a20e88c8bb781fbb0929b9e93544b76bca0722f5617ea9526bedb99f0084"},
+    {file = "jaxlib-0.4.10+cuda11.cudnn86-cp310-cp310-manylinux2014_x86_64.whl", hash = "sha256:fe53205ef12727c80ed5ac2d4506d6732c0c3db69ede4565a7d4df98e609af84"},
+    {file = "jaxlib-0.4.10+cuda11.cudnn86-cp311-cp311-manylinux2014_x86_64.whl", hash = "sha256:1bcfc5df762f3d1fc20cce5bae34b56bc2c7130c6dda273dbf79b5add449b91c"},
+    {file = "jaxlib-0.4.10+cuda11.cudnn86-cp38-cp38-manylinux2014_x86_64.whl", hash = "sha256:072bd422e87ef908e9e3c17b87f96904123726f250b197c7318cc25a4bee6b4b"},
+    {file = "jaxlib-0.4.10+cuda11.cudnn86-cp39-cp39-manylinux2014_x86_64.whl", hash = "sha256:b7f1f1f2b0133adf7028e981ca84e5191d5e87562c9d50ebfb9b60f953686619"},
 ]
 
 [package.source]
 type = "legacy"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
 reference = "jax"
+
+[[package]]
+name = "jaxopt"
+version = "0.6"
+description = "Hardware accelerated, batchable and differentiable optimizers in JAX."
+optional = false
+python-versions = "*"
+files = [
+    {file = "jaxopt-0.6-py3-none-any.whl", hash = "sha256:69af71c39969e9e5fa54bd50cbab3e18f6c32659d92e1bf56912a24c8ad0fca6"},
+    {file = "jaxopt-0.6.tar.gz", hash = "sha256:19df9cb745ee39fa27f9ba4f01bbec5b0e3a8a1f60320aff553131a5f152c9fa"},
+]
+
+[package.dependencies]
+absl-py = ">=0.7.0"
+jax = ">=0.2.18"
+jaxlib = ">=0.1.69"
+matplotlib = ">=2.0.1"
+numpy = ">=1.18.4"
+scipy = ">=1.0.0"
 
 [[package]]
 name = "jmp"
@@ -1263,6 +1282,33 @@ typing_extensions = "*"
 
 [package.extras]
 dev = ["flax", "pytest", "pytest-xdist"]
+
+[[package]]
+name = "ott-jax"
+version = "0.4.0"
+description = "Optimal Transport Tools in JAX."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "ott-jax-0.4.0.tar.gz", hash = "sha256:949fd59a68750581425887f840565f014f31bd846494a8207ec2d836f60f19ed"},
+    {file = "ott_jax-0.4.0-py3-none-any.whl", hash = "sha256:bccc0c7367d3509f4e07d5848eecaef6333b592a898c987d1e0258bd0508dcb1"},
+]
+
+[package.dependencies]
+flax = ">=0.5.2"
+jax = ">=0.1.67"
+jaxlib = ">=0.1.47"
+jaxopt = ">=0.5.5"
+matplotlib = ">=3.0.0"
+numpy = ">=1.18.4,<1.23.0 || >1.23.0"
+optax = ">=0.1.1"
+scipy = ">=1.7.0"
+
+[package.extras]
+dev = ["pre-commit (>=2.16.0)", "tox (>=4)"]
+docs = ["ipython (>=7.20.0)", "myst-nb (>=0.17.1)", "sphinx (>=4.0)", "sphinx-autodoc-typehints (>=1.12.0)", "sphinx-book-theme (>=0.3.3)", "sphinx-copybutton (>=0.5.1)", "sphinxcontrib-bibtex (>=2.5.0)", "sphinxcontrib-spelling (>=7.7.0)"]
+experimental = ["scikit-sparse (>=0.4.6)"]
+test = ["chex", "coverage[toml]", "networkx (>=2.5)", "pytest", "pytest-cov", "pytest-memray", "pytest-xdist", "scikit-learn (>=1.0)"]
 
 [[package]]
 name = "packaging"
@@ -2177,4 +2223,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "8453336e9673abca0bf48fa1f5e2c861a195534bf42bb8193a0409a534908566"
+content-hash = "9f6d1ff166e17d7c12cb7b7a45a005aceb182b9c567cb9e7fa46866348ffe3de"
