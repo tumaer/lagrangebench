@@ -118,13 +118,23 @@ def setup_data(
         external_force_fn = None
     elif "RPF" in args.info.dataset_name:
         args.info.has_external_force = True
+        if metadata["dim"] == 2:
 
-        def external_force_fn(position):
-            return jnp.where(
-                position[1] > 1.0,
-                jnp.array([-1.0, 0.0, 0.0]),
-                jnp.array([1.0, 0.0, 0.0]),
-            )
+            def external_force_fn(position):
+                return jnp.where(
+                    position[1] > 1.0,
+                    jnp.array([-1.0, 0.0]),
+                    jnp.array([1.0, 0.0]),
+                )
+
+        elif metadata["dim"] == 3:
+
+            def external_force_fn(position):
+                return jnp.where(
+                    position[1] > 1.0,
+                    jnp.array([-1.0, 0.0, 0.0]),
+                    jnp.array([1.0, 0.0, 0.0]),
+                )
 
     elif "Hook" in args.info.dataset_name:
         args.info.has_external_force = False
