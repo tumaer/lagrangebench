@@ -2,6 +2,7 @@ from typing import Dict, NamedTuple, Optional
 
 import e3nn_jax as e3nn
 import haiku as hk
+import jax.numpy as jnp
 import jraph
 
 from equisph.case_setup import NodeType
@@ -49,3 +50,26 @@ def build_mlp(latent_size, output_size, num_layers, is_layer_norm=True, **kwds: 
         return hk.Sequential([network, l_norm])
     else:
         return network
+
+
+def features_2d_to_3d(features):
+    """Add zeros in the z component of 2D features."""
+    n_nodes = features["vel_hist"].shape[0]
+    n_edges = features["rel_disp"].shape[0]
+    n_vels = features["vel_hist"].shape[1]
+    features["vel_hist"] = jnp.concatenate(
+        [features["vel_hist"], jnp.zeros((n_nodes, n_vels, 1))], -1
+    )
+    features["rel_disp"] = jnp.concatenate(
+        [features["rel_disp"], jnp.zeros((n_edges, 1))], -1
+    )
+    if "bound" in features:
+        features["bound"] = jnp.concatenate(
+            [features["bound"], jnp.zeros((n_nodes, 1))], -1
+        )
+    if "force" in features:
+        features["force"] = jnp.concatenate(
+            [features["force"], jnp.zeros((n_nodes, 1))], -1
+        )
+
+    return features
