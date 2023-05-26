@@ -1,5 +1,5 @@
 # Model settings
-# Model architecture name. gns, segnn, hae_segnn
+# Model architecture name. gns, segnn, egnn
 model:
 # Length of the position input sequence
 input_seq_length: 6

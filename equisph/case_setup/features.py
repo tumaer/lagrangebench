@@ -10,7 +10,6 @@ FeatureDict = Dict[str, jnp.ndarray]
 TargetDict = Dict[str, jnp.ndarray]
 
 
-# TODO remove this before submission
 class NodeType(enum.IntEnum):
     FLUID = 0
     SOLID_WALL = 1
@@ -19,7 +18,6 @@ class NodeType(enum.IntEnum):
     SIZE = 9
 
 
-# TODO remove this before submission
 def get_kinematic_mask(particle_type):
     """Returns a boolean mask, set to true for all kinematic (obstacle)
     particles"""
@@ -78,7 +76,7 @@ def physical_feature_builder(
         features = {}
 
         n_total_points = pos_input.shape[0]
-        most_recent_position = pos_input[:, -1]  # (n_nodes, 2)
+        most_recent_position = pos_input[:, -1]  # (n_nodes, dim)
         # pos_input.shape = (n_nodes, n_timesteps, dim)
         velocity_sequence = displacement_fn_dvmap(pos_input[:, 1:], pos_input[:, :-1])
         # Normalized velocity sequence, merging spatial an time axis.
@@ -89,6 +87,7 @@ def physical_feature_builder(
             n_total_points, -1
         )
 
+        features["abs_pos"] = pos_input
         features["vel_hist"] = flat_velocity_sequence
 
         if magnitudes:
@@ -98,10 +97,9 @@ def physical_feature_builder(
             )
             features["vel_mag"] = velocity_magnitude_sequence
 
-        # TODO remove this before submission (and docstrings)
         if not any(pbc):
             # Normalized clipped distances to lower and upper boundaries.
-            # boundaries are an array of shape [num_dimensions, 2], where the
+            # boundaries are an array of shape [num_dimensions, dim], where the
             # second axis, provides the lower/upper boundaries.
             boundaries = lax.stop_gradient(jnp.array(bounds))
 
@@ -126,7 +124,7 @@ def physical_feature_builder(
         features["senders"] = senders
         features["receivers"] = receivers
 
-        # Relative displacement and distances normalized to radius (E, 2)
+        # Relative displacement and distances normalized to radius (E, dim)
         displacement = vmap(displacement_fn)(
             most_recent_position[senders], most_recent_position[receivers]
         )

@@ -124,7 +124,7 @@ class GNS(BaseModel):
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
-    ) -> jraph.GraphsTuple:
+    ) -> jnp.ndarray:
         graph, particle_type = self._transform(*sample)
 
         if self._num_particle_types > 1:

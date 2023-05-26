@@ -49,7 +49,6 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--model",
         type=str,
-        choices=["gns", "segnn", "hae_segnn", "linear"],
         help="Model name.",
     )
     parser.add_argument(

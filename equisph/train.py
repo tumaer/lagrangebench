@@ -147,7 +147,7 @@ def train(
     if args.config.wandb:
         wandb.init(
             project=args.config.wandb_project,
-            entity="equivariant-sph",
+            entity="segnn-sph",
             name=args.info.run_name,
             config=args_dict,
             save_code=True,

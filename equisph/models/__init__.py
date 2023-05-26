@@ -1,8 +1,8 @@
 from argparse import Namespace
 from typing import Callable, Tuple, Type
 
+from .egnn import EGNN
 from .gns import GNS
-from .haesegnn import HAESEGNN
 from .linear import Linear
 from .segnn import SEGNN
 
@@ -10,8 +10,8 @@ __all__ = ["get_model"]
 
 model_dict = {
     "gns": GNS,
+    "egnn": EGNN,
     "segnn": SEGNN,
-    "hae_segnn": HAESEGNN,
     "linear": Linear,
 }
 
