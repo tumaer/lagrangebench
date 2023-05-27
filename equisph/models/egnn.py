@@ -349,6 +349,16 @@ class EGNN(BaseModel):
 
         return graph, props
 
+    def _postprocess(
+        self, next_pos: jnp.ndarray, props: Dict[str, jnp.ndarray]
+    ) -> jnp.ndarray:
+        prev_vel = props["vel"]
+        prev_pos = props["pos"]
+        # first order finite difference
+        next_vel = self._displacement_fn(next_pos, prev_pos)
+        acc = next_vel - prev_vel
+        return acc
+
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
     ) -> jnp.ndarray:
@@ -357,9 +367,7 @@ class EGNN(BaseModel):
         h = LinearXav(self._hidden_size, name="embedding")(graph.nodes)
         graph = graph._replace(nodes=h)
         # message passing
-        prev_pos = props["pos"]
         next_pos = props["pos"].copy()
-        prev_vel = props["vel"]
         for n in range(self._num_layers):
             graph, next_pos = EGNNLayer(
                 layer_num=n,
@@ -370,19 +378,25 @@ class EGNN(BaseModel):
                 attention=self._attention,
                 normalize=self._normalize,
                 tanh=self._tanh,
-            )(graph, next_pos, prev_vel, props["edge_attr"], props["node_attr"])
+            )(graph, next_pos, props["vel"], props["edge_attr"], props["node_attr"])
 
         # position finite differencing to get acceleration
-        next_vel = self._displacement_fn(next_pos, prev_pos)
-        acc = next_vel - prev_vel
-        return acc
+        out = self._postprocess(next_pos, props)
+        return out
 
     @classmethod
     def setup_model(cls, args: Namespace) -> Tuple["EGNN", Type]:
-        if jnp.array(args.metadata["periodic_boundary_conditions"]).any():
-            displacement_fn, _ = space.periodic(side=jnp.array(args.box))
-        else:
-            displacement_fn, _ = space.free()
+        dtype = jnp.float64 if args.config.f64 else jnp.float32
+
+        def displacement_fn(x, y):
+            return jax.lax.cond(
+                jnp.array(args.metadata["periodic_boundary_conditions"]).any(),
+                lambda x, y: space.periodic(jnp.array(args.box))[0](x, y).astype(dtype),
+                lambda x, y: space.free()[0](x, y).astype(dtype),
+                x,
+                y,
+            )
+
         displacement_fn = jax.vmap(displacement_fn, in_axes=(0, 0))
         return cls(
             hidden_size=args.config.latent_dim,
