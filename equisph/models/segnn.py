@@ -504,7 +504,7 @@ class SEGNN(BaseModel):
 
     def _transform(
         self, features: Dict[str, jnp.ndarray], particle_type: jnp.ndarray
-    ) -> SteerableGraphsTuple:
+    ) -> Tuple[SteerableGraphsTuple, int]:
         """Convert physical features to SteerableGraphsTuple for segnn."""
         dim = features["vel_hist"].shape[1] // self._n_vels
         assert (
@@ -559,16 +559,17 @@ class SEGNN(BaseModel):
         edge_features = [features[k] for k in ["rel_disp", "rel_dist"] if k in features]
         edge_features = jnp.concatenate(edge_features, axis=-1)
 
-        return SteerableGraphsTuple(
-            graph=jraph.GraphsTuple(
-                nodes=IrrepsArray(self._node_features_irreps, node_features),
-                edges=None,
-                senders=features["senders"],
-                receivers=features["receivers"],
-                n_node=jnp.array([n_nodes]),
-                n_edge=jnp.array([len(features["senders"])]),
-                globals=None,
-            ),
+        feature_graph = jraph.GraphsTuple(
+            nodes=IrrepsArray(self._node_features_irreps, node_features),
+            edges=None,
+            senders=features["senders"],
+            receivers=features["receivers"],
+            n_node=jnp.array([n_nodes]),
+            n_edge=jnp.array([len(features["senders"])]),
+            globals=None,
+        )
+        st_graph = SteerableGraphsTuple(
+            graph=feature_graph,
             node_attributes=node_attributes,
             edge_attributes=edge_attributes,
             additional_message_features=IrrepsArray(
@@ -576,11 +577,19 @@ class SEGNN(BaseModel):
             ),
         )
 
+        return st_graph, dim
+
+    def _postprocess(self, nodes: IrrepsArray, dim: int) -> jnp.ndarray:
+        out = jnp.squeeze(nodes.array)
+        if dim == 2:
+            out = out[:, :2]
+        return out
+
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
     ) -> jnp.ndarray:
         # feature transformation
-        st_graph = self._transform(*sample)
+        st_graph, dim = self._transform(*sample)
         # node (and edge) embedding
         st_graph = self._embedding(st_graph)
         # message passing
@@ -588,7 +597,8 @@ class SEGNN(BaseModel):
             st_graph = SEGNNLayer(self._hidden_irreps, n, norm=self._norm)(st_graph)
         # readout
         nodes = self._decoder(st_graph)
-        return jnp.squeeze(nodes.array)
+        out = self._postprocess(nodes, dim)
+        return out
 
     @classmethod
     def setup_model(cls, args: Namespace) -> Tuple["SEGNN", Type]:
