@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jnp
 import jraph
 from jax.tree_util import Partial
+from jax_md import space
 
 from equisph.case_setup.features import NodeType
 
@@ -248,6 +249,7 @@ class EGNN(BaseModel):
         hidden_size: int,
         output_size: int,
         n_vels: int,
+        displacement_fn: space.DisplacementFn,
         act_fn: Callable = jax.nn.silu,
         num_layers: int = 4,
         velocity_aggregate: str = "avg",
@@ -264,6 +266,7 @@ class EGNN(BaseModel):
             hidden_size: Number of hidden features
             output_size: Number of features for 'h' at the output
             n_vels: Number of velocities in the history.
+            displacement_fn: Displacement function for the acceleration computation.
             act_fn: Non-linearity
             num_layers: Number of layer for the EGNN
             velocity_aggregate: Velocity sequence aggregation method.
@@ -280,6 +283,7 @@ class EGNN(BaseModel):
         super().__init__()
         self._hidden_size = hidden_size
         self._output_size = output_size
+        self._displacement_fn = displacement_fn
         self._act_fn = act_fn
         self._num_layers = num_layers
         self._residual = residual
@@ -353,8 +357,11 @@ class EGNN(BaseModel):
         h = LinearXav(self._hidden_size, name="embedding")(graph.nodes)
         graph = graph._replace(nodes=h)
         # message passing
+        prev_pos = props["pos"]
+        next_pos = props["pos"].copy()
+        prev_vel = props["vel"]
         for n in range(self._num_layers):
-            graph, pos = EGNNLayer(
+            graph, next_pos = EGNNLayer(
                 layer_num=n,
                 hidden_size=self._hidden_size,
                 output_size=self._hidden_size,
@@ -363,17 +370,24 @@ class EGNN(BaseModel):
                 attention=self._attention,
                 normalize=self._normalize,
                 tanh=self._tanh,
-            )(graph, props["pos"], props["vel"], props["edge_attr"], props["node_attr"])
+            )(graph, next_pos, prev_vel, props["edge_attr"], props["node_attr"])
 
-        # TODO position differencing to get acceleration
-        acc = pos
+        # position finite differencing to get acceleration
+        next_vel = self._displacement_fn(next_pos, prev_pos)
+        acc = next_vel - prev_vel
         return acc
 
     @classmethod
     def setup_model(cls, args: Namespace) -> Tuple["EGNN", Type]:
+        if jnp.array(args.metadata["periodic_boundary_conditions"]).any():
+            displacement_fn, _ = space.periodic(side=jnp.array(args.box))
+        else:
+            displacement_fn, _ = space.free()
+        displacement_fn = jax.vmap(displacement_fn, in_axes=(0, 0))
         return cls(
             hidden_size=args.config.latent_dim,
             output_size=1,
+            displacement_fn=displacement_fn,
             num_layers=args.config.num_mp_steps,
             velocity_aggregate=args.config.velocity_aggregate,
             n_vels=args.config.input_seq_length - 1,

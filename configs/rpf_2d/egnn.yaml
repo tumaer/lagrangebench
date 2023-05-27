@@ -1,0 +1,27 @@
+# fallback parameters. Relative path from the config/ directory
+includes: defaults.yaml
+
+model: egnn
+num_mp_steps: 6
+latent_dim: 64
+velocity_aggregate: avg
+
+
+batch_size: 1
+lr_start: 5.e-4
+lr_decay_steps: 1.e+5
+noise_std: 3.e-5
+pushforward:
+  steps: [-1, 100000, 125000, 150000, 175000, 200000]
+  unrolls: [0, 1, 2, 3, 4, 5]
+  probs: [16, 2, 1, 1, 1, 1]
+
+mode: train
+n_rollout_steps: 20
+eval_n_trajs: 38
+split_valid_traj_into_n: 38
+
+wandb: False
+wandb_project: rpf_2d
+
+data_dir: datasets/2D_RPF_3200_100kevery10
