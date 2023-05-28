@@ -2,8 +2,8 @@ import json
 import os
 import pickle
 import random
-from typing import Callable, Tuple
 from dataclasses import dataclass
+from typing import Callable, Tuple
 
 import cloudpickle
 import jax
