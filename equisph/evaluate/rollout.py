@@ -49,9 +49,9 @@ def eval_single_rollout(
             continue
 
         # predict
-        normalized_acc, _ = model_apply(params, state, (features, particle_type))
+        pred, _ = model_apply(params, state, (features, particle_type))
 
-        next_position = case.integrate(normalized_acc, current_positions)
+        next_position = case.integrate(pred, current_positions)
 
         if n_extrap_steps == 0:
             kinematic_mask = get_kinematic_mask(particle_type)

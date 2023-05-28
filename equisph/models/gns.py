@@ -124,7 +124,7 @@ class GNS(BaseModel):
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
-    ) -> jnp.ndarray:
+    ) -> Dict[str, jnp.ndarray]:
         graph, particle_type = self._transform(*sample)
 
         if self._num_particle_types > 1:
@@ -133,8 +133,8 @@ class GNS(BaseModel):
                 [graph.nodes, particle_type_embeddings], axis=-1
             )
             graph = graph._replace(nodes=new_node_features)
-
-        return self._decoder(self._processor(self._encoder(graph)))
+        acc = self._decoder(self._processor(self._encoder(graph)))
+        return {"acc": acc}
 
     @classmethod
     def setup_model(cls, args: Namespace) -> Tuple["GNS", Type]:

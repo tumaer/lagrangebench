@@ -14,22 +14,23 @@ class Linear(BaseModel):
 
     def __init__(self, dim_out):
         super().__init__()
-        self.mlp = hk.nets.MLP([dim_out], activate_final=False, name="MLP")
+        self.mlp = hk.Linear(dim_out)
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], np.ndarray]
-    ) -> jnp.ndarray:
+    ) -> Dict[str, jnp.ndarray]:
         # transform
         features, particle_type = sample
         x = [
             features[k]
             for k in ["vel_hist", "vel_mag", "bound", "force"]
-            if k in features[0]
-        ] + [particle_type]
+            if k in features
+        ] + [particle_type[:, None]]
         # call
-        return vmap(self.mlp)(jnp.concatenate(x, axis=-1))
+        acc = vmap(self.mlp)(jnp.concatenate(x, axis=-1))
+        return {"acc": acc}
 
     @classmethod
     def setup_model(cls, args: Namespace) -> Tuple["Linear", Type]:
         _ = args
-        return cls(dim_out=3)
+        return cls(dim_out=args.metadata["dim"])

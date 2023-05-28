@@ -39,7 +39,7 @@ class MLPXav(hk.nets.MLP):
         with_bias: bool = True,
         w_init: Optional[hk.initializers.Initializer] = None,
         b_init: Optional[hk.initializers.Initializer] = None,
-        activation: Optional[hk.initializers.Initializer] = None,
+        activation: Callable = jax.nn.silu,
         activate_final: bool = False,
         name: Optional[str] = None,
     ):
@@ -118,10 +118,9 @@ class EGNNLayer(hk.Module):
         # position update network
         net = [LinearXav(hidden_size)] * blocks
         # NOTE: from https://github.com/vgsatorras/egnn/blob/main/models/gcl.py#L254
-        a = dt * jnp.sqrt(6 / hidden_size)
         net += [
             act_fn,
-            LinearXav(1, with_bias=False, w_init=hk.initializers.UniformScaling(a)),
+            LinearXav(1, with_bias=False, w_init=hk.initializers.UniformScaling(dt)),
         ]
         if tanh:
             net.append(jax.nn.tanh)
@@ -129,10 +128,9 @@ class EGNNLayer(hk.Module):
 
         # velocity integrator network
         net = [LinearXav(hidden_size)] * blocks
-        a = dt * jnp.sqrt(6 / hidden_size)
         net += [
             act_fn,
-            LinearXav(1, with_bias=False, w_init=hk.initializers.UniformScaling(a)),
+            LinearXav(1, with_bias=False, w_init=hk.initializers.UniformScaling(dt)),
         ]
         self._vel_correction_mlp = hk.Sequential(net)
 
@@ -150,8 +148,6 @@ class EGNNLayer(hk.Module):
         coord_diff: jnp.ndarray,
     ) -> jnp.ndarray:
         trans = coord_diff * self._pos_correction_mlp(graph.edges)
-        # NOTE: was in the original code
-        trans = jnp.clip(trans, -100, 100)
         return self.pos_aggregate_fn(trans, graph.senders, num_segments=pos.shape[0])
 
     def _message(
@@ -223,7 +219,6 @@ class EGNNLayer(hk.Module):
             Updated graph, node position
         """
         radial, coord_diff = self._coord2radial(graph, pos)
-
         graph = jraph.GraphNetwork(
             update_edge_fn=Partial(self._message, radial, edge_attribute),
             update_node_fn=Partial(self._update, node_attribute),
@@ -232,8 +227,7 @@ class EGNNLayer(hk.Module):
         # update position
         pos = pos + self._pos_update(pos, graph, coord_diff)
         # integrate velocity
-        shift = self._vel_correction_mlp(graph.nodes) * vel
-        pos = pos + jnp.clip(shift, -100, 100)
+        pos = pos + self._vel_correction_mlp(graph.nodes) * vel
         return graph, pos
 
 
@@ -248,11 +242,11 @@ class EGNN(BaseModel):
         self,
         hidden_size: int,
         output_size: int,
+        dt: float,
         n_vels: int,
         displacement_fn: space.DisplacementFn,
         act_fn: Callable = jax.nn.silu,
         num_layers: int = 4,
-        velocity_aggregate: str = "avg",
         homogeneous_particles: bool = True,
         residual: bool = True,
         attention: bool = False,
@@ -265,11 +259,11 @@ class EGNN(BaseModel):
         Args:
             hidden_size: Number of hidden features
             output_size: Number of features for 'h' at the output
+            dt: Time step for position and velocity integration
             n_vels: Number of velocities in the history.
             displacement_fn: Displacement function for the acceleration computation.
             act_fn: Non-linearity
             num_layers: Number of layer for the EGNN
-            velocity_aggregate: Velocity sequence aggregation method.
             homogeneous_particles: If all particles are of homogeneous type.
             residual: Use residual connections, we recommend not changing this one
             attention: Whether using attention or not
@@ -283,6 +277,7 @@ class EGNN(BaseModel):
         super().__init__()
         self._hidden_size = hidden_size
         self._output_size = output_size
+        self._dt = dt
         self._displacement_fn = displacement_fn
         self._act_fn = act_fn
         self._num_layers = num_layers
@@ -291,12 +286,6 @@ class EGNN(BaseModel):
         self._normalize = normalize
         self._tanh = tanh
         # transform
-        assert velocity_aggregate in [
-            "avg",
-            "sum",
-            "last",
-        ], "Invalid velocity aggregate. Must be one of 'avg', 'sum' or 'last'."
-        self._velocity_aggregate = velocity_aggregate
         self._n_vels = n_vels
         self._homogeneous_particles = homogeneous_particles
 
@@ -306,29 +295,23 @@ class EGNN(BaseModel):
         props = {}
         n_nodes = features["vel_hist"].shape[0]
 
-        traj = jnp.reshape(features["vel_hist"], (n_nodes, self._n_vels, -1))
-
-        if self._n_vels == 1:
-            props["vel"] = jnp.squeeze(traj)
-        else:
-            if self._velocity_aggregate == "avg":
-                props["vel"] = jnp.mean(traj, 1)
-            if self._velocity_aggregate == "sum":
-                props["vel"] = jnp.sum(traj, 1)
-            if self._velocity_aggregate == "last":
-                props["vel"] = traj[:, -1, :]
+        props["vel"] = jnp.reshape(features["vel_hist"], (n_nodes, self._n_vels, -1))
 
         # most recent position
         props["pos"] = features["abs_pos"][:, -1]
         # relative distances between particles
         props["edge_attr"] = features["rel_dist"]
         # force magnitude as node attributes
-        props["node_attr"] = jnp.sum(features["force"] ** 2, -1, keepdims=True)
+        props["node_attr"] = None
+        if "force" in features:
+            props["node_attr"] = jnp.linalg.norm(
+                features["force"], axis=-1, keepdims=True
+            )
 
         # velocity magnitudes as node features
         node_features = jnp.concatenate(
             [
-                jnp.linalg.norm(traj[:, i, :], axis=-1, keepdims=True)
+                jnp.linalg.norm(props["vel"][:, i, :], axis=-1, keepdims=True)
                 for i in range(self._n_vels)
             ],
             axis=-1,
@@ -351,21 +334,22 @@ class EGNN(BaseModel):
 
     def _postprocess(
         self, next_pos: jnp.ndarray, props: Dict[str, jnp.ndarray]
-    ) -> jnp.ndarray:
-        prev_vel = props["vel"]
+    ) -> Dict[str, jnp.ndarray]:
+        prev_vel = props["vel"][:, -1, :]
         prev_pos = props["pos"]
         # first order finite difference
         next_vel = self._displacement_fn(next_pos, prev_pos)
         acc = next_vel - prev_vel
-        return acc
+        return {"pos": next_pos}  # , "vel": next_vel, "acc": acc}
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
-    ) -> jnp.ndarray:
+    ) -> Dict[str, jnp.ndarray]:
         graph, props = self._transform(*sample)
         # input node embedding
-        h = LinearXav(self._hidden_size, name="embedding")(graph.nodes)
+        h = LinearXav(self._hidden_size, name="scalar_emb")(graph.nodes)
         graph = graph._replace(nodes=h)
+        vel = LinearXav(1, name="vel_emb")(props["vel"].transpose(0, 2, 1)).squeeze()
         # message passing
         next_pos = props["pos"].copy()
         for n in range(self._num_layers):
@@ -377,8 +361,9 @@ class EGNN(BaseModel):
                 residual=self._residual,
                 attention=self._attention,
                 normalize=self._normalize,
+                dt=self._dt,
                 tanh=self._tanh,
-            )(graph, next_pos, props["vel"], props["edge_attr"], props["node_attr"])
+            )(graph, next_pos, vel, props["edge_attr"], props["node_attr"])
 
         # position finite differencing to get acceleration
         out = self._postprocess(next_pos, props)
@@ -401,9 +386,9 @@ class EGNN(BaseModel):
         return cls(
             hidden_size=args.config.latent_dim,
             output_size=1,
+            dt=args.metadata["dt"],
             displacement_fn=displacement_fn,
             num_layers=args.config.num_mp_steps,
-            velocity_aggregate=args.config.velocity_aggregate,
             n_vels=args.config.input_seq_length - 1,
             residual=True,
         )

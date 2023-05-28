@@ -92,8 +92,11 @@ def case_builder(args: Namespace, external_force_fn: Callable):
 
         vel_stats = normalization_stats["velocity"]
         normalized_velocity = (next_velocity - vel_stats["mean"]) / vel_stats["std"]
-
-        return {"acc": normalized_acceleration, "vel": normalized_velocity}
+        return {
+            "acc": normalized_acceleration,
+            "vel": normalized_velocity,
+            "pos": pos_input[:, -1],
+        }
 
     def _preprocess(
         sample: Tuple[jnp.ndarray, jnp.ndarray],
@@ -159,24 +162,37 @@ def case_builder(args: Namespace, external_force_fn: Callable):
         return _preprocess(sample, neighbors, mode="eval")
 
     @jit
-    def integrate_fn(normalized_acceleration, position_sequence):
+    def integrate_fn(normalized_in, position_sequence):
         """Euler integrator to get position shift."""
 
-        # invert normalization.
-        acceleration_stats = normalization_stats["acceleration"]
-        acceleration = acceleration_stats["mean"] + (
-            normalized_acceleration * acceleration_stats["std"]
-        )
+        assert any([key in normalized_in for key in ["pos", "vel", "acc"]])
 
-        # Euler integrator to go from acceleration to position, assuming a dt=1.
-        most_recent_position = position_sequence[:, -1]
-        most_recent_velocity = displacement_fn_set(
-            most_recent_position, position_sequence[:, -2]
-        )
+        if "pos" in normalized_in:
+            # Zeroth euler step
+            new_position = normalized_in["pos"]
+        else:
+            most_recent_position = position_sequence[:, -1]
+            if "vel" in normalized_in:
+                # invert normalization
+                velocity_stats = normalization_stats["velocity"]
+                new_velocity = velocity_stats["mean"] + (
+                    normalized_in["vel"] * velocity_stats["std"]
+                )
+            elif "acc" in normalized_in:
+                # invert normalization.
+                acceleration_stats = normalization_stats["acceleration"]
+                acceleration = acceleration_stats["mean"] + (
+                    normalized_in["acc"] * acceleration_stats["std"]
+                )
+                # Second Euler step
+                most_recent_velocity = displacement_fn_set(
+                    most_recent_position, position_sequence[:, -2]
+                )
+                new_velocity = most_recent_velocity + acceleration  # * dt = 1
 
-        new_velocity = most_recent_velocity + acceleration  # * dt = 1
-        # jax-md shift function takes case of PBC
-        new_position = shift_fn(most_recent_position, new_velocity)
+            # First Euler step
+            new_position = shift_fn(most_recent_position, new_velocity)
+
         return new_position
 
     return CaseSetupFn(

@@ -493,7 +493,6 @@ class SEGNN(BaseModel):
         # transform
         assert velocity_aggregate in [
             "avg",
-            "sum",
             "last",
         ], "Invalid velocity aggregate. Must be one of 'avg', 'sum' or 'last'."
         self._node_features_irreps = node_features_irreps
@@ -524,8 +523,6 @@ class SEGNN(BaseModel):
         else:
             if self._velocity_aggregate == "avg":
                 vel = jnp.mean(features["vel_hist"], 1)
-            if self._velocity_aggregate == "sum":
-                vel = jnp.sum(features["vel_hist"], 1)
             if self._velocity_aggregate == "last":
                 vel = features["vel_hist"][:, -1, :]
 
@@ -579,15 +576,15 @@ class SEGNN(BaseModel):
 
         return st_graph, dim
 
-    def _postprocess(self, nodes: IrrepsArray, dim: int) -> jnp.ndarray:
-        out = jnp.squeeze(nodes.array)
+    def _postprocess(self, nodes: IrrepsArray, dim: int) -> Dict[str, jnp.ndarray]:
+        acc = jnp.squeeze(nodes.array)
         if dim == 2:
-            out = out[:, :2]
-        return out
+            acc = acc[:, :2]
+        return {"acc": acc}
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
-    ) -> jnp.ndarray:
+    ) -> Dict[str, jnp.ndarray]:
         # feature transformation
         st_graph, dim = self._transform(*sample)
         # node (and edge) embedding

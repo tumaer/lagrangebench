@@ -47,8 +47,8 @@ def push_forward_build(model_apply, case):
     @jax.jit
     def push_forward(features, current_pos, particle_type, neighbors, params, state):
         # no buffer overflow check here, since push forward acts on later epochs
-        normalized_acc, _ = model_apply(params, state, (features, particle_type))
-        next_pos = case.integrate(normalized_acc, current_pos)
+        pred, _ = model_apply(params, state, (features, particle_type))
+        next_pos = case.integrate(pred, current_pos)
         current_pos = jnp.concatenate(
             [current_pos[:, 1:], next_pos[:, None, :]], axis=1
         )
@@ -71,15 +71,17 @@ def mse(
     model_fn: Callable,
 ):
     pred, state = model_fn(params, state, (features, particle_type))
-    assert target.shape == pred.shape
+    assert all(target[k].shape == pred[k].shape for k in pred)
     non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
     num_non_kinematic = non_kinematic_mask.sum()
+    losses = []
+    for t in pred:
+        losses.append(((pred[t] - target[t]) ** 2).sum(axis=-1))
+    total_loss = jnp.array(losses).sum(0)
+    total_loss = jnp.where(non_kinematic_mask, total_loss, 0)
+    total_loss = total_loss.sum() / num_non_kinematic
 
-    loss = ((pred - target) ** 2).sum(axis=-1)
-    loss = jnp.where(non_kinematic_mask, loss, 0)
-    loss = loss.sum() / num_non_kinematic
-
-    return loss, state
+    return total_loss, state
 
 
 @partial(jax.jit, static_argnames=["loss_fn", "opt_update"])
@@ -229,7 +231,7 @@ def train(
                 params=params,
                 state=state,
                 features_batch=features_batch,
-                target_batch=target_batch["acc"],
+                target_batch=target_batch,
                 particle_type_batch=raw_batch[1],
                 opt_state=opt_state,
             )
