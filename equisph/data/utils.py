@@ -71,7 +71,13 @@ def setup_data(
 
     # dataloader
     train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
-    data_train = H5Dataset(args.config.data_dir, "train", train_seq_l, is_rollout=False)
+    data_train = H5Dataset(
+        args.config.data_dir,
+        "train",
+        args.config.perc_train,
+        train_seq_l,
+        is_rollout=False,
+    )
     loader_train = DataLoader(
         dataset=data_train,
         batch_size=args.config.batch_size,
