@@ -169,7 +169,7 @@ def case_builder(args: Namespace, external_force_fn: Callable):
 
         if "pos" in normalized_in:
             # Zeroth euler step
-            new_position = normalized_in["pos"]
+            return normalized_in["pos"]
         else:
             most_recent_position = position_sequence[:, -1]
             if "vel" in normalized_in:
@@ -191,9 +191,7 @@ def case_builder(args: Namespace, external_force_fn: Callable):
                 new_velocity = most_recent_velocity + acceleration  # * dt = 1
 
             # First Euler step
-            new_position = shift_fn(most_recent_position, new_velocity)
-
-        return new_position
+            return shift_fn(most_recent_position, new_velocity)
 
     return CaseSetupFn(
         allocate_fn,

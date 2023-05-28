@@ -3,6 +3,7 @@ import os
 import pickle
 import random
 from typing import Callable, Tuple
+from dataclasses import dataclass
 
 import cloudpickle
 import jax
@@ -151,3 +152,19 @@ def set_seed(seed: int) -> Tuple[jax.random.KeyArray, Callable, torch.Generator]
     generator.manual_seed(seed)
 
     return key, seed_worker, generator
+
+
+@dataclass(frozen=True)
+class LossWeights:
+    """Weights for the different targets in the loss function"""
+
+    pos: float = 0.0
+    vel: float = 0.0
+    acc: float = 0.0
+
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+    @property
+    def nonzero(self):
+        return [field for field in self.__annotations__ if self[field] != 0]

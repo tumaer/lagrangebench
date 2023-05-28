@@ -13,19 +13,11 @@ latent_dim: 128
 model_dir:
 # SEGNN only parameters
 # Steerable attributes level
-lmax_attributes: 1
+# lmax_attributes: 1
 # Level of the hidden layer
-lmax_hidden: 1
+# lmax_hidden: 1
 # SEGNN normalization. instance, batch, none
-segnn_norm: instance
-# Number of attribute embedding layers. 1 for linear layer
-attribute_embedding_blocks: 1
-# Whether to use the last velocity as steerable attribute in the embedding
-right_attribute: False
-# Method to aggregate velocity. avg, sum, last, all
-velocity_aggregate: avg
-# Method to compose attributes. add, concat
-attribute_mode: add
+# segnn_norm: instance
 
 # Optimization settings
 # Max steps
@@ -54,6 +46,11 @@ pushforward:
   unrolls: [0,]
   # Which probability ratio to keep between the unrolls, e.g. [5, 4, 1]
   probs: [1.,]
+
+# Loss settings
+# Loss weight for position, acceleration, and velocity components
+loss_weight:
+  acc: 1.0
 
 # Run settings
 # train, infer

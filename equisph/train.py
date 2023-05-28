@@ -18,6 +18,7 @@ import wandb
 from equisph.case_setup import CaseSetupFn, get_kinematic_mask
 from equisph.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from equisph.utils import (
+    LossWeights,
     broadcast_from_batch,
     broadcast_to_batch,
     load_haiku,
@@ -61,7 +62,7 @@ def push_forward_build(model_apply, case):
     return push_forward
 
 
-@partial(jax.jit, static_argnames=["model_fn"])
+@partial(jax.jit, static_argnames=["model_fn", "loss_weight"])
 def mse(
     params: hk.Params,
     state: hk.State,
@@ -69,14 +70,19 @@ def mse(
     particle_type: jnp.ndarray,
     target: jnp.ndarray,
     model_fn: Callable,
+    loss_weight: LossWeights,
 ):
     pred, state = model_fn(params, state, (features, particle_type))
-    assert all(target[k].shape == pred[k].shape for k in pred)
+    # check active (non zero) output shapes
+    keys = list(set(loss_weight.nonzero) & set(pred.keys()))
+    assert all(target[k].shape == pred[k].shape for k in keys)
+    # particle mask
     non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
     num_non_kinematic = non_kinematic_mask.sum()
+    # loss components
     losses = []
-    for t in pred:
-        losses.append(((pred[t] - target[t]) ** 2).sum(axis=-1))
+    for t in keys:
+        losses.append((loss_weight[t] * (pred[t] - target[t]) ** 2).sum(axis=-1))
     total_loss = jnp.array(losses).sum(0)
     total_loss = jnp.where(non_kinematic_mask, total_loss, 0)
     total_loss = total_loss.sum() / num_non_kinematic
@@ -166,7 +172,12 @@ def train(
     # Precompile model for evaluation
     model_apply = jax.jit(model.apply)
     # loss and update functions
-    loss_fn = partial(mse, model_fn=model_apply)
+    loss_weight = (
+        LossWeights(**args.config.loss_weight)
+        if hasattr(args.config, "loss_weight") and args.config.loss_weight is not None
+        else LossWeights(**{})
+    )
+    loss_fn = partial(mse, model_fn=model_apply, loss_weight=loss_weight)
     update_fn = partial(update, loss_fn=loss_fn, opt_update=opt_update)
 
     # continue training from checkpoint or initialize optimizer state
