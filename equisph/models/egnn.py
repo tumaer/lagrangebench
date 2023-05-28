@@ -65,6 +65,8 @@ class EGNNLayer(hk.Module):
         layer_num: layer number
         hidden_size: hidden size
         output_size: output size
+        displacement_fn: Displacement function for the acceleration computation.
+        shift_fn: Shift function for updating positions
         blocks: number of blocks in the node and edge MLPs
         act_fn: activation function
         pos_aggregate_fn: position aggregation function
@@ -82,6 +84,8 @@ class EGNNLayer(hk.Module):
         layer_num: int,
         hidden_size: int,
         output_size: int,
+        displacement_fn: space.DisplacementFn,
+        shift_fn: space.ShiftFn,
         blocks: int = 1,
         act_fn: Callable = jax.nn.silu,
         pos_aggregate_fn: Optional[Callable] = jraph.segment_sum,
@@ -95,6 +99,8 @@ class EGNNLayer(hk.Module):
     ):
         super().__init__(f"layer_{layer_num}")
 
+        self._displacement_fn = displacement_fn
+        self._shift_fn = shift_fn
         self.pos_aggregate_fn = pos_aggregate_fn
         self.msg_aggregate_fn = msg_aggregate_fn
         self._residual = residual
@@ -191,7 +197,7 @@ class EGNNLayer(hk.Module):
     def _coord2radial(
         self, graph: jraph.GraphsTuple, coord: jnp.array
     ) -> Tuple[jnp.array, jnp.array]:
-        coord_diff = coord[graph.senders] - coord[graph.receivers]
+        coord_diff = self._displacement_fn(coord[graph.senders], coord[graph.receivers])
         radial = jnp.sum(coord_diff**2, 1)[:, jnp.newaxis]
         if self._normalize:
             norm = jnp.sqrt(radial)
@@ -225,9 +231,9 @@ class EGNNLayer(hk.Module):
             aggregate_edges_for_nodes_fn=self.msg_aggregate_fn,
         )(graph)
         # update position
-        pos = pos + self._pos_update(pos, graph, coord_diff)
+        pos = self._shift_fn(pos, self._pos_update(pos, graph, coord_diff))
         # integrate velocity
-        pos = pos + self._vel_correction_mlp(graph.nodes) * vel
+        pos = self._shift_fn(pos, self._vel_correction_mlp(graph.nodes) * vel)
         return graph, pos
 
 
@@ -245,6 +251,7 @@ class EGNN(BaseModel):
         dt: float,
         n_vels: int,
         displacement_fn: space.DisplacementFn,
+        shift_fn: space.ShiftFn,
         act_fn: Callable = jax.nn.silu,
         num_layers: int = 4,
         homogeneous_particles: bool = True,
@@ -262,6 +269,7 @@ class EGNN(BaseModel):
             dt: Time step for position and velocity integration
             n_vels: Number of velocities in the history.
             displacement_fn: Displacement function for the acceleration computation.
+            shift_fn: Shift function for updating positions
             act_fn: Non-linearity
             num_layers: Number of layer for the EGNN
             homogeneous_particles: If all particles are of homogeneous type.
@@ -279,6 +287,7 @@ class EGNN(BaseModel):
         self._output_size = output_size
         self._dt = dt
         self._displacement_fn = displacement_fn
+        self._shift_fn = shift_fn
         self._act_fn = act_fn
         self._num_layers = num_layers
         self._residual = residual
@@ -340,7 +349,7 @@ class EGNN(BaseModel):
         # first order finite difference
         next_vel = self._displacement_fn(next_pos, prev_pos)
         acc = next_vel - prev_vel
-        return {"pos": next_pos}  # , "vel": next_vel, "acc": acc}
+        return {"pos": next_pos, "vel": next_vel, "acc": acc}
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
@@ -357,6 +366,8 @@ class EGNN(BaseModel):
                 layer_num=n,
                 hidden_size=self._hidden_size,
                 output_size=self._hidden_size,
+                displacement_fn=self._displacement_fn,
+                shift_fn=self._shift_fn,
                 act_fn=self._act_fn,
                 residual=self._residual,
                 attention=self._attention,
@@ -382,12 +393,24 @@ class EGNN(BaseModel):
                 y,
             )
 
+        def shift_fn(x, y):
+            return jax.lax.cond(
+                jnp.array(args.metadata["periodic_boundary_conditions"]).any(),
+                lambda x, y: space.periodic(jnp.array(args.box))[1](x, y).astype(dtype),
+                lambda x, y: space.free()[1](x, y).astype(dtype),
+                x,
+                y,
+            )
+
         displacement_fn = jax.vmap(displacement_fn, in_axes=(0, 0))
+        shift_fn = jax.vmap(shift_fn, in_axes=(0, 0))
+
         return cls(
             hidden_size=args.config.latent_dim,
             output_size=1,
             dt=args.metadata["dt"],
             displacement_fn=displacement_fn,
+            shift_fn=shift_fn,
             num_layers=args.config.num_mp_steps,
             n_vels=args.config.input_seq_length - 1,
             residual=True,
