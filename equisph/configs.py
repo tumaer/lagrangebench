@@ -71,7 +71,7 @@ def cli_arguments() -> Dict:
     )
     parser.add_argument(
         "--magnitudes",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="Whether to include velocity magnitudes in node features.",
     )
     parser.add_argument(
