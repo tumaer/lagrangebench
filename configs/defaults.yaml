@@ -13,11 +13,11 @@ latent_dim: 128
 model_dir:
 # SEGNN only parameters
 # Steerable attributes level
-# lmax_attributes: 1
+lmax_attributes: 1
 # Level of the hidden layer
-# lmax_hidden: 1
+lmax_hidden: 1
 # SEGNN normalization. instance, batch, none
-# segnn_norm: instance
+segnn_norm: instance
 
 # Optimization settings
 # Max steps

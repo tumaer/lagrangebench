@@ -46,8 +46,8 @@ class H5Dataset(Dataset):
             self.getter = self.get_trajectory
             self.num_samples = split_valid_traj_into_n * len(self.traj_keys)
         else:
-            perc = perc_train // 100
-            samples_per_traj = self.sequence_length * perc - self.input_seq_length - 1
+            perc_samples = (self.sequence_length * perc_train) // 100
+            samples_per_traj = perc_samples - self.input_seq_length - 1
             keylens = jnp.array([samples_per_traj for _ in range(len(self.traj_keys))])
             self._keylen_cumulative = jnp.cumsum(keylens).tolist()
             self.num_samples = sum(keylens)

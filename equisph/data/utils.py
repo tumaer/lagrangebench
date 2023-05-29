@@ -122,6 +122,9 @@ def setup_data(
     if "TGV" in args.info.dataset_name.upper():
         args.info.has_external_force = False
         external_force_fn = None
+    if "LDC" in args.info.dataset_name.upper():
+        args.info.has_external_force = False
+        external_force_fn = None
     elif "RPF" in args.info.dataset_name:
         args.info.has_external_force = True
         if metadata["dim"] == 2:
