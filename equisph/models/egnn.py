@@ -252,6 +252,7 @@ class EGNN(BaseModel):
         n_vels: int,
         displacement_fn: space.DisplacementFn,
         shift_fn: space.ShiftFn,
+        normalization_stats: Dict[str, jnp.ndarray],
         act_fn: Callable = jax.nn.silu,
         num_layers: int = 4,
         homogeneous_particles: bool = True,
@@ -270,6 +271,7 @@ class EGNN(BaseModel):
             n_vels: Number of velocities in the history.
             displacement_fn: Displacement function for the acceleration computation.
             shift_fn: Shift function for updating positions
+            normalization_stats: Normalization statistics for the input data
             act_fn: Non-linearity
             num_layers: Number of layer for the EGNN
             homogeneous_particles: If all particles are of homogeneous type.
@@ -283,17 +285,23 @@ class EGNN(BaseModel):
                 stability but it may decrease in accuracy. Not used in the paper.
         """
         super().__init__()
+        # network
         self._hidden_size = hidden_size
         self._output_size = output_size
-        self._dt = dt
-        self._displacement_fn = displacement_fn
-        self._shift_fn = shift_fn
         self._act_fn = act_fn
         self._num_layers = num_layers
         self._residual = residual
         self._attention = attention
         self._normalize = normalize
         self._tanh = tanh
+
+        # integrator
+        self._dt = dt / num_layers
+        self._displacement_fn = displacement_fn
+        self._shift_fn = shift_fn
+        self._vel_stats = normalization_stats["velocity"]
+        self._acc_stats = normalization_stats["acceleration"]
+
         # transform
         self._n_vels = n_vels
         self._homogeneous_particles = homogeneous_particles
@@ -313,14 +321,14 @@ class EGNN(BaseModel):
         # force magnitude as node attributes
         props["node_attr"] = None
         if "force" in features:
-            props["node_attr"] = jnp.linalg.norm(
-                features["force"], axis=-1, keepdims=True
+            props["node_attr"] = jnp.sqrt(
+                jnp.sum(features["force"] ** 2, axis=-1, keepdims=True)
             )
 
         # velocity magnitudes as node features
         node_features = jnp.concatenate(
             [
-                jnp.linalg.norm(props["vel"][:, i, :], axis=-1, keepdims=True)
+                jnp.sqrt(jnp.sum(props["vel"][:, i, :] ** 2, axis=-1, keepdims=True))
                 for i in range(self._n_vels)
             ],
             axis=-1,
@@ -349,7 +357,7 @@ class EGNN(BaseModel):
         # first order finite difference
         next_vel = self._displacement_fn(next_pos, prev_pos)
         acc = next_vel - prev_vel
-        return {"pos": next_pos, "vel": next_vel, "acc": acc}
+        return {"acc": acc}
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
@@ -358,7 +366,9 @@ class EGNN(BaseModel):
         # input node embedding
         h = LinearXav(self._hidden_size, name="scalar_emb")(graph.nodes)
         graph = graph._replace(nodes=h)
-        vel = LinearXav(1, name="vel_emb")(props["vel"].transpose(0, 2, 1)).squeeze()
+        prev_vel = props["vel"][:, -1, :]
+        # egnn works with unnormalized velocities
+        prev_vel = prev_vel * self._vel_stats["std"] + self._vel_stats["mean"]
         # message passing
         next_pos = props["pos"].copy()
         for n in range(self._num_layers):
@@ -374,7 +384,7 @@ class EGNN(BaseModel):
                 normalize=self._normalize,
                 dt=self._dt,
                 tanh=self._tanh,
-            )(graph, next_pos, vel, props["edge_attr"], props["node_attr"])
+            )(graph, next_pos, prev_vel, props["edge_attr"], props["node_attr"])
 
         # position finite differencing to get acceleration
         out = self._postprocess(next_pos, props)
@@ -408,9 +418,10 @@ class EGNN(BaseModel):
         return cls(
             hidden_size=args.config.latent_dim,
             output_size=1,
-            dt=args.metadata["dt"],
+            dt=args.metadata["dt"] * args.metadata["write_every"],
             displacement_fn=displacement_fn,
             shift_fn=shift_fn,
+            normalization_stats=args.normalization,
             num_layers=args.config.num_mp_steps,
             n_vels=args.config.input_seq_length - 1,
             residual=True,
