@@ -109,8 +109,8 @@ def update(
     )
 
     # aggregate over the first (batch) dimension of each leave element
-    grads = jax.tree_map(lambda x: x.mean(axis=0), grads)
-    state = jax.tree_map(lambda x: x.mean(axis=0), state)
+    grads = jax.tree_map(lambda x: x.sum(axis=0), grads)
+    state = jax.tree_map(lambda x: x.sum(axis=0), state)
     loss = jax.tree_map(lambda x: x.mean(axis=0), loss)
 
     updates, opt_state = opt_update(grads, opt_state, params)
@@ -248,11 +248,15 @@ def train(
             )
 
             if step % args.config.log_steps == 0:
+                loss.block_until_ready()
                 if args.config.wandb:
                     wandb.log({"train/loss": loss.item()}, step)
                 else:
                     step_str = str(step).zfill(step_digits)
                     print(f"{step_str}, train/loss: {loss.item():.5f}.")
+
+                jax.profiler.stop_trace()
+                exit(0)
 
             if step % args.config.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
