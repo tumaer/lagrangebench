@@ -157,13 +157,13 @@ def cli_arguments() -> Dict:
 
 
 class NestedLoader(yaml.SafeLoader):
-    """Load yaml files with nested includes."""
+    """Load yaml files with nested configs."""
 
     def get_single_data(self):
         parent = {}
         config = super().get_single_data()
-        if "includes" in config and (included := config["includes"]):
-            del config["includes"]
+        if "extends" in config and (included := config["extends"]):
+            del config["extends"]
             with open(os.path.join("configs", included), "r") as f:
                 parent = yaml.load(f, NestedLoader)
         return {**parent, **config}

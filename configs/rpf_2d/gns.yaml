@@ -1,5 +1,4 @@
-# fallback parameters. Relative path from the config/ directory
-includes: defaults.yaml
+extends: rpf_2d/base.yaml
 
 model: gns
 num_mp_steps: 10
@@ -9,18 +8,7 @@ latent_dim: 64
 batch_size: 1
 lr_start: 5.e-4
 lr_decay_steps: 1.e+5
-noise_std: 3.e-5
 pushforward:
   steps: [-1, 100000, 125000, 150000, 175000, 200000]
   unrolls: [0, 1, 2, 3, 4, 5]
   probs: [16, 2, 1, 1, 1, 1]
-
-mode: train
-n_rollout_steps: 20
-eval_n_trajs: 100
-split_valid_traj_into_n: 384
-
-wandb: True
-wandb_project: rpf_2d
-
-data_dir: /home/atoshev/data/2D_RPF_3200_20kevery100

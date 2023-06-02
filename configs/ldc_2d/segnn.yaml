@@ -1,29 +1,18 @@
-# fallback parameters. Relative path from the config/ directory
-includes: defaults.yaml
+extends: ldc_2d/base.yaml
 
 model: segnn
 num_mp_steps: 10
 latent_dim: 64
+
 velocity_aggregate: avg
 segnn_norm: instance
+isotropic_norm: True
 
 batch_size: 1
 lr_start: 5.e-4
 lr_final: 1.e-6
 lr_decay_steps: 1.e+5
-noise_std: 3.e-5
-isotropic_norm: True
 pushforward:
   steps: [-1, 100000, 125000, 150000, 175000, 200000]
   unrolls: [0, 1, 2, 3, 4, 5]
   probs: [16, 2, 1, 1, 1, 1]
-
-mode: train
-n_rollout_steps: 20
-eval_n_trajs: 96
-split_valid_traj_into_n: 192
-
-wandb: True
-wandb_project: ldc_2d
-
-data_dir: /home/atoshev/data/2D_LDC_2500_10kevery100

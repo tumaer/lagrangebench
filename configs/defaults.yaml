@@ -1,3 +1,5 @@
+# Fallback parameters for the config file. These are overwritten by the config file.
+extends:
 # Model settings
 # Model architecture name. gns, segnn, egnn
 model:

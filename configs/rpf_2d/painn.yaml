@@ -1,15 +1,13 @@
 extends: rpf_2d/base.yaml
 
-model: segnn
-num_mp_steps: 10
-latent_dim: 64
-velocity_aggregate: avg
+model: painn
+num_mp_steps: 5
+latent_dim: 128
 
-segnn_norm: instance
 isotropic_norm: True
 
 batch_size: 1
-lr_start: 1.e-3
+lr_start: 1.e-4
 lr_final: 1.e-6
 lr_decay_steps: 1.e+5
 pushforward:
