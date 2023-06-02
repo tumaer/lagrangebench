@@ -38,6 +38,8 @@ class MetricsComputer:
             stride: rollout subsample frequency for sinkhorn
             ot_backend: backend for sinkhorn computation. "ott" or "pot"
         """
+        if active_metrics is None:
+            active_metrics = []
         assert all([hasattr(self, metric) for metric in active_metrics])
         assert ot_backend in ["ott", "pot"]
 

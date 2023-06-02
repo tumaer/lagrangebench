@@ -109,8 +109,8 @@ def update(
     )
 
     # aggregate over the first (batch) dimension of each leave element
-    grads = jax.tree_map(lambda x: x.sum(axis=0), grads)
-    state = jax.tree_map(lambda x: x.sum(axis=0), state)
+    grads = jax.tree_map(lambda x: x.mean(axis=0), grads)
+    state = jax.tree_map(lambda x: x.mean(axis=0), state)
     loss = jax.tree_map(lambda x: x.mean(axis=0), loss)
 
     updates, opt_state = opt_update(grads, opt_state, params)

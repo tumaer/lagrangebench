@@ -18,6 +18,8 @@ lmax_attributes: 1
 lmax_hidden: 1
 # SEGNN normalization. instance, batch, none
 segnn_norm: instance
+# SEGNN velocity aggregation. avg or last
+velocity_aggregate: avg
 
 # Optimization settings
 # Max steps
