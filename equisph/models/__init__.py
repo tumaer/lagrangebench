@@ -3,8 +3,8 @@ from typing import Callable, Tuple, Type
 
 from .egnn import EGNN
 from .gns import GNS
-from .painn import PaiNN
 from .linear import Linear
+from .painn import PaiNN
 from .segnn import SEGNN
 
 __all__ = ["get_model"]

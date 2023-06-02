@@ -3,7 +3,7 @@ extends: ldc_3d/base.yaml
 model: gns
 num_mp_steps: 10
 num_mlp_layers: 1
-latent_dim: 64
+latent_dim: 128
 
 batch_size: 1
 lr_start: 5.e-4

@@ -27,7 +27,7 @@ velocity_aggregate: avg
 # Max steps
 step_max: 2.e+7
 # Batch size
-batch_size: 2
+batch_size: 1
 # Starting learning rate
 lr_start: 1.e-4
 # Final learning rate after decay
