@@ -3,6 +3,7 @@ from typing import Callable, Tuple, Type
 
 from .egnn import EGNN
 from .gns import GNS
+from .painn import PaiNN
 from .linear import Linear
 from .segnn import SEGNN
 
@@ -13,6 +14,7 @@ model_dict = {
     "egnn": EGNN,
     "segnn": SEGNN,
     "linear": Linear,
+    "painn": PaiNN,
 }
 
 
