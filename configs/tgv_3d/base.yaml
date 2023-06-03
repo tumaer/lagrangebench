@@ -1,4 +1,3 @@
-# fallback parameters. Relative path from the config/ directory
 extends: defaults.yaml
 
 noise_std: 1.e-4
@@ -8,7 +7,7 @@ n_rollout_steps: 20
 eval_n_trajs: 10
 split_valid_traj_into_n: 1
 
-wandb: False
+wandb: True
 wandb_project: tgv_3d
 
 data_dir: /home/atoshev/data/3D_TGV_8000_10kevery100
