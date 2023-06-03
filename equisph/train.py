@@ -255,9 +255,6 @@ def train(
                     step_str = str(step).zfill(step_digits)
                     print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
-                jax.profiler.stop_trace()
-                exit(0)
-
             if step % args.config.eval_steps == 0 and step > 0:
                 nbrs = broadcast_from_batch(neighbors_batch, index=0)
                 eval_metrics, nbrs = eval_rollout(
