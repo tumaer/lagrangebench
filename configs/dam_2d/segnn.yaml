@@ -1,4 +1,4 @@
-extends: tgv_2d/base.yaml
+extends: dam_2d/base.yaml
 
 model: segnn
 num_mp_steps: 10
