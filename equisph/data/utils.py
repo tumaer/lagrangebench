@@ -1,5 +1,6 @@
 import json
 import os
+import os.path as osp
 import warnings
 from argparse import Namespace
 from typing import Callable, Dict, List, Tuple
@@ -58,15 +59,15 @@ def numpy_collate(batch) -> np.ndarray:
 def setup_data(
     args: Namespace, seed_worker, generator
 ) -> Tuple[Dict, DataLoader, DataLoader, Callable]:
-    if not os.path.isabs(args.config.data_dir):
-        args.config.data_dir = os.path.join(os.getcwd(), args.config.data_dir)
+    if not osp.isabs(args.config.data_dir):
+        args.config.data_dir = osp.join(os.getcwd(), args.config.data_dir)
 
-    args.info.dataset_name = os.path.basename(args.config.data_dir.split("/")[-1])
+    args.info.dataset_name = osp.basename(args.config.data_dir.split("/")[-1]).upper()
     if args.config.ckp_dir is not None:
         os.makedirs(args.config.ckp_dir, exist_ok=True)
     if args.config.rollout_dir is not None:
         os.makedirs(args.config.rollout_dir, exist_ok=True)
-    with open(os.path.join(args.config.data_dir, "metadata.json"), "r") as f:
+    with open(osp.join(args.config.data_dir, "metadata.json"), "r") as f:
         metadata = json.loads(f.read())
 
     # dataloader
@@ -119,13 +120,7 @@ def setup_data(
             data_eval.subsequence_length - args.config.input_seq_length
         )
 
-    if "TGV" in args.info.dataset_name.upper():
-        args.info.has_external_force = False
-        external_force_fn = None
-    if "LDC" in args.info.dataset_name.upper():
-        args.info.has_external_force = False
-        external_force_fn = None
-    elif "RPF" in args.info.dataset_name:
+    if "RPF" in args.info.dataset_name:
         args.info.has_external_force = True
         if metadata["dim"] == 2:
 
@@ -144,8 +139,7 @@ def setup_data(
                     jnp.array([-1.0, 0.0, 0.0]),
                     jnp.array([1.0, 0.0, 0.0]),
                 )
-
-    elif "Hook" in args.info.dataset_name:
+    else:
         args.info.has_external_force = False
         external_force_fn = None
 
