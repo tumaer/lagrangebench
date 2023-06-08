@@ -10,14 +10,14 @@ import jax.numpy as jnp
 import jax_md.partition as partition
 import jraph
 import optax
+import wandb
 import yaml
 from jax import vmap
 from torch.utils.data import DataLoader
 
-import wandb
-from equisph.case_setup import CaseSetupFn, get_kinematic_mask
-from equisph.evaluate import MetricsComputer, averaged_metrics, eval_rollout
-from equisph.utils import (
+from lagrangebench.case_setup import CaseSetupFn, get_kinematic_mask
+from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout
+from lagrangebench.utils import (
     LossWeights,
     broadcast_from_batch,
     broadcast_to_batch,
@@ -155,7 +155,7 @@ def train(
     if args.config.wandb:
         wandb.init(
             project=args.config.wandb_project,
-            entity="segnn-sph",
+            entity=args.config.wandb_entity,
             name=args.info.run_name,
             config=args_dict,
             save_code=True,

@@ -10,9 +10,13 @@ import jax.numpy as jnp
 import jax_md.partition as partition
 from torch.utils.data import DataLoader
 
-from equisph.case_setup import CaseSetupFn, get_kinematic_mask
-from equisph.evaluate.metrics import MetricsComputer, MetricsDict, averaged_metrics
-from equisph.utils import broadcast_from_batch, write_vtk
+from lagrangebench.case_setup import CaseSetupFn, get_kinematic_mask
+from lagrangebench.evaluate.metrics import (
+    MetricsComputer,
+    MetricsDict,
+    averaged_metrics,
+)
+from lagrangebench.utils import broadcast_from_batch, write_vtk
 
 
 def eval_single_rollout(

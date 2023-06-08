@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
 
-from equisph.case_setup.features import NodeType
+from lagrangebench.case_setup.features import NodeType
 
 
 class NodeFeatures(NamedTuple):

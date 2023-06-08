@@ -9,7 +9,7 @@ import jraph
 from jax.tree_util import Partial
 from jax_md import space
 
-from equisph.case_setup.features import NodeType
+from lagrangebench.case_setup.features import NodeType
 
 from .base import BaseModel
 

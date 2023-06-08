@@ -13,7 +13,7 @@ from e3nn_jax import Irreps, IrrepsArray
 from e3nn_jax._src.tensor_products import naive_broadcast_decorator
 from jax.tree_util import Partial, tree_map
 
-from equisph.case_setup import NodeType
+from lagrangebench.case_setup import NodeType
 
 from .base import BaseModel
 from .utils import SteerableGraphsTuple, features_2d_to_3d, node_irreps

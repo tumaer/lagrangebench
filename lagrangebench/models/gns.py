@@ -5,7 +5,7 @@ import haiku as hk
 import jax.numpy as jnp
 import jraph
 
-from equisph.case_setup.features import NodeType
+from lagrangebench.case_setup.features import NodeType
 
 from .base import BaseModel
 from .utils import build_mlp

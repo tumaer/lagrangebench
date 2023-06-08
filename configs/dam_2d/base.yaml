@@ -7,7 +7,6 @@ n_rollout_steps: 20
 eval_n_trajs: 50
 split_valid_traj_into_n: 15
 
-wandb: True
 wandb_project: dam_2d
 
-data_dir: /home/atoshev/data/2D_DB_5740_20kevery100
+data_dir: data/2D_DB_5740_20kevery100

@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "equisph"
+name = "lagrangebench"
 version = "0.1.0"
-description = "Learning Lagrangian Fluid Mechanics with E(3)-Equivariant Graph Neural Networks"
+description = "LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite"
 authors = ["Artur Toshev <artur.toshev@tum.de>", "Gianluca Galletti <g.galletti@tum.de"]
 license = "MIT"
 readme = "README.md"

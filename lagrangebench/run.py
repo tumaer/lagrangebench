@@ -3,11 +3,11 @@ import jax
 import jmp
 import numpy as np
 
-from equisph.case_setup import case_builder
-from equisph.data import get_dataset_stats, setup_data
-from equisph.evaluate import MetricsComputer
-from equisph.models import get_model
-from equisph.utils import get_num_params, load_haiku, set_seed
+from lagrangebench.case_setup import case_builder
+from lagrangebench.data import get_dataset_stats, setup_data
+from lagrangebench.evaluate import MetricsComputer
+from lagrangebench.models import get_model
+from lagrangebench.utils import get_num_params, load_haiku, set_seed
 
 
 def train_or_infer(args):
@@ -73,7 +73,7 @@ def train_or_infer(args):
     )
 
     if args.config.mode == "train":
-        from equisph.train import train
+        from lagrangebench.train import train
 
         train(
             model,
@@ -87,7 +87,7 @@ def train_or_infer(args):
             args,
         )
     elif args.config.mode == "infer":
-        from equisph.evaluate import infer
+        from lagrangebench.evaluate import infer
 
         infer(
             model,
