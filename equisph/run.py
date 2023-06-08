@@ -40,7 +40,7 @@ def train_or_infer(args):
     args.info.homogeneous_particles = particle_type.max() == particle_type.min()
     # setup model from configs
     model, MODEL = get_model(args)
-    # transform core simulator outputting accelerations.
+    # transform core simulator
     model = hk.without_apply_rng(hk.transform_with_state(model))
 
     # mixed precision training based on this reference:

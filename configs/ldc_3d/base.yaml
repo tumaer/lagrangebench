@@ -1,0 +1,13 @@
+extends: defaults.yaml
+
+noise_std: 1.e-4
+
+mode: train
+n_rollout_steps: 20
+eval_n_trajs: 10
+split_valid_traj_into_n: 192
+
+wandb: True
+wandb_project: ldc_3d
+
+data_dir: /home/atoshev/data/3D_LDC_8160_10kevery100

@@ -36,7 +36,7 @@ class H5Dataset(Dataset):
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())
 
-            self.sequence_length = f["0000/position"].shape[0]
+            self.sequence_length = f["00000/position"].shape[0]
 
         # subsequence is used to split one long validation trajectory into multiple
         self.subsequence_length = self.sequence_length // split_valid_traj_into_n
@@ -53,7 +53,10 @@ class H5Dataset(Dataset):
             self.getter = self.get_window
 
     def open_hdf5(self) -> h5py.File:
-        return h5py.File(self.file_path, "r")
+        if self.db_hdf5 is None:
+            return h5py.File(self.file_path, "r")
+        else:
+            return self.db_hdf5
 
     def get_trajectory(self, idx: int):
         # open the database file

@@ -1,7 +1,7 @@
 import warnings
 from collections import defaultdict
 from functools import partial
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 import jax
 import jax.numpy as jnp
@@ -13,13 +13,7 @@ MetricsDict = Dict[str, Dict[str, jnp.ndarray]]
 
 
 class MetricsComputer:
-    """Metrics between predicted and target rollouts.
-    Args:
-        active_metrics: list of metrics to compute
-        dist: distance function
-        metadata: metadata of the dataset
-        stride: stride for computing metrics
-    """
+    """Metrics between predicted and target rollouts."""
 
     METRICS = ["mse", "mae", "sinkhorn", "e_kin"]
 
@@ -30,15 +24,37 @@ class MetricsComputer:
         metadata: Dict,
         input_seq_length: int,
         stride: int = 10,
+        loss_ranges: Optional[List] = None,
+        ot_backend: str = "pot",
     ):
+        """Init the metric computer.
+
+        Args:
+            active_metrics: list of metrics to compute
+            dist: distance function
+            metadata: metadata of the dataset
+            loss_ranges: list of horizon lengths to compute the loss for
+            input_seq_length: length of the input sequence
+            stride: rollout subsample frequency for sinkhorn
+            ot_backend: backend for sinkhorn computation. "ott" or "pot"
+        """
+        if active_metrics is None:
+            active_metrics = []
         assert all([hasattr(self, metric) for metric in active_metrics])
+        assert ot_backend in ["ott", "pot"]
+
         self._active_metrics = active_metrics
         self._dist = dist
         self._dist_vmap = jax.vmap(dist, in_axes=(0, 0))
         self._dist_dvmap = jax.vmap(self._dist_vmap, in_axes=(0, 0))
+
+        if loss_ranges is None:
+            loss_ranges = [5, 10, 20, 50, 100]
+        self._loss_ranges = loss_ranges
         self._input_seq_length = input_seq_length
         self._stride = stride
         self._metadata = metadata
+        self.ot_backend = ot_backend
 
     def __call__(
         self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray
@@ -56,11 +72,12 @@ class MetricsComputer:
                         pred_rollout, target_rollout
                     )
                     # shorter horizon losses
-                    for span in [5, 10, 20, 50, 100]:
-                        metrics[metric_name + str(span)] = metrics[metric_name][:span]
+                    for i in self._loss_ranges:
+                        if i < metrics[metric_name].shape[0]:
+                            metrics[f"{metric_name}{i}"] = metrics[metric_name][:i]
 
                 elif metric_name in ["e_kin"]:
-                    dt = self._metadata["dt"]
+                    dt = self._metadata["dt"] * self._metadata["write_every"]
                     dx = self._metadata["dx"]
                     dim = self._metadata["dim"]
 
@@ -72,6 +89,7 @@ class MetricsComputer:
                         pred_rollout[0 : -1 : self._stride],
                     )
                     e_kin_pred = metric_dvmap(velocity_rollout / dt).sum(1)
+                    e_kin_pred = e_kin_pred * dx**dim
 
                     # Ekin of target rollout
                     velocity_rollout = self._dist_dvmap(
@@ -79,22 +97,24 @@ class MetricsComputer:
                         target_rollout[0 : -1 : self._stride],
                     )
                     e_kin_target = metric_dvmap(velocity_rollout / dt).sum(1)
+                    e_kin_target = e_kin_target * dx**dim
 
                     metrics[metric_name] = {
-                        "predicted": e_kin_pred * dx**dim,
-                        "target": e_kin_target * dx**dim,
+                        "predicted": e_kin_pred,
+                        "target": e_kin_target,
+                        "mse": ((e_kin_pred - e_kin_target) ** 2).mean(),
                     }
 
                 elif metric_name == "sinkhorn":
                     # vmapping over distance matrix blows up
                     metrics[metric_name] = jax.lax.scan(
-                        lambda _, x: (None, self.sinkhorn_ott(*x)),
+                        lambda _, x: (None, self.sinkhorn(*x)),
                         None,
                         (
                             pred_rollout[0 : -1 : self._stride],
                             target_rollout[0 : -1 : self._stride],
                         ),
-                    )
+                    )[1]
         return metrics
 
     @partial(jax.jit, static_argnums=(0,))
@@ -106,7 +126,18 @@ class MetricsComputer:
         return (jnp.abs(self._dist_vmap(pred, target))).mean()
 
     @partial(jax.jit, static_argnums=(0,))
-    def sinkhorn_ott(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:
+    def sinkhorn(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:
+        if self.ot_backend == "ott":
+            return self._sinkhorn_ott(pred, target)
+        else:
+            return self._sinkhorn_pot(pred, target)
+
+    @partial(jax.jit, static_argnums=(0,))
+    def e_kin(self, frame: jnp.ndarray) -> float:
+        """Computes the kinetic energy of a frame"""
+        return jnp.sum(frame**2)  # * dx ** 3
+
+    def _sinkhorn_ott(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:
         # pairwise distances as cost
         loss_matrix_xy = self._distance_matrix(pred, target)
         loss_matrix_xx = self._distance_matrix(pred, pred)
@@ -122,9 +153,8 @@ class MetricsComputer:
             sinkhorn_kwargs={"threshold": 1e-4},
         ).divergence
 
-    @partial(jax.jit, static_argnums=(0,))
-    def sinkhorn_pot(self, pred: jnp.ndarray, target: jnp.ndarray):
-        """Jax-compatible POT implementation of Sinkorn. Version used in the paper."""
+    def _sinkhorn_pot(self, pred: jnp.ndarray, target: jnp.ndarray):
+        """Jax-compatible POT implementation of Sinkorn."""
         # equivalent to empirical_sinkhorn_divergence with custom distance computation
         sinkhorn_ab = self._custom_empirical_sinkorn_pot(pred, target)
         sinkhorn_a = self._custom_empirical_sinkorn_pot(pred, pred)
@@ -134,7 +164,6 @@ class MetricsComputer:
             dtype=jnp.float32,
         )
 
-    @partial(jax.jit, static_argnums=(0,))
     def _custom_empirical_sinkorn_pot(self, pred: jnp.ndarray, target: jnp.ndarray):
         from ot.bregman import sinkhorn2
 
@@ -178,11 +207,6 @@ class MetricsComputer:
             jax.vmap(lambda a: jax.vmap(lambda b: dist(a, b))(y))(x), dtype=jnp.float32
         )
 
-    @partial(jax.jit, static_argnums=(0,))
-    def e_kin(self, frame: jnp.ndarray) -> float:
-        """Computes the kinetic energy of a frame"""
-        return jnp.sum(frame**2)  # * dx ** 3
-
 
 def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
     """Averages the metrics over the rollouts."""
@@ -191,7 +215,7 @@ def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
     for rollout in eval_metrics.values():
         for k, v in rollout.items():
             if k == "e_kin":
-                continue
+                v = v["mse"]
             if k in ["mse", "mae"]:
                 k = "loss"
             trajectory_averages[k].append(jnp.mean(v).item())

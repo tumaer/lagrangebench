@@ -3,22 +3,24 @@ from typing import Callable, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import jit, lax, random, vmap
-from jax_md import partition, space
+from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
+from jax_md.partition import NeighborList, NeighborListFormat
 
 from .features import FeatureDict, TargetDict, add_gns_noise, physical_feature_builder
+from .partition import neighbor_list
 
-TrainCaseOut = Tuple[random.KeyArray, FeatureDict, TargetDict, partition.NeighborList]
-EvalCaseOut = Tuple[FeatureDict, partition.NeighborList]
+TrainCaseOut = Tuple[random.KeyArray, FeatureDict, TargetDict, NeighborList]
+EvalCaseOut = Tuple[FeatureDict, NeighborList]
 SampleIn = Tuple[jnp.ndarray, jnp.ndarray]
 
 AllocateFn = Callable[[random.KeyArray, SampleIn, float, int], TrainCaseOut]
 AllocateEvalFn = Callable[[SampleIn], EvalCaseOut]
 
 PreprocessFn = Callable[
-    [random.KeyArray, SampleIn, float, partition.NeighborList, int], TrainCaseOut
+    [random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut
 ]
-PreprocessEvalFn = Callable[[SampleIn, partition.NeighborList], EvalCaseOut]
+PreprocessEvalFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
 IntegrateFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
@@ -57,13 +59,14 @@ def case_builder(args: Namespace, external_force_fn: Callable):
 
     displacement_fn_set = vmap(displacement_fn, in_axes=(0, 0))
 
-    neighbor_fn = partition.neighbor_list(
+    neighbor_fn = neighbor_list(
         displacement_fn,
         jnp.array(args.box),
+        backend=args.config.neighbor_list_backend,
         r_cutoff=args.metadata["default_connectivity_radius"],
-        capacity_multiplier=1.25,
+        capacity_multiplier=args.config.neighbor_list_capacity_multiplier,
         mask_self=False,
-        format=partition.Sparse,
+        format=NeighborListFormat.Sparse,
     )
 
     feature_transform = physical_feature_builder(
@@ -92,12 +95,15 @@ def case_builder(args: Namespace, external_force_fn: Callable):
 
         vel_stats = normalization_stats["velocity"]
         normalized_velocity = (next_velocity - vel_stats["mean"]) / vel_stats["std"]
-
-        return {"acc": normalized_acceleration, "vel": normalized_velocity}
+        return {
+            "acc": normalized_acceleration,
+            "vel": normalized_velocity,
+            "pos": pos_input[:, -1],
+        }
 
     def _preprocess(
         sample: Tuple[jnp.ndarray, jnp.ndarray],
-        neighbors: Optional[partition.NeighborList] = None,
+        neighbors: Optional[NeighborList] = None,
         is_allocate: bool = False,
         mode: str = "train",
         **kwargs,  # key, noise_std
@@ -159,25 +165,36 @@ def case_builder(args: Namespace, external_force_fn: Callable):
         return _preprocess(sample, neighbors, mode="eval")
 
     @jit
-    def integrate_fn(normalized_acceleration, position_sequence):
+    def integrate_fn(normalized_in, position_sequence):
         """Euler integrator to get position shift."""
 
-        # invert normalization.
-        acceleration_stats = normalization_stats["acceleration"]
-        acceleration = acceleration_stats["mean"] + (
-            normalized_acceleration * acceleration_stats["std"]
-        )
+        assert any([key in normalized_in for key in ["pos", "vel", "acc"]])
 
-        # Euler integrator to go from acceleration to position, assuming a dt=1.
-        most_recent_position = position_sequence[:, -1]
-        most_recent_velocity = displacement_fn_set(
-            most_recent_position, position_sequence[:, -2]
-        )
+        if "pos" in normalized_in:
+            # Zeroth euler step
+            return normalized_in["pos"]
+        else:
+            most_recent_position = position_sequence[:, -1]
+            if "vel" in normalized_in:
+                # invert normalization
+                velocity_stats = normalization_stats["velocity"]
+                new_velocity = velocity_stats["mean"] + (
+                    normalized_in["vel"] * velocity_stats["std"]
+                )
+            elif "acc" in normalized_in:
+                # invert normalization.
+                acceleration_stats = normalization_stats["acceleration"]
+                acceleration = acceleration_stats["mean"] + (
+                    normalized_in["acc"] * acceleration_stats["std"]
+                )
+                # Second Euler step
+                most_recent_velocity = displacement_fn_set(
+                    most_recent_position, position_sequence[:, -2]
+                )
+                new_velocity = most_recent_velocity + acceleration  # * dt = 1
 
-        new_velocity = most_recent_velocity + acceleration  # * dt = 1
-        # jax-md shift function takes case of PBC
-        new_position = shift_fn(most_recent_position, new_velocity)
-        return new_position
+            # First Euler step
+            return shift_fn(most_recent_position, new_velocity)
 
     return CaseSetupFn(
         allocate_fn,

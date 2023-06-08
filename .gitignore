@@ -4,6 +4,9 @@ rollout
 wandb
 *.out
 datasets
+baselines
+partition_*
+*.pkl
 # dev
 .vscode
 __pycache__
@@ -11,3 +14,5 @@ __pycache__
 venv
 *.egg-info
 .ruff-cache
+rollouts
+profile

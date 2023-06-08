@@ -18,6 +18,7 @@ import wandb
 from equisph.case_setup import CaseSetupFn, get_kinematic_mask
 from equisph.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from equisph.utils import (
+    LossWeights,
     broadcast_from_batch,
     broadcast_to_batch,
     load_haiku,
@@ -47,8 +48,8 @@ def push_forward_build(model_apply, case):
     @jax.jit
     def push_forward(features, current_pos, particle_type, neighbors, params, state):
         # no buffer overflow check here, since push forward acts on later epochs
-        normalized_acc, _ = model_apply(params, state, (features, particle_type))
-        next_pos = case.integrate(normalized_acc, current_pos)
+        pred, _ = model_apply(params, state, (features, particle_type))
+        next_pos = case.integrate(pred, current_pos)
         current_pos = jnp.concatenate(
             [current_pos[:, 1:], next_pos[:, None, :]], axis=1
         )
@@ -61,7 +62,7 @@ def push_forward_build(model_apply, case):
     return push_forward
 
 
-@partial(jax.jit, static_argnames=["model_fn"])
+@partial(jax.jit, static_argnames=["model_fn", "loss_weight"])
 def mse(
     params: hk.Params,
     state: hk.State,
@@ -69,17 +70,24 @@ def mse(
     particle_type: jnp.ndarray,
     target: jnp.ndarray,
     model_fn: Callable,
+    loss_weight: LossWeights,
 ):
     pred, state = model_fn(params, state, (features, particle_type))
-    assert target.shape == pred.shape
+    # check active (non zero) output shapes
+    keys = list(set(loss_weight.nonzero) & set(pred.keys()))
+    assert all(target[k].shape == pred[k].shape for k in keys)
+    # particle mask
     non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
     num_non_kinematic = non_kinematic_mask.sum()
+    # loss components
+    losses = []
+    for t in keys:
+        losses.append((loss_weight[t] * (pred[t] - target[t]) ** 2).sum(axis=-1))
+    total_loss = jnp.array(losses).sum(0)
+    total_loss = jnp.where(non_kinematic_mask, total_loss, 0)
+    total_loss = total_loss.sum() / num_non_kinematic
 
-    loss = ((pred - target) ** 2).sum(axis=-1)
-    loss = jnp.where(non_kinematic_mask, loss, 0)
-    loss = loss.sum() / num_non_kinematic
-
-    return loss, state
+    return total_loss, state
 
 
 @partial(jax.jit, static_argnames=["loss_fn", "opt_update"])
@@ -147,7 +155,7 @@ def train(
     if args.config.wandb:
         wandb.init(
             project=args.config.wandb_project,
-            entity="equivariant-sph",
+            entity="segnn-sph",
             name=args.info.run_name,
             config=args_dict,
             save_code=True,
@@ -164,7 +172,12 @@ def train(
     # Precompile model for evaluation
     model_apply = jax.jit(model.apply)
     # loss and update functions
-    loss_fn = partial(mse, model_fn=model_apply)
+    loss_weight = (
+        LossWeights(**args.config.loss_weight)
+        if hasattr(args.config, "loss_weight") and args.config.loss_weight is not None
+        else LossWeights(**{})
+    )
+    loss_fn = partial(mse, model_fn=model_apply, loss_weight=loss_weight)
     update_fn = partial(update, loss_fn=loss_fn, opt_update=opt_update)
 
     # continue training from checkpoint or initialize optimizer state
@@ -229,12 +242,13 @@ def train(
                 params=params,
                 state=state,
                 features_batch=features_batch,
-                target_batch=target_batch["acc"],
+                target_batch=target_batch,
                 particle_type_batch=raw_batch[1],
                 opt_state=opt_state,
             )
 
             if step % args.config.log_steps == 0:
+                loss.block_until_ready()
                 if args.config.wandb:
                     wandb.log({"train/loss": loss.item()}, step)
                 else:

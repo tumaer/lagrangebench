@@ -1,9 +1,10 @@
-# fallback parameters. Relative path from the config/ directory
-includes: defaults.yaml
+extends: ldc_3d/base.yaml
 
 model: segnn
 num_mp_steps: 10
 latent_dim: 64
+
+segnn_norm: none
 
 batch_size: 1
 lr_start: 5.e-4
@@ -14,13 +15,3 @@ pushforward:
   steps: [-1, 100000, 125000, 150000, 175000, 200000]
   unrolls: [0, 1, 2, 3, 4, 5]
   probs: [16, 2, 1, 1, 1, 1]
-
-segnn_norm: none
-
-mode: train
-eval_n_trajs: 10
-
-wandb: False
-wandb_project: tgv10
-
-data_dir: datasets/TGV1k100every10
