@@ -4,6 +4,9 @@ rollout
 wandb
 *.out
 datasets
+baselines
+partition_*
+*.pkl
 # dev
 .vscode
 __pycache__

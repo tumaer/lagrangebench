@@ -91,7 +91,6 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--rollout_dir", type=str, required=False, help="Directory to write rollouts."
     )
-    parser.add_argument("--perc_train", type=int, default=100)
 
     # segnn-specific arguments
     parser.add_argument(

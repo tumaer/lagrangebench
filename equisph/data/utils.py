@@ -62,7 +62,7 @@ def setup_data(
     if not osp.isabs(args.config.data_dir):
         args.config.data_dir = osp.join(os.getcwd(), args.config.data_dir)
 
-    args.info.dataset_name = osp.basename(args.config.data_dir.split("/")[-1]).upper()
+    args.info.dataset_name = osp.basename(args.config.data_dir.split("/")[-1])
     if args.config.ckp_dir is not None:
         os.makedirs(args.config.ckp_dir, exist_ok=True)
     if args.config.rollout_dir is not None:
@@ -75,7 +75,6 @@ def setup_data(
     data_train = H5Dataset(
         args.config.data_dir,
         "train",
-        args.config.perc_train,
         train_seq_l,
         is_rollout=False,
     )
@@ -120,7 +119,7 @@ def setup_data(
             data_eval.subsequence_length - args.config.input_seq_length
         )
 
-    if "RPF" in args.info.dataset_name:
+    if "RPF" in args.info.dataset_name.upper():
         args.info.has_external_force = True
         if metadata["dim"] == 2:
 
@@ -139,6 +138,7 @@ def setup_data(
                     jnp.array([-1.0, 0.0, 0.0]),
                     jnp.array([1.0, 0.0, 0.0]),
                 )
+
     else:
         args.info.has_external_force = False
         external_force_fn = None

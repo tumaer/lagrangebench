@@ -77,7 +77,7 @@ class MetricsComputer:
                             metrics[f"{metric_name}{i}"] = metrics[metric_name][:i]
 
                 elif metric_name in ["e_kin"]:
-                    dt = self._metadata["dt"]
+                    dt = self._metadata["dt"] * self._metadata["write_every"]
                     dx = self._metadata["dx"]
                     dim = self._metadata["dim"]
 
@@ -89,6 +89,7 @@ class MetricsComputer:
                         pred_rollout[0 : -1 : self._stride],
                     )
                     e_kin_pred = metric_dvmap(velocity_rollout / dt).sum(1)
+                    e_kin_pred = e_kin_pred * dx**dim
 
                     # Ekin of target rollout
                     velocity_rollout = self._dist_dvmap(
@@ -96,10 +97,12 @@ class MetricsComputer:
                         target_rollout[0 : -1 : self._stride],
                     )
                     e_kin_target = metric_dvmap(velocity_rollout / dt).sum(1)
+                    e_kin_target = e_kin_target * dx**dim
 
                     metrics[metric_name] = {
-                        "predicted": e_kin_pred * dx**dim,
-                        "target": e_kin_target * dx**dim,
+                        "predicted": e_kin_pred,
+                        "target": e_kin_target,
+                        "mse": ((e_kin_pred - e_kin_target) ** 2).mean(),
                     }
 
                 elif metric_name == "sinkhorn":
@@ -212,7 +215,7 @@ def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
     for rollout in eval_metrics.values():
         for k, v in rollout.items():
             if k == "e_kin":
-                continue
+                v = v["mse"]
             if k in ["mse", "mae"]:
                 k = "loss"
             trajectory_averages[k].append(jnp.mean(v).item())

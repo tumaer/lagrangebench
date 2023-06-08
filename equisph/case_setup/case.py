@@ -61,7 +61,7 @@ def case_builder(args: Namespace, external_force_fn: Callable):
         displacement_fn,
         jnp.array(args.box),
         r_cutoff=args.metadata["default_connectivity_radius"],
-        capacity_multiplier=1.25,
+        capacity_multiplier=2.0,
         mask_self=False,
         format=partition.Sparse,
     )
