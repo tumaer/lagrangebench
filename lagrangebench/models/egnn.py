@@ -357,7 +357,7 @@ class EGNN(BaseModel):
         # first order finite difference
         next_vel = self._displacement_fn(next_pos, prev_pos)
         acc = next_vel - prev_vel
-        return {"acc": acc}
+        return {"pos": next_pos, "vel": next_vel, "acc": acc}
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]

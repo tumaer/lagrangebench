@@ -9,4 +9,5 @@ split_valid_traj_into_n: 192
 
 wandb_project: ldc_2d
 
-data_dir: /home/atoshev/data/2D_LDC_2500_10kevery100
+neighbor_list_capacity_multiplier: 1.5
+data_dir: data/2D_LDC_2500_10kevery100

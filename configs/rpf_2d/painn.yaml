@@ -14,3 +14,5 @@ pushforward:
   steps: [-1, 100000, 125000, 150000, 175000, 200000]
   unrolls: [0, 1, 2, 3, 4, 5]
   probs: [16, 2, 1, 1, 1, 1]
+
+magnitudes: True
