@@ -3,6 +3,7 @@ import os
 
 import h5py
 import jax.numpy as jnp
+import numpy as np
 from torch.utils.data import Dataset
 
 
@@ -16,6 +17,8 @@ class H5Dataset(Dataset):
         input_seq_length: int = 6,
         split_valid_traj_into_n: int = 1,
         is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
+        num_particles_max=10,
     ):
         """
         Reference on parallel loading of h5 samples see:
@@ -30,6 +33,8 @@ class H5Dataset(Dataset):
         self.file_path = os.path.join(dataset_path, split + ".h5")
         self.input_seq_length = input_seq_length
         self.split_valid_traj_into_n = split_valid_traj_into_n
+        self.nl_backend = nl_backend
+        self.num_particles_max = num_particles_max
 
         self.db_hdf5 = None
 
@@ -58,6 +63,19 @@ class H5Dataset(Dataset):
         else:
             return self.db_hdf5
 
+    def matscipy_pad(self, pos_input, particle_type):
+        padding_size = self.num_particles_max - pos_input.shape[0] + 1
+        pos_input = np.pad(
+            pos_input,
+            ((0, padding_size), (0, 0), (0, 0)),
+            mode="constant",
+            constant_values=self.num_particles_max,
+        )
+        particle_type = np.pad(
+            particle_type, (0, padding_size), mode="constant", constant_values=9
+        )
+        return pos_input, particle_type
+
     def get_trajectory(self, idx: int):
         # open the database file
         self.db_hdf5 = self.open_hdf5()
@@ -79,6 +97,9 @@ class H5Dataset(Dataset):
         pos_input = traj_pos[slice_from:slice_to].transpose((1, 0, 2))
 
         particle_type = traj["particle_type"][:]
+
+        if self.nl_backend == "matscipy":
+            pos_input, particle_type = self.matscipy_pad(pos_input, particle_type)
 
         return pos_input, particle_type
 
@@ -103,6 +124,11 @@ class H5Dataset(Dataset):
         pos_input_and_target = pos_input_and_target.transpose((1, 0, 2))
 
         particle_type = traj["particle_type"][:]
+
+        if self.nl_backend == "matscipy":
+            pos_input_and_target, particle_type = self.matscipy_pad(
+                pos_input_and_target, particle_type
+            )
 
         return pos_input_and_target, particle_type
 

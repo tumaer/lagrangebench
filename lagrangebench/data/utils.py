@@ -77,6 +77,8 @@ def setup_data(
         "train",
         train_seq_l,
         is_rollout=False,
+        nl_backend=args.config.neighbor_list_backend,
+        num_particles_max=metadata["num_particles_max"],
     )
     loader_train = DataLoader(
         dataset=data_train,
@@ -94,6 +96,8 @@ def setup_data(
         input_seq_length=args.config.input_seq_length,
         split_valid_traj_into_n=args.config.split_valid_traj_into_n,
         is_rollout=True,
+        nl_backend=args.config.neighbor_list_backend,
+        num_particles_max=metadata["num_particles_max"],
     )
     loader_eval = DataLoader(
         dataset=data_eval,

@@ -1,8 +1,10 @@
 from functools import partial
 from typing import Optional
 
+import jax
 import jax.lax as lax
 import jax.numpy as jnp
+import numpy as np
 import numpy as onp
 from jax import jit
 from jax_md import space
@@ -324,7 +326,7 @@ def _scan_neighbor_list(
     return NeighborListFns(allocate_fn, update_fn)  # pytype: disable=wrong-arg-count
 
 
-def _mat_scipy_neighbor_list(
+def _matscipy_neighbor_list(
     displacement_or_metric: space.DisplacementOrMetricFn,
     box_size: space.Box,
     r_cutoff: float,
@@ -337,13 +339,100 @@ def _mat_scipy_neighbor_list(
     format: NeighborListFormat = NeighborListFormat.Dense,
     **static_kwargs,
 ) -> NeighborFn:
-    raise NotImplementedError
+    pbc = static_kwargs["pbc"]
+    num_particles_max = static_kwargs["num_particles_max"]
+
+    from matscipy.neighbours import neighbour_list as matscipy_nl
+
+    assert box_size.ndim == 1 and (len(box_size) in [2, 3])
+    if len(box_size) == 2:
+        box_size = np.pad(box_size, (0, 1), mode="constant", constant_values=1.0)
+        box_size = np.eye(3) * box_size
+    if len(pbc) == 2:
+        pbc = np.pad(pbc, (0, 1), mode="constant", constant_values=False)
+
+    def matscipy_wrapper(positions, idx):
+        res = matscipy_nl(
+            "ij", cutoff=r_cutoff, positions=positions, cell=box_size, pbc=True
+        )
+
+        # buffer overflow
+        buffer_overflow = (
+            jnp.array(True) if res.shape[1] > idx.shape[1] else jnp.array(False)
+        )
+
+        # edge list
+        idx_new = jnp.ones_like(idx) * num_particles_max
+        idx_new = idx_new.at[:, : res.shape[0]].set(res)
+
+        return idx_new, buffer_overflow
+
+    @jax.jit
+    def update_fn(
+        position: jnp.ndarray, neighbors: NeighborList, **kwargs
+    ) -> NeighborList:
+        if position.shape[1] == 2:
+            position = np.pad(
+                position, ((0, 0), (0, 1)), mode="constant", constant_values=0.5
+            )
+
+        shape_edgelist = jax.ShapeDtypeStruct(
+            neighbors.idx.shape, dtype=neighbors.idx.dtype
+        )
+        shape_overflow = jax.ShapeDtypeStruct((), dtype=bool)
+        shape = (shape_edgelist, shape_overflow)
+        idx, buffer_overflow = jax.pure_callback(
+            matscipy_wrapper, shape, position, neighbors.idx
+        )
+
+        return NeighborList(
+            idx,
+            position,
+            buffer_overflow,
+            None,
+            None,
+            None,
+            update_fn,
+        )
+
+    def allocate_fn(
+        position: jnp.ndarray, extra_capacity: int = 0, **kwargs
+    ) -> NeighborList:
+        num_particles = int(position[-1, 0])
+        position = position[:num_particles]
+
+        if position.shape[1] == 2:
+            position = np.pad(
+                position, ((0, 0), (0, 1)), mode="constant", constant_values=0.5
+            )
+
+        edge_list = matscipy_nl(
+            "ij", cutoff=r_cutoff, positions=position, cell=box_size, pbc=pbc
+        )
+        edge_list = np.asarray(edge_list, dtype=np.int32)
+        # in case this is a (2,M) pair list, we pad with N and capacity_multiplier
+        res = num_particles * jnp.ones(
+            (2, round(edge_list.shape[1] * capacity_multiplier + extra_capacity)),
+            np.int32,
+        )
+        res = res.at[:, : edge_list.shape[1]].set(edge_list)
+        return NeighborList(
+            res,
+            position,
+            jnp.array(False),
+            None,
+            None,
+            None,
+            update_fn,
+        )
+
+    return NeighborListFns(allocate_fn, update_fn)
 
 
 BACKENDS = {
     "jaxmd_vmap": neighbor_list,
     "jaxmd_scan": _scan_neighbor_list,
-    "matscipy": _mat_scipy_neighbor_list,
+    "matscipy": _matscipy_neighbor_list,
 }
 
 
@@ -359,6 +448,8 @@ def neighbor_list(
     custom_mask_function: Optional[MaskFn] = None,
     fractional_coordinates: bool = False,
     format: NeighborListFormat = NeighborListFormat.Dense,
+    num_particles_max: int = None,
+    pbc: jnp.ndarray = None,
 ) -> NeighborFn:
     """Neighbor lists wrapper.
 
@@ -381,4 +472,6 @@ def neighbor_list(
         custom_mask_function,
         fractional_coordinates,
         format,
+        num_particles_max=num_particles_max,
+        pbc=pbc,
     )

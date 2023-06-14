@@ -67,6 +67,8 @@ def case_builder(args: Namespace, external_force_fn: Callable):
         capacity_multiplier=args.config.neighbor_list_capacity_multiplier,
         mask_self=False,
         format=NeighborListFormat.Sparse,
+        num_particles_max=args.metadata["num_particles_max"],
+        pbc=args.metadata["periodic_boundary_conditions"],
     )
 
     feature_transform = physical_feature_builder(
