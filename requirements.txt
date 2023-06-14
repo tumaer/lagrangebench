@@ -8,10 +8,11 @@ cloudpickle
 # JAX
 dm_haiku==0.0.9
 e3nn_jax==0.17.0
+gdown
 h5py
-jax[cuda]==0.4.7
+jax[cuda]==0.4.10
 jax_md==0.2.3
-jaxlib[cuda]==0.4.7
+jaxlib[cuda]==0.4.10
 jmp==0.0.4
 jraph==0.0.6.dev0
 
