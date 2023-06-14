@@ -25,9 +25,9 @@ The datasets are temporarily hosted on Google Drive. To download them use the `d
 Runs are based around YAML config files and cli arguments. By default, passed cli arguments will overwrite the YAML config.
 When loading a model with `--model_dir` the correct config is automatically loaded and training is restarted.
 
-For example, to start a _SEGNN_ run from scratch on the TGV 3D dataset use
+For example, to start a _GNS_ run from scratch on the RPF 2D dataset use
 ```
-python main.py --config configs/tgv_3d/segnn.yaml
+python main.py --config configs/rpf_2d/gns.yaml
 ```
 
 Some model presets are found in [configs/](/configs/).
