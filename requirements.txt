@@ -15,6 +15,7 @@ jax_md==0.2.3
 jaxlib[cuda]==0.4.10
 jmp==0.0.4
 jraph==0.0.6.dev0
+matscipy==0.8.0
 
 # Misc
 numpy

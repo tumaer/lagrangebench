@@ -23,6 +23,26 @@ files = [
 ]
 
 [[package]]
+name = "ase"
+version = "3.22.1"
+description = "Atomic Simulation Environment"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "ase-3.22.1-py3-none-any.whl", hash = "sha256:66cc481e3d82bea8931d5fe677119932ea0bd1bc08b901fd84f36b37fa681c9e"},
+    {file = "ase-3.22.1.tar.gz", hash = "sha256:004df6b0ea04b1114c790fadfe45d4125eb0e53125c66a93425af853d82ab432"},
+]
+
+[package.dependencies]
+matplotlib = ">=3.1.0"
+numpy = ">=1.15.0"
+scipy = ">=1.1.0"
+
+[package.extras]
+docs = ["pillow", "sphinx", "sphinx-rtd-theme"]
+test = ["pytest (>=5.0.0)", "pytest-mock (>=3.3.0)", "pytest-xdist (>=1.30.0)"]
+
+[[package]]
 name = "beautifulsoup4"
 version = "4.12.2"
 description = "Screen-scraping library"
@@ -1045,6 +1065,49 @@ packaging = ">=20.0"
 pillow = ">=6.2.0"
 pyparsing = ">=2.3.1"
 python-dateutil = ">=2.7"
+
+[[package]]
+name = "matscipy"
+version = "0.8.0"
+description = "Generic Python Materials Science tools"
+optional = false
+python-versions = ">=3.7.0"
+files = [
+    {file = "matscipy-0.8.0-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:a2793c24058465758ef03747ab2d2d4a5015b96d81401c9f6bd5a7456143390b"},
+    {file = "matscipy-0.8.0-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:cc53ac66cc061ecb635255eded75691488b0e13a2fdd0764f4e36c013f3e300c"},
+    {file = "matscipy-0.8.0-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:c0525ed8393c2e800d9e63447b70c22e5ce3a5a7e3b4d90298829dcc43062d5b"},
+    {file = "matscipy-0.8.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:9c8e4ea06726df0342705808775055be54d73af2bdb663b8d83ca0789eb6d712"},
+    {file = "matscipy-0.8.0-cp310-cp310-musllinux_1_1_aarch64.whl", hash = "sha256:aee19e1822b0fc02c7b74c775ef9b602c0a867730aa2c087cd244f32c2208cea"},
+    {file = "matscipy-0.8.0-cp310-cp310-win_amd64.whl", hash = "sha256:360cad44d1c5fe07a9220338987f31d3ba63f2c031151937321c297a7e1e0719"},
+    {file = "matscipy-0.8.0-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:5c185b7a53a447a7e54f01caba298354560f14744a53c62a1f13442f72cb75d4"},
+    {file = "matscipy-0.8.0-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:445414d10006e46f4732a590e164e5a4e5586052ae1d4e9555baca409978a064"},
+    {file = "matscipy-0.8.0-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8b31d4d5414a6436c653ad98db8b28c8a0e78e2bc426c9358c4f8fa6d88253e2"},
+    {file = "matscipy-0.8.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:93bcd26b0c7a522fdd05d620828fb6d92a69831b06ee28736b2d8c8c0b233fbc"},
+    {file = "matscipy-0.8.0-cp311-cp311-musllinux_1_1_aarch64.whl", hash = "sha256:1aa882e27a446ad03a00b0ffdf7b387ec4ffce1ad944c4d4c6c02906a0e5765e"},
+    {file = "matscipy-0.8.0-cp311-cp311-win_amd64.whl", hash = "sha256:a37187285d21455b096882f23018c3a0f2fb68723ca0484e4dd8c740e56e602d"},
+    {file = "matscipy-0.8.0-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:82de2474e2be3fa464265d6d1327c18e3e7542fc1cf8c09e4115019faeb4ff00"},
+    {file = "matscipy-0.8.0-cp38-cp38-macosx_12_0_arm64.whl", hash = "sha256:aa603724d7f99d8e1288a552f7d36907ee26a4ad2b349be44a4d2279c2a23074"},
+    {file = "matscipy-0.8.0-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:238491e088b6f9643f6134e5690daa10307e433a88f701cb943aa57bb8c58926"},
+    {file = "matscipy-0.8.0-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:afed8c57022b0e6514c4e4e95427c6260c223a8755a228aacfb94eefd71a1772"},
+    {file = "matscipy-0.8.0-cp38-cp38-musllinux_1_1_aarch64.whl", hash = "sha256:0765f1911209e37ce84fb7cf2014ccbd01f2d8f1d280aee647bde07efcaee90e"},
+    {file = "matscipy-0.8.0-cp38-cp38-win_amd64.whl", hash = "sha256:b5b42b60e97d178f191afb5451ed6391a8c046463191a94058d0e87f78072181"},
+    {file = "matscipy-0.8.0-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:8d3af56774bbfbaa7118793af8f4a7affec10d07631e937dd6f2fda7425924d9"},
+    {file = "matscipy-0.8.0-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:1111a259760aa0449aa070c60de95645430ffd43e264457d2b71477bcc9f91a5"},
+    {file = "matscipy-0.8.0-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:4daaf2a413f48fc2c29df577304af0fe846b472ebde1b56056f31fd1a7865854"},
+    {file = "matscipy-0.8.0-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:5c5f4b6e4824cfbf0b4a85e0ef63e014d240943cc02dba48efb4dc591e9da9e3"},
+    {file = "matscipy-0.8.0-cp39-cp39-musllinux_1_1_aarch64.whl", hash = "sha256:5b8ba7354580bd928da22214659fef514763579f472e14a8c9a1246b9bb31cf6"},
+    {file = "matscipy-0.8.0-cp39-cp39-win_amd64.whl", hash = "sha256:b14c8c50935b61ceefffcc0e25a68c15fca058afaff458dd40ba58e785d58e38"},
+    {file = "matscipy-0.8.0.tar.gz", hash = "sha256:c6284e9d74cbcc30d705d9c6d02d84b7dbfa15fe07b9f7358ed8c2b525c7026f"},
+]
+
+[package.dependencies]
+ase = ">=3.16.0"
+numpy = ">=1.16.0"
+scipy = ">=1.2.3"
+
+[package.extras]
+docs = ["sphinx", "sphinx-rtd-theme"]
+test = ["pytest", "sympy"]
 
 [[package]]
 name = "mdurl"
@@ -2283,4 +2346,4 @@ testing = ["big-O", "flake8 (<5)", "jaraco.functools", "jaraco.itertools", "more
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.9"
-content-hash = "6c5199c6d90be72f7a8d2e1fe24b993f5c2ee101f5a4c5b74bfcff535d6a77fa"
+content-hash = "67b888ae9a566ea3d8a08d17ff23c35a2c22e628c0c7cb7da09995a48c363c5c"
