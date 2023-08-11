@@ -445,6 +445,7 @@ class SEGNN(BaseModel):
         velocity_aggregate: str = "avg",
         homogeneous_particles: bool = True,
         norm: Optional[str] = None,
+        # TODO fix
         blocks_per_layer: int = 2,
         embed_msg_features: bool = False,
     ):

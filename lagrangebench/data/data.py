@@ -1,8 +1,10 @@
+"""Dataset modules for loading HDF5 simulation trajectories."""
+
 import bisect
 import json
 import os.path as osp
 import re
-from typing import Optional
+from typing import Optional, Callable
 
 import h5py
 import jax.numpy as jnp
@@ -22,7 +24,14 @@ URLS = {
 
 
 class H5Dataset(Dataset):
-    """Dataset for loading HDF5 simulation trajectories."""
+    """Dataset for loading HDF5 simulation trajectories.
+    
+    Reference on parallel loading of h5 samples see:
+    https://github.com/pytorch/pytorch/issues/11929
+
+    Implementation inspired by:
+    https://github.com/Open-Catalyst-Project/ocp/blob/main/ocpmodels/datasets/lmdb_dataset.py
+    """
 
     def __init__(
         self,
@@ -33,14 +42,9 @@ class H5Dataset(Dataset):
         split_valid_traj_into_n: int = 1,
         is_rollout: bool = False,
         nl_backend: str = "jaxmd_vmap",
+        external_force_fn: Optional[Callable] = None,
     ):
         """
-        Reference on parallel loading of h5 samples see:
-        https://github.com/pytorch/pytorch/issues/11929
-
-        Implementation inspired by:
-        https://github.com/Open-Catalyst-Project/ocp/blob/main/ocpmodels/datasets/lmdb_dataset.py
-
         Args:
             split: "train", "valid", or "test"
             dataset_path: Path to the dataset
@@ -49,6 +53,7 @@ class H5Dataset(Dataset):
             split_valid_traj_into_n: Number splits per validation trajectory
             is_rollout: Whether to return trajectories (valid) or subsequences (train)
             nl_backend: Which backend to use for the neighbor list
+            external_force_fn: Function that returns the position-wise external force
         """
 
         if not osp.exists(dataset_path):
@@ -62,7 +67,7 @@ class H5Dataset(Dataset):
         self.split_valid_traj_into_n = split_valid_traj_into_n
         self.nl_backend = nl_backend
 
-        self.external_force_fn = None
+        self.external_force_fn = external_force_fn
 
         # load metadata
         with open(osp.join(dataset_path, "metadata.json"), "r") as f:
@@ -240,6 +245,13 @@ class RPF2D(H5Dataset):
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):
+        def external_force_fn(position):
+            return jnp.where(
+                position[1] > 1.0,
+                jnp.array([-1.0, 0.0]),
+                jnp.array([1.0, 0.0]),
+            )
+        
         super().__init__(
             split,
             dataset_path,
@@ -248,13 +260,7 @@ class RPF2D(H5Dataset):
             split_valid_traj_into_n=384,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
-        )
-    
-    def external_force_fn(self, position):
-        return jnp.where(
-            position[1] > 1.0,
-            jnp.array([-1.0, 0.0]),
-            jnp.array([1.0, 0.0]),
+            external_force_fn=external_force_fn,
         )
 
 
@@ -265,7 +271,13 @@ class RPF3D(H5Dataset):
         dataset_path: str = "datasets/3D_RPF_8000_10kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
-    ):
+    ):    
+        def external_force_fn(position):
+            return jnp.where(
+                position[1] > 1.0,
+                jnp.array([-1.0, 0.0, 0.0]),
+                jnp.array([1.0, 0.0, 0.0]),
+            )
         super().__init__(
             split,
             dataset_path,
@@ -274,13 +286,7 @@ class RPF3D(H5Dataset):
             split_valid_traj_into_n=192,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
-        )
-    
-    def external_force_fn(self, position):
-        return jnp.where(
-            position[1] > 1.0,
-            jnp.array([-1.0, 0.0, 0.0]),
-            jnp.array([1.0, 0.0, 0.0]),
+            external_force_fn=external_force_fn,
         )
 
 

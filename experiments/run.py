@@ -18,10 +18,10 @@ from lagrangebench.utils import PushforwardConfig
 
 
 def train_or_infer(args: Namespace):
-    args.metadata, data_train, data_eval, external_force_fn = setup_data(args)
+    data_train, data_eval = setup_data(args)
 
     # neighbors search
-    bounds = np.array(args.metadata["bounds"])
+    bounds = np.array(data_train.metadata["bounds"])
     args.box = bounds[:, 1] - bounds[:, 0]
 
     args.info.len_train = len(data_train)
@@ -30,12 +30,12 @@ def train_or_infer(args: Namespace):
     # setup core functions
     case = case_builder(
         box=args.box,
-        metadata=args.metadata,
+        metadata=data_train.metadata,
         input_seq_length=args.config.input_seq_length,
         isotropic_norm=args.config.isotropic_norm,
         noise_std=args.config.noise_std,
         magnitude_features=args.config.magnitudes,
-        external_force_fn=external_force_fn,
+        external_force_fn=data_train.external_force_fn,
         neighbor_list_backend=args.config.neighbor_list_backend,
         neighbor_list_multiplier=args.config.neighbor_list_capacity_multiplier,
         dtype=(jnp.float64 if args.config.f64 else jnp.float32),
@@ -47,7 +47,7 @@ def train_or_infer(args: Namespace):
 
     # setup model from configs
     model_kwargs = {
-        "metadata": args.metadata,
+        "metadata": data_train.metadata,
         "box": args.box,
         "normalization_stats": case.normalization_stats,
         "dtype": (jnp.float64 if args.config.f64 else jnp.float32),
@@ -110,13 +110,8 @@ def train_or_infer(args: Namespace):
             case,
             data_train,
             data_eval,
-            args.config.metrics,
-            args.config.seed,
-        )
-        trainer(
-            step_max=args.config.step_max,
-            load_checkpoint=args.config.model_dir,
-            store_checkpoint=args.config.new_checkpoint,
+            metrics=args.config.metrics,
+            seed=args.config.seed,
             batch_size=args.config.batch_size,
             noise_std=args.config.noise_std,
             pushforward=pf_config,
@@ -126,6 +121,11 @@ def train_or_infer(args: Namespace):
             lr_decay_rate=args.config.lr_decay_rate,
             log_steps=args.config.log_steps,
             eval_steps=args.config.eval_steps,
+        )
+        trainer(
+            step_max=args.config.step_max,
+            load_checkpoint=args.config.model_dir,
+            store_checkpoint=args.config.new_checkpoint,
             wandb_run=wandb_run,
         )
     elif args.config.mode == "infer":
