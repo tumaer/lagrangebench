@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
 
-from lagrangebench.case_setup.features import NodeType
+from lagrangebench.utils import NodeType
 
 
 class NodeFeatures(NamedTuple):

@@ -1,5 +1,4 @@
-from argparse import Namespace
-from typing import Callable, Optional, Tuple, Union
+from typing import Callable, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import jit, lax, random, vmap
@@ -7,7 +6,11 @@ from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
 
-from .features import FeatureDict, TargetDict, add_gns_noise, physical_feature_builder
+from lagrangebench.data.utils import get_dataset_stats
+from lagrangebench.defaults import defaults
+from lagrangebench.train.strats import add_gns_noise
+
+from .features import FeatureDict, TargetDict, physical_feature_builder
 from .partition import neighbor_list
 
 TrainCaseOut = Tuple[random.KeyArray, FeatureDict, TargetDict, NeighborList]
@@ -37,23 +40,45 @@ class CaseSetupFn:
     displacement: space.DisplacementFn = static_field()
 
 
-def case_builder(args: Namespace, external_force_fn: Callable):
+def case_builder(
+    box: Tuple[float, float, float],
+    metadata: Dict,
+    input_seq_length: int,
+    isotropic_norm: bool = defaults.isotropic_norm,
+    noise_std: float = defaults.noise_std,
+    external_force_fn: Optional[Callable] = None,
+    magnitude_features: bool = defaults.magnitude_features,
+    neighbor_list_backend: str = defaults.neighbor_list_backend,
+    neighbor_list_multiplier: float = defaults.neighbor_list_multiplier,
+    dtype: jnp.dtype = defaults.dtype,
+):
     """Set up a CaseSetupFn that contains every required function besides the model.
 
     Inspired by the `partition.neighbor_list` function in JAX-MD.
 
     The core functions are:
-        allocate - allocate memory for the neighbors list
-        preprocess - update the neighbors list
-        integrate - Semi-implicit Euler respecting periodic boundary conditions
+        * allocate, allocate memory for the neighbors list.
+        * preprocess, update the neighbors list.
+        * integrate, semi-implicit Euler respecting periodic boundary conditions.
+
+    Args:
+        box: Box xyz sizes of the system.
+        metadata: Dataset metadata dictionary.
+        input_seq_length: Length of the input sequence.
+        isotropic_norm: Whether to use isotropic normalization.
+        noise_std: Noise standard deviation.
+        external_force_fn: External force function.
+        magnitude_features: Whether to add velocity magnitudes in the features.
+        neighbor_list_backend: Backend of the neighbor list.
+        neighbor_list_multiplier: Capacity multiplier of the neighbor list.
+        dtype: Data type.
     """
 
-    dtype = jnp.float64 if args.config.f64 else jnp.float32
-    normalization_stats = args.normalization
+    normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
 
     # apply PBC in all directions or not at all
-    if jnp.array(args.metadata["periodic_boundary_conditions"]).any():
-        displacement_fn, shift_fn = space.periodic(side=jnp.array(args.box))
+    if jnp.array(metadata["periodic_boundary_conditions"]).any():
+        displacement_fn, shift_fn = space.periodic(side=jnp.array(box))
     else:
         displacement_fn, shift_fn = space.free()
 
@@ -61,27 +86,25 @@ def case_builder(args: Namespace, external_force_fn: Callable):
 
     neighbor_fn = neighbor_list(
         displacement_fn,
-        jnp.array(args.box),
-        backend=args.config.neighbor_list_backend,
-        r_cutoff=args.metadata["default_connectivity_radius"],
-        capacity_multiplier=args.config.neighbor_list_capacity_multiplier,
+        jnp.array(box),
+        backend=neighbor_list_backend,
+        r_cutoff=metadata["default_connectivity_radius"],
+        capacity_multiplier=neighbor_list_multiplier,
         mask_self=False,
         format=NeighborListFormat.Sparse,
-        num_particles_max=args.metadata["num_particles_max"],
-        pbc=args.metadata["periodic_boundary_conditions"],
+        num_particles_max=metadata["num_particles_max"],
+        pbc=metadata["periodic_boundary_conditions"],
     )
 
     feature_transform = physical_feature_builder(
-        bounds=args.metadata["bounds"],
+        bounds=metadata["bounds"],
         normalization_stats=normalization_stats,
-        connectivity_radius=args.metadata["default_connectivity_radius"],
+        connectivity_radius=metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
-        pbc=args.metadata["periodic_boundary_conditions"],
-        magnitudes=args.config.magnitudes,
+        pbc=metadata["periodic_boundary_conditions"],
+        magnitudes=magnitude_features,
         external_force_fn=external_force_fn,
     )
-
-    input_seq_length = args.config.input_seq_length
 
     def _compute_target(pos_input: jnp.ndarray) -> TargetDict:
         # displacement(r1, r2) = r1-r2  # without PBC

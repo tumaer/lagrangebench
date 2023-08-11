@@ -1,15 +1,8 @@
-import json
-import os
-import os.path as osp
 import warnings
-from argparse import Namespace
-from typing import Callable, Dict, List, Tuple
+from typing import Dict, List
 
 import jax.numpy as jnp
 import numpy as np
-from torch.utils.data import DataLoader
-
-from .data import H5Dataset
 
 
 def get_dataset_stats(
@@ -54,97 +47,3 @@ def numpy_collate(batch) -> np.ndarray:
         return type(batch[0])(numpy_collate(samples) for samples in zip(*batch))
     else:
         return np.asarray(batch)
-
-
-def setup_data(
-    args: Namespace, seed_worker, generator
-) -> Tuple[Dict, DataLoader, DataLoader, Callable]:
-    if not osp.isabs(args.config.data_dir):
-        args.config.data_dir = osp.join(os.getcwd(), args.config.data_dir)
-
-    args.info.dataset_name = osp.basename(args.config.data_dir.split("/")[-1])
-    if args.config.ckp_dir is not None:
-        os.makedirs(args.config.ckp_dir, exist_ok=True)
-    if args.config.rollout_dir is not None:
-        os.makedirs(args.config.rollout_dir, exist_ok=True)
-    with open(osp.join(args.config.data_dir, "metadata.json"), "r") as f:
-        metadata = json.loads(f.read())
-
-    # dataloader
-    train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
-    data_train = H5Dataset(
-        args.config.data_dir,
-        "train",
-        train_seq_l,
-        is_rollout=False,
-        nl_backend=args.config.neighbor_list_backend,
-        num_particles_max=metadata["num_particles_max"],
-    )
-    loader_train = DataLoader(
-        dataset=data_train,
-        batch_size=args.config.batch_size,
-        shuffle=True,
-        num_workers=4,
-        collate_fn=numpy_collate,
-        drop_last=True,
-        worker_init_fn=seed_worker,
-        generator=generator,
-    )
-    data_eval = H5Dataset(
-        dataset_path=args.config.data_dir,
-        split="test" if args.config.test else "valid",
-        input_seq_length=args.config.input_seq_length,
-        split_valid_traj_into_n=args.config.split_valid_traj_into_n,
-        is_rollout=True,
-        nl_backend=args.config.neighbor_list_backend,
-        num_particles_max=metadata["num_particles_max"],
-    )
-    loader_eval = DataLoader(
-        dataset=data_eval,
-        batch_size=1,
-        collate_fn=numpy_collate,
-        worker_init_fn=seed_worker,
-        generator=generator,
-    )
-
-    assert (
-        args.config.n_rollout_steps
-        <= data_eval.subsequence_length - args.config.input_seq_length
-    ), (
-        "If you want to evaluate the loss on more than the ground truth traj length, "
-        "then use the --eval_n_more_steps argument."
-    )
-    assert args.config.eval_n_trajs <= len(
-        loader_eval
-    ), "eval_n_trajs must be <= len(loader_valid)"
-
-    if args.config.n_rollout_steps == -1:
-        args.config.n_rollout_steps = (
-            data_eval.subsequence_length - args.config.input_seq_length
-        )
-
-    if "RPF" in args.info.dataset_name.upper():
-        args.info.has_external_force = True
-        if metadata["dim"] == 2:
-
-            def external_force_fn(position):
-                return jnp.where(
-                    position[1] > 1.0,
-                    jnp.array([-1.0, 0.0]),
-                    jnp.array([1.0, 0.0]),
-                )
-
-        elif metadata["dim"] == 3:
-
-            def external_force_fn(position):
-                return jnp.where(
-                    position[1] > 1.0,
-                    jnp.array([-1.0, 0.0, 0.0]),
-                    jnp.array([1.0, 0.0, 0.0]),
-                )
-
-    else:
-        args.info.has_external_force = False
-        external_force_fn = None
-
-    return metadata, loader_train, loader_eval, external_force_fn

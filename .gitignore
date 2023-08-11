@@ -17,3 +17,4 @@ venv
 .ruff-cache
 rollouts
 profile
+dist

@@ -1,5 +1,6 @@
 import bisect
 import os
+from typing import Dict
 
 import h5py
 import jax.numpy as jnp
@@ -14,11 +15,12 @@ class H5Dataset(Dataset):
         self,
         dataset_path: str,
         split: str,
+        metadata: Dict,
         input_seq_length: int = 6,
         split_valid_traj_into_n: int = 1,
         is_rollout: bool = False,
         nl_backend: str = "jaxmd_vmap",
-        num_particles_max=10,
+        name: str = "",
     ):
         """
         Reference on parallel loading of h5 samples see:
@@ -34,9 +36,11 @@ class H5Dataset(Dataset):
         self.input_seq_length = input_seq_length
         self.split_valid_traj_into_n = split_valid_traj_into_n
         self.nl_backend = nl_backend
-        self.num_particles_max = num_particles_max
+        self.metadata = metadata
 
         self.db_hdf5 = None
+
+        self.name = name
 
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())
@@ -64,12 +68,12 @@ class H5Dataset(Dataset):
             return self.db_hdf5
 
     def matscipy_pad(self, pos_input, particle_type):
-        padding_size = self.num_particles_max - pos_input.shape[0] + 1
+        padding_size = self.metadata["num_particles_max"] - pos_input.shape[0] + 1
         pos_input = np.pad(
             pos_input,
             ((0, padding_size), (0, 0), (0, 0)),
             mode="constant",
-            constant_values=self.num_particles_max,
+            constant_values=self.metadata["num_particles_max"],
         )
         particle_type = np.pad(
             particle_type, (0, padding_size), mode="constant", constant_values=9

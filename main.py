@@ -3,7 +3,7 @@ from argparse import Namespace
 
 import yaml
 
-from lagrangebench.configs import NestedLoader, cli_arguments
+from experiments.config import NestedLoader, cli_arguments
 
 if __name__ == "__main__":
     cli_args = cli_arguments()
@@ -28,6 +28,6 @@ if __name__ == "__main__":
 
         config.update("jax_enable_x64", True)
 
-    from lagrangebench.run import train_or_infer
+    from experiments.run import train_or_infer
 
     train_or_infer(args)

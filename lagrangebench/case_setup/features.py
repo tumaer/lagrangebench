@@ -1,5 +1,4 @@
-import enum
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional
 
 import jax
 import jax.numpy as jnp
@@ -8,22 +7,6 @@ from jax_md import partition, space
 
 FeatureDict = Dict[str, jnp.ndarray]
 TargetDict = Dict[str, jnp.ndarray]
-
-
-class NodeType(enum.IntEnum):
-    FLUID = 0
-    SOLID_WALL = 1
-    MOVING_WALL = 2
-    RIGID_BODY = 3
-    SIZE = 9
-
-
-def get_kinematic_mask(particle_type):
-    """Returns a boolean mask, set to true for all kinematic (obstacle)
-    particles"""
-    return jnp.logical_or(
-        particle_type == NodeType.SOLID_WALL, particle_type == NodeType.MOVING_WALL
-    )
 
 
 def physical_feature_builder(
@@ -38,12 +21,12 @@ def physical_feature_builder(
     """Builds a physical feature transform function.
 
     Transform raw coordinates to
-        - Absolute positions
-        - Historical velocity sequence
-        - Velocity magnitudes
-        - Distance to boundaries
-        - External force field
-        - Relative displacement vectors and distances
+        * Absolute positions
+        * Historical velocity sequence
+        * Velocity magnitudes
+        * Distance to boundaries
+        * External force field
+        * Relative displacement vectors and distances
 
     Args:
         bounds: Each sublist contains the lower and upper bound of a dimension.
@@ -67,13 +50,13 @@ def physical_feature_builder(
         """Feature engineering.
         Returns:
             Dict of features, with possible keys
-                - "abs_pos", bsolute positions
-                - "vel_hist", historical velocity sequence
-                - "vel_mag", velocity magnitudes
-                - "bound", distance to boundaries
-                - "force", external force field
-                - "rel_disp", relative displacement vectors
-                - "rel_dist", relative distance vectors
+                * "abs_pos", bsolute positions
+                * "vel_hist", historical velocity sequence
+                * "vel_mag", velocity magnitudes
+                * "bound", distance to boundaries
+                * "force", external force field
+                * "rel_disp", relative displacement vectors
+                * "rel_dist", relative distance vectors
         """
 
         features = {}
@@ -142,58 +125,3 @@ def physical_feature_builder(
         return jax.tree_map(lambda f: f, features)
 
     return feature_transform
-
-
-def add_gns_noise(
-    key: jax.random.KeyArray,
-    pos_input: jnp.ndarray,
-    particle_type: jnp.ndarray,
-    input_seq_length: int,
-    noise_std: float,
-    shift_fn: space.ShiftFn,
-) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    isl = input_seq_length
-    # add noise to the input and adjust the target accordingly
-    key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
-        key, pos_input, noise_std_last_step=noise_std
-    )
-    kinematic_mask = get_kinematic_mask(particle_type)
-    pos_input_noise = jnp.where(kinematic_mask[:, None, None], 0.0, pos_input_noise)
-    # adjust targets based on the noise from the last input position
-    n_potential_targets = pos_input_noise[:, isl:].shape[1]
-    pos_target_noise = pos_input_noise[:, isl - 1][:, None, :]
-    pos_target_noise = jnp.tile(pos_target_noise, (1, n_potential_targets, 1))
-    pos_input_noise = pos_input_noise.at[:, isl:].set(pos_target_noise)
-
-    shift_vmap = vmap(shift_fn, in_axes=(0, 0))
-    shift_dvmap = vmap(shift_vmap, in_axes=(0, 0))
-    pos_input_noisy = shift_dvmap(pos_input, pos_input_noise)
-
-    return key, pos_input_noisy
-
-
-def _get_random_walk_noise_for_pos_sequence(
-    key, position_sequence, noise_std_last_step
-):
-    """Returns random-walk noise in the velocity applied to the position.
-    Same functionality as above implemented in JAX."""
-    key, subkey = jax.random.split(key)
-    velocity_sequence_shape = list(position_sequence.shape)
-    velocity_sequence_shape[1] -= 1
-    n_velocities = velocity_sequence_shape[1]
-
-    velocity_sequence_noise = jax.random.normal(
-        subkey, shape=tuple(velocity_sequence_shape)
-    )
-    velocity_sequence_noise *= noise_std_last_step / (n_velocities**0.5)
-    velocity_sequence_noise = jnp.cumsum(velocity_sequence_noise, axis=1)
-
-    position_sequence_noise = jnp.concatenate(
-        [
-            jnp.zeros_like(velocity_sequence_noise[:, 0:1]),
-            jnp.cumsum(velocity_sequence_noise, axis=1),
-        ],
-        axis=1,
-    )
-
-    return key, position_sequence_noise

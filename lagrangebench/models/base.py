@@ -17,18 +17,18 @@ class BaseModel(hk.Module, ABC):
 
         Args:
             sample: Tuple with feature dictionary and particle type. Possible features:
-                - "abs_pos", bsolute positions
-                - "vel_hist", historical velocity sequence
-                - "vel_mag", velocity magnitudes
-                - "bound", distance to boundaries
-                - "force", external force field
-                - "rel_disp", relative displacement vectors
-                - "rel_dist", relative distance vectors
+                * "abs_pos", bsolute positions
+                * "vel_hist", historical velocity sequence
+                * "vel_mag", velocity magnitudes
+                * "bound", distance to boundaries
+                * "force", external force field
+                * "rel_disp", relative displacement vectors
+                * "rel_dist", relative distance vectors
         Returns:
             Dict with model output. The keys must be at least one of:
-                - "acc", (normalized) acceleration
-                - "vel", (normalized) velocity
-                - "pos", (absolute) next position
+                * "acc", (normalized) acceleration
+                * "vel", (normalized) velocity
+                * "pos", (absolute) next position
         """
         raise NotImplementedError
 

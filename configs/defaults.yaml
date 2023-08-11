@@ -93,8 +93,6 @@ wandb_entity: lagrangebench
 log_steps: 1000
 # Number of steps between evaluation
 eval_steps: 5000
-# Number of steps between checkpoints
-save_steps: 5000
 # Checkpoint directory
 ckp_dir: ckp
 # Rollout/metrics directory

@@ -1,9 +1,10 @@
+import enum
 import json
 import os
 import pickle
 import random
-from dataclasses import dataclass
-from typing import Callable, Tuple
+from dataclasses import dataclass, field
+from typing import Callable, List, Tuple
 
 import cloudpickle
 import jax
@@ -11,6 +12,22 @@ import jax.numpy as jnp
 import numpy as np
 import pyvista
 import torch
+
+
+# TODO look for a better place to put this and get_kinematic_mask
+class NodeType(enum.IntEnum):
+    FLUID = 0
+    SOLID_WALL = 1
+    MOVING_WALL = 2
+    RIGID_BODY = 3
+    SIZE = 9
+
+
+def get_kinematic_mask(particle_type):
+    """Returns a boolean mask, set to true for all kinematic (obstacle) particles."""
+    return jnp.logical_or(
+        particle_type == NodeType.SOLID_WALL, particle_type == NodeType.MOVING_WALL
+    )
 
 
 def broadcast_to_batch(sample, batch_size: int):
@@ -36,7 +53,12 @@ def save_pytree(ckp_dir: str, pytree_obj, name) -> None:
 
 
 def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
-    """https://github.com/deepmind/dm-haiku/issues/18"""
+    """
+    Saves params, state and optimizer state to ckp_dir. Additionally also tracks and
+    saves the best model to ckp_dir/best.
+
+    See: https://github.com/deepmind/dm-haiku/issues/18
+    """
 
     save_pytree(ckp_dir, params, "params")
     save_pytree(ckp_dir, state, "state")
@@ -46,9 +68,11 @@ def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
     with open(os.path.join(ckp_dir, "metadata_ckp.json"), "w") as f:
         json.dump(metadata_ckp, f)
 
+    # only run for the main checkpoint directory (not best)
     if "best" not in ckp_dir:
         ckp_dir_best = os.path.join(ckp_dir, "best")
         metadata_best_path = os.path.join(ckp_dir, "best", "metadata_ckp.json")
+        tag = ""
 
         if os.path.exists(metadata_best_path):  # all except first step
             with open(metadata_best_path, "r") as fp:
@@ -56,14 +80,15 @@ def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
 
             # if loss is better than best previous loss, save to best model directory
             if metadata_ckp["loss"] < metadata_ckp_best["loss"]:
-                print(
-                    f"Saving model to {ckp_dir} at step {metadata_ckp['step']}"
-                    f" with loss {metadata_ckp['loss']} (best so far)"
-                )
-
                 save_haiku(ckp_dir_best, params, state, opt_state, metadata_ckp)
+                tag = " (best so far)"
         else:  # first step
             save_haiku(ckp_dir_best, params, state, opt_state, metadata_ckp)
+
+        print(
+            f"saved model to {ckp_dir} at step {metadata_ckp['step']}"
+            f" with loss {metadata_ckp['loss']}{tag}"
+        )
 
 
 def load_pytree(model_dir: str, name):
@@ -82,8 +107,6 @@ def load_pytree(model_dir: str, name):
 def load_haiku(model_dir: str):
     """https://github.com/deepmind/dm-haiku/issues/18"""
 
-    print("Loading model from", model_dir)
-
     params = load_pytree(model_dir, "params")
     state = load_pytree(model_dir, "state")
 
@@ -92,6 +115,8 @@ def load_haiku(model_dir: str):
 
     with open(os.path.join(model_dir, "metadata_ckp.json"), "r") as fp:
         metadata_ckp = json.loads(fp.read())
+
+    print(f"Loaded model from {model_dir} at step {metadata_ckp['step']}")
 
     return params, state, opt_state, metadata_ckp["step"]
 
@@ -155,12 +180,12 @@ def set_seed(seed: int) -> Tuple[jax.random.KeyArray, Callable, torch.Generator]
 
 
 @dataclass(frozen=True)
-class LossWeights:
+class LossConfig:
     """Weights for the different targets in the loss function"""
 
     pos: float = 0.0
     vel: float = 0.0
-    acc: float = 0.0
+    acc: float = 1.0
 
     def __getitem__(self, item):
         return getattr(self, item)
@@ -168,3 +193,21 @@ class LossWeights:
     @property
     def nonzero(self):
         return [field for field in self.__annotations__ if self[field] != 0]
+
+
+@dataclass(frozen=False)
+class PushforwardConfig:
+    """Pushforward trick configuration.
+
+    Attributes:
+        steps: When to introduce each unroll stage, e.g. [-1, 20000, 50000]
+        unrolls: For how many timesteps to unroll, e.g. [0, 1, 20]
+        probs: Probability (ratio) between the relative unrolls, e.g. [5, 4, 1]
+    """
+
+    steps: List[int] = field(default_factory=lambda: [-1])
+    unrolls: List[int] = field(default_factory=lambda: [0])
+    probs: List[float] = field(default_factory=lambda: [1.0])
+
+    def __getitem__(self, item):
+        return getattr(self, item)

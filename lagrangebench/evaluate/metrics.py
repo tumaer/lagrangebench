@@ -20,7 +20,7 @@ class MetricsComputer:
     def __init__(
         self,
         active_metrics: List,
-        dist: Callable,
+        dist_fn: Callable,
         metadata: Dict,
         input_seq_length: int,
         stride: int = 10,
@@ -31,7 +31,7 @@ class MetricsComputer:
 
         Args:
             active_metrics: list of metrics to compute
-            dist: distance function
+            dist_fn: distance function
             metadata: metadata of the dataset
             loss_ranges: list of horizon lengths to compute the loss for
             input_seq_length: length of the input sequence
@@ -44,8 +44,8 @@ class MetricsComputer:
         assert ot_backend in ["ott", "pot"]
 
         self._active_metrics = active_metrics
-        self._dist = dist
-        self._dist_vmap = jax.vmap(dist, in_axes=(0, 0))
+        self._dist_fn = dist_fn
+        self._dist_vmap = jax.vmap(dist_fn, in_axes=(0, 0))
         self._dist_dvmap = jax.vmap(self._dist_vmap, in_axes=(0, 0))
 
         if loss_ranges is None:
@@ -196,7 +196,7 @@ class MetricsComputer:
         """Euclidean distance matrix (pairwise)."""
 
         def dist(a, b):
-            return jnp.sum(self._dist(a, b) ** 2)
+            return jnp.sum(self._dist_fn(a, b) ** 2)
 
         if not squared:
 

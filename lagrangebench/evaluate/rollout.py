@@ -2,7 +2,7 @@ import os
 import pickle
 import time
 import warnings
-from typing import Iterable, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -10,13 +10,18 @@ import jax.numpy as jnp
 import jax_md.partition as partition
 from torch.utils.data import DataLoader
 
-from lagrangebench.case_setup import CaseSetupFn, get_kinematic_mask
-from lagrangebench.evaluate.metrics import (
-    MetricsComputer,
-    MetricsDict,
-    averaged_metrics,
+from lagrangebench.case_setup import CaseSetupFn
+from lagrangebench.data import H5Dataset
+from lagrangebench.data.utils import numpy_collate
+from lagrangebench.defaults import defaults
+from lagrangebench.evaluate.metrics import MetricsComputer, MetricsDict
+from lagrangebench.utils import (
+    broadcast_from_batch,
+    get_kinematic_mask,
+    load_haiku,
+    set_seed,
+    write_vtk,
 )
-from lagrangebench.utils import broadcast_from_batch, write_vtk
 
 
 def eval_single_rollout(
@@ -32,12 +37,17 @@ def eval_single_rollout(
     n_extrap_steps: int = 0,
 ) -> Tuple[jnp.ndarray, MetricsDict, jnp.ndarray]:
     pos_input, particle_type = traj_i
+    # if n_rollout_steps set to -1, use the whole trajectory
+    if n_rollout_steps < 0:
+        n_rollout_steps = pos_input.shape[1] - t_window
+
     initial_positions = pos_input[:, 0:t_window]  # (n_nodes, t_window, dim)
     traj_len = n_rollout_steps + n_extrap_steps  # (n_nodes, traj_len - t_window, dim)
     ground_truth_positions = pos_input[:, t_window : t_window + traj_len]
     current_positions = initial_positions  # (n_nodes, t_window, dim)
     n_nodes, _, dim = ground_truth_positions.shape
-    predictions = jnp.zeros((n_rollout_steps + n_extrap_steps, n_nodes, dim))
+
+    predictions = jnp.zeros((traj_len, n_nodes, dim))
 
     step = 0
     while step < n_rollout_steps + n_extrap_steps:
@@ -173,14 +183,72 @@ def eval_rollout(
 def infer(
     model: hk.TransformedWithState,
     case: CaseSetupFn,
-    params: hk.Params,
-    state: hk.State,
-    neighbors: partition.NeighborList,
-    loader_eval: DataLoader,
-    metrics_computer: MetricsComputer,
-    args,
+    dataset_test: H5Dataset,
+    params: Optional[hk.Params] = None,
+    state: Optional[hk.State] = None,
+    load_checkpoint: Optional[str] = None,
+    metrics: Optional[Dict] = None,
+    rollout_dir: Optional[str] = None,
+    eval_n_trajs: int = defaults.eval_n_trajs,
+    n_rollout_steps: int = defaults.n_rollout_steps,
+    out_type: str = defaults.out_type,
+    n_extrap_steps: int = defaults.n_extrap_steps,
+    seed: int = defaults.seed,
 ):
+    """
+    Infer on a dataset, compute metrics and optionally save rollout in out_type format.
+
+    Args:
+        model: (Transformed) Haiku model.
+        case: Case setup class.
+        dataset_test: Test dataset.
+        params: Haiku params.
+        state: Haiku state.
+        load_checkpoint: Path to checkpoint directory.
+        metrics: Metrics to compute.
+        rollout_dir: Path to rollout directory.
+        eval_n_trajs: Number of trajectories to evaluate.
+        n_rollout_steps: Number of rollout steps.
+        out_type: Output type.
+        n_extrap_steps: Number of extrapolation steps.
+        seed: Seed.
+
+    Returns:
+        eval_metrics: Metrics per trajectory.
+    """
+    assert (
+        params is not None or load_checkpoint is not None
+    ), "Either params or a load_checkpoint directory must be provided for inference."
+
+    if params is not None:
+        if state is None:
+            state = {}
+    else:
+        params, state, _, _ = load_haiku(load_checkpoint)
+
+    key, seed_worker, generator = set_seed(seed)
+
+    loader_test = DataLoader(
+        dataset=dataset_test,
+        batch_size=1,
+        collate_fn=numpy_collate,
+        worker_init_fn=seed_worker,
+        generator=generator,
+    )
+    metrics_computer = MetricsComputer(
+        metrics,
+        dist_fn=case.displacement,
+        metadata=dataset_test.metadata,
+        input_seq_length=dataset_test.input_seq_length,
+    )
+    # Precompile model
     model_apply = jax.jit(model.apply)
+
+    # init values
+    pos_input_and_target, particle_type = next(iter(loader_test))
+    sample = (pos_input_and_target[0], particle_type[0])
+    key, _, _, neighbors = case.allocate(key, sample)
+
     eval_metrics, _ = eval_rollout(
         model_apply=model_apply,
         case=case,
@@ -188,11 +256,11 @@ def infer(
         params=params,
         state=state,
         neighbors=neighbors,
-        loader_eval=loader_eval,
-        n_rollout_steps=args.config.n_rollout_steps,
-        n_trajs=args.config.eval_n_trajs,
-        rollout_dir=args.config.rollout_dir,
-        out_type=args.config.out_type,
-        n_extrap_steps=args.config.n_extrap_steps,
+        loader_eval=loader_test,
+        n_rollout_steps=n_rollout_steps,
+        n_trajs=eval_n_trajs,
+        rollout_dir=rollout_dir,
+        out_type=out_type,
+        n_extrap_steps=n_extrap_steps,
     )
-    print(averaged_metrics(eval_metrics))
+    return eval_metrics

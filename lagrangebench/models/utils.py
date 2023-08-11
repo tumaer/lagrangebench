@@ -5,7 +5,7 @@ import haiku as hk
 import jax.numpy as jnp
 import jraph
 
-from lagrangebench.case_setup import NodeType
+from lagrangebench.utils import NodeType
 
 
 class SteerableGraphsTuple(NamedTuple):
