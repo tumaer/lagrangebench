@@ -1,4 +1,3 @@
-from argparse import Namespace
 from typing import Callable, Tuple, Type
 
 from .egnn import EGNN
@@ -18,13 +17,13 @@ model_dict = {
 }
 
 
-def get_model(args: Namespace) -> Tuple[Callable, Type]:
+def get_model(model_name: str, *args, **kwargs) -> Tuple[Callable, Type]:
     """Setup model based on args."""
-    assert args.config.model in model_dict, f"Unknown model: {args.config.model}"
+    assert model_name in model_dict, f"Unknown model: {model_name}"
 
-    model_class = model_dict[args.config.model]
+    model_class = model_dict[model_name]
 
     def model(x):
-        return model_class.setup_model(args)(x)
+        return model_class.setup_model(*args, **kwargs)(x)
 
     return model, model_class

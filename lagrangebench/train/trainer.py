@@ -13,7 +13,6 @@ from jax import vmap
 from torch.utils.data import DataLoader
 from wandb.wandb_run import Run
 
-from lagrangebench.case_setup import CaseSetupFn
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.defaults import defaults
@@ -91,7 +90,7 @@ def _update(
 
 def Trainer(
     model: hk.Module,
-    case: CaseSetupFn,
+    case,
     dataset_train: H5Dataset,
     dataset_eval: H5Dataset,
     metrics: Optional[Dict] = None,

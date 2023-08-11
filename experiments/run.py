@@ -46,8 +46,18 @@ def train_or_infer(args: Namespace):
     args.info.homogeneous_particles = particle_type.max() == particle_type.min()
 
     # setup model from configs
-    model, MODEL = get_model(args)
+    model_kwargs = {
+        "metadata": args.metadata,
+        "box": args.box,
+        "normalization_stats": case.normalization_stats,
+        "dtype": (jnp.float64 if args.config.f64 else jnp.float32),
+        # TODO replace with data_train.has_external_force
+        "has_external_force": args.info.has_external_force,
+        **vars(args.config),
+    }
+    model, MODEL = get_model(args.config.model, **model_kwargs)
     model = hk.without_apply_rng(hk.transform_with_state(model))
+
     # mixed precision training based on this reference:
     # https://github.com/deepmind/dm-haiku/blob/main/examples/imagenet/train.py
     policy = jmp.get_policy("params=float32,compute=float32,output=float32")

@@ -1,5 +1,4 @@
 """E(3) equivariant GNN. Model + feature transform, everything in one file."""
-from argparse import Namespace
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Type
 
 import haiku as hk
@@ -391,13 +390,23 @@ class EGNN(BaseModel):
         return out
 
     @classmethod
-    def setup_model(cls, args: Namespace) -> Tuple["EGNN", Type]:
-        dtype = jnp.float64 if args.config.f64 else jnp.float32
+    def setup_model(
+        cls,
+        input_seq_length: int,
+        metadata: Dict,
+        normalization_stats: Dict,
+        dtype: jnp.dtype,
+        box: Tuple[float, float, float],
+        latent_dim: int = 128,
+        num_mp_steps: int = 5,
+        **kwargs,
+    ) -> Tuple["EGNN", Type]:
+        _ = kwargs
 
         def displacement_fn(x, y):
             return jax.lax.cond(
-                jnp.array(args.metadata["periodic_boundary_conditions"]).any(),
-                lambda x, y: space.periodic(jnp.array(args.box))[0](x, y).astype(dtype),
+                jnp.array(metadata["periodic_boundary_conditions"]).any(),
+                lambda x, y: space.periodic(jnp.array(box))[0](x, y).astype(dtype),
                 lambda x, y: space.free()[0](x, y).astype(dtype),
                 x,
                 y,
@@ -405,8 +414,8 @@ class EGNN(BaseModel):
 
         def shift_fn(x, y):
             return jax.lax.cond(
-                jnp.array(args.metadata["periodic_boundary_conditions"]).any(),
-                lambda x, y: space.periodic(jnp.array(args.box))[1](x, y).astype(dtype),
+                jnp.array(metadata["periodic_boundary_conditions"]).any(),
+                lambda x, y: space.periodic(jnp.array(box))[1](x, y).astype(dtype),
                 lambda x, y: space.free()[1](x, y).astype(dtype),
                 x,
                 y,
@@ -416,13 +425,13 @@ class EGNN(BaseModel):
         shift_fn = jax.vmap(shift_fn, in_axes=(0, 0))
 
         return cls(
-            hidden_size=args.config.latent_dim,
+            hidden_size=latent_dim,
             output_size=1,
-            dt=args.metadata["dt"] * args.metadata["write_every"],
+            dt=metadata["dt"] * metadata["write_every"],
             displacement_fn=displacement_fn,
             shift_fn=shift_fn,
-            normalization_stats=args.normalization,
-            num_layers=args.config.num_mp_steps,
-            n_vels=args.config.input_seq_length - 1,
+            normalization_stats=normalization_stats,
+            num_layers=num_mp_steps,
+            n_vels=input_seq_length - 1,
             residual=True,
         )

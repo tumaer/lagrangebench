@@ -38,6 +38,7 @@ class CaseSetupFn:
     preprocess_eval: PreprocessEvalFn = static_field()
     integrate: IntegrateFn = static_field()
     displacement: space.DisplacementFn = static_field()
+    normalization_stats: Dict = static_field()
 
 
 def case_builder(
@@ -228,4 +229,5 @@ def case_builder(
         preprocess_eval_fn,
         integrate_fn,
         displacement_fn,
+        normalization_stats,
     )

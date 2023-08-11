@@ -1,4 +1,3 @@
-from argparse import Namespace
 from typing import Dict, Tuple, Type
 
 import haiku as hk
@@ -137,12 +136,20 @@ class GNS(BaseModel):
         return {"acc": acc}
 
     @classmethod
-    def setup_model(cls, args: Namespace) -> Tuple["GNS", Type]:
+    def setup_model(
+        cls,
+        metadata: Dict,
+        latent_dim: int = 128,
+        num_mp_steps: int = 10,
+        num_mlp_layers: int = 2,
+        **kwargs,
+    ) -> Tuple["GNS", Type]:
+        _ = kwargs
         return cls(
-            particle_dimension=args.metadata["dim"],
-            latent_size=args.config.latent_dim,
-            num_mlp_layers=args.config.num_mlp_layers,
-            num_message_passing_steps=args.config.num_mp_steps,
+            particle_dimension=metadata["dim"],
+            latent_size=latent_dim,
+            num_mlp_layers=num_mlp_layers,
+            num_message_passing_steps=num_mp_steps,
             num_particle_types=NodeType.SIZE,
             particle_type_embedding_size=16,
         )

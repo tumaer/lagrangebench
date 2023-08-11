@@ -1,4 +1,3 @@
-from argparse import Namespace
 from typing import Callable, Dict, NamedTuple, Optional, Tuple, Type
 
 import haiku as hk
@@ -509,15 +508,23 @@ class PaiNN(hk.Module):
         return {"acc": v}
 
     @classmethod
-    def setup_model(cls, args: Namespace) -> Tuple["PaiNN", Type]:
-        radius = args.metadata["default_connectivity_radius"] * 1.5
+    def setup_model(
+        cls,
+        input_seq_length: int,
+        metadata: Dict,
+        latent_dim: int = 128,
+        num_mp_steps: int = 5,
+        **kwargs,
+    ) -> Tuple["PaiNN", Type]:
+        _ = kwargs
+        radius = metadata["default_connectivity_radius"] * 1.5
         rbf = gaussian_rbf(20, radius, trainable=True)
         cutoff = cosine_cutoff(radius)
         return cls(
-            hidden_size=args.config.latent_dim,
+            hidden_size=latent_dim,
             output_size=1,
-            n_vels=args.config.input_seq_length - 1,
+            n_vels=input_seq_length - 1,
             radial_basis_fn=rbf,
             cutoff_fn=cutoff,
-            n_layers=args.config.num_mp_steps,
+            n_layers=num_mp_steps,
         )

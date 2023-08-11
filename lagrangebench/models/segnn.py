@@ -1,6 +1,5 @@
 """Steerable E(3) equivariant GNN. Model + feature transform, everything in one file."""
 import warnings
-from argparse import Namespace
 from math import prod
 from typing import Any, Callable, Dict, Optional, Tuple, Type, Union
 
@@ -479,7 +478,6 @@ class SEGNN(BaseModel):
         self._num_layers = num_layers
         self._embed_msg_features = embed_msg_features
         self._norm = norm
-        self._blocks_per_layer = blocks_per_layer
         self._embedding = O3Embedding(
             self._hidden_irreps,
             embed_edges=self._embed_msg_features,
@@ -598,23 +596,45 @@ class SEGNN(BaseModel):
         return out
 
     @classmethod
-    def setup_model(cls, args: Namespace) -> Tuple["SEGNN", Type]:
+    def setup_model(
+        cls,
+        input_seq_length: int,
+        metadata: Dict,
+        has_external_force: bool,
+        magnitudes: bool,
+        lmax_hidden: int = 1,
+        lmax_attributes: int = 1,
+        velocity_aggregate: str = "avg",
+        segnn_norm: str = "instance",
+        latent_dim: int = 64,
+        num_mp_steps: int = 10,
+        num_mlp_layers: int = 2,
+        homogeneous_particles: bool = False,
+        **kwargs,
+    ) -> Tuple["SEGNN", Type]:
+        _ = kwargs
         # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
-        node_feature_irreps = node_irreps(args)
+        node_feature_irreps = node_irreps(
+            metadata,
+            input_seq_length,
+            has_external_force,
+            magnitudes,
+            homogeneous_particles,
+        )
         # 1o displacement, 0e distance
         edge_feature_irreps = Irreps("1x1o + 1x0e")
 
         return cls(
             node_features_irreps=node_feature_irreps,
             edge_features_irreps=edge_feature_irreps,
-            scalar_units=args.config.latent_dim,
-            lmax_hidden=args.config.lmax_hidden,
-            lmax_attributes=args.config.lmax_attributes,
+            scalar_units=latent_dim,
+            lmax_hidden=lmax_hidden,
+            lmax_attributes=lmax_attributes,
             output_irreps=Irreps("1x1o"),
-            num_layers=args.config.num_mp_steps,
-            n_vels=args.config.input_seq_length - 1,
-            velocity_aggregate=args.config.velocity_aggregate,
-            homogeneous_particles=args.info.homogeneous_particles,
-            blocks_per_layer=args.config.num_mlp_layers,
-            norm=args.config.segnn_norm,
+            num_layers=num_mp_steps,
+            n_vels=input_seq_length - 1,
+            velocity_aggregate=velocity_aggregate,
+            homogeneous_particles=homogeneous_particles,
+            blocks_per_layer=num_mlp_layers,
+            norm=segnn_norm,
         )

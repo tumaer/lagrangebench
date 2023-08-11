@@ -10,7 +10,6 @@ import jax.numpy as jnp
 import jax_md.partition as partition
 from torch.utils.data import DataLoader
 
-from lagrangebench.case_setup import CaseSetupFn
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.defaults import defaults
@@ -25,7 +24,7 @@ from lagrangebench.utils import (
 
 
 def eval_single_rollout(
-    case: CaseSetupFn,
+    case,
     metrics_computer: MetricsComputer,
     model_apply: hk.TransformedWithState,
     params: hk.Params,
@@ -98,7 +97,7 @@ def eval_single_rollout(
 
 def eval_rollout(
     model_apply: hk.TransformedWithState,
-    case: CaseSetupFn,
+    case,
     metrics_computer: MetricsComputer,
     params: hk.Params,
     state: hk.State,
@@ -182,7 +181,7 @@ def eval_rollout(
 
 def infer(
     model: hk.TransformedWithState,
-    case: CaseSetupFn,
+    case,
     dataset_test: H5Dataset,
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,

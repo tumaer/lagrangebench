@@ -1,4 +1,3 @@
-from argparse import Namespace
 from typing import Dict, Tuple, Type
 
 import haiku as hk
@@ -31,6 +30,6 @@ class Linear(BaseModel):
         return {"acc": acc}
 
     @classmethod
-    def setup_model(cls, args: Namespace) -> Tuple["Linear", Type]:
-        _ = args
-        return cls(dim_out=args.metadata["dim"])
+    def setup_model(cls, metadata: Dict, **kwargs) -> Tuple["Linear", Type]:
+        _ = kwargs
+        return cls(dim_out=metadata["dim"])

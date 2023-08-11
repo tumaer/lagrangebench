@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from argparse import Namespace
 from typing import Dict, Tuple, Type
 
 import haiku as hk
@@ -34,11 +33,8 @@ class BaseModel(hk.Module, ABC):
 
     @classmethod
     @abstractmethod
-    def setup_model(cls, args: Namespace) -> Tuple["BaseModel", Type]:
+    def setup_model(cls, *args, **kwargs) -> Tuple["BaseModel", Type]:
         """Setup model based on args.
-
-        Args:
-            args: Namespace with model arguments.
 
         Returns:
             Tuple with model instance and class.
