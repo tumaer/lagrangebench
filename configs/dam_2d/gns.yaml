@@ -2,7 +2,6 @@ extends: dam_2d/base.yaml
 
 model: gns
 num_mp_steps: 10
-num_mlp_layers: 1
 latent_dim: 128
 
 batch_size: 1

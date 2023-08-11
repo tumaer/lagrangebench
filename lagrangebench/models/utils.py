@@ -19,19 +19,26 @@ class SteerableGraphsTuple(NamedTuple):
     additional_message_features: Optional[e3nn.IrrepsArray] = None
 
 
-def node_irreps(args) -> str:
+def node_irreps(
+    metadata: Dict,
+    input_seq_length: int,
+    has_external_force: bool,
+    has_magnitudes: bool,
+    has_homogeneous_particles: bool,
+) -> str:
+    """Compute input node irreps based on which features are available."""
     irreps = []
-    irreps.append(f"{args.config.input_seq_length - 1}x1o")
-    if not any(args.metadata["periodic_boundary_conditions"]):
+    irreps.append(f"{input_seq_length - 1}x1o")
+    if not any(metadata["periodic_boundary_conditions"]):
         irreps.append("2x1o")
 
-    if args.info.has_external_force:
+    if has_external_force:
         irreps.append("1x1o")
 
-    if args.config.magnitudes:
-        irreps.append(f"{args.config.input_seq_length - 1}x0e")
+    if has_magnitudes:
+        irreps.append(f"{input_seq_length - 1}x0e")
 
-    if not args.info.homogeneous_particles:
+    if not has_homogeneous_particles:
         irreps.append(f"{NodeType.SIZE}x0e")
 
     return e3nn.Irreps("+".join(irreps))
@@ -39,8 +46,9 @@ def node_irreps(args) -> str:
 
 def build_mlp(latent_size, output_size, num_layers, is_layer_norm=True, **kwds: Dict):
     """MLP generation helper using Haiku"""
+    assert num_layers >= 1
     network = hk.nets.MLP(
-        [latent_size] * num_layers + [output_size],
+        [latent_size] * (num_layers - 1) + [output_size],
         **kwds,
         activate_final=False,
         name="MLP",
