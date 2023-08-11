@@ -198,7 +198,7 @@ class TGV2D(H5Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str = "data/2D_TGV_2500_10kevery100",
+        dataset_path: str = "datasets/2D_TGV_2500_10kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):
@@ -212,22 +212,12 @@ class TGV2D(H5Dataset):
             nl_backend=nl_backend,
         )
 
-        # TODO compute this from metadata
-        self.n_rollout_steps = 20
-
-    def external_force_fn(self, position):
-        return jnp.where(
-            position[1] > 1.0,
-            jnp.array([-1.0, 0.0]),
-            jnp.array([1.0, 0.0]),
-        )
-
 
 class TGV3D(H5Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str = "data/3D_TGV_8000_10kevery100",
+        dataset_path: str = "datasets/3D_TGV_8000_10kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):
@@ -241,19 +231,12 @@ class TGV3D(H5Dataset):
             nl_backend=nl_backend,
         )
 
-    def external_force_fn(self, position):
-        return jnp.where(
-            position[1] > 1.0,
-            jnp.array([-1.0, 0.0, 0.0]),
-            jnp.array([1.0, 0.0, 0.0]),
-        )
-
 
 class RPF2D(H5Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str = "data/2D_RPF_3200_20kevery100",
+        dataset_path: str = "datasets/2D_RPF_3200_20kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):
@@ -266,13 +249,20 @@ class RPF2D(H5Dataset):
             is_rollout=is_rollout,
             nl_backend=nl_backend,
         )
+    
+    def external_force_fn(self, position):
+        return jnp.where(
+            position[1] > 1.0,
+            jnp.array([-1.0, 0.0]),
+            jnp.array([1.0, 0.0]),
+        )
 
 
 class RPF3D(H5Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str = "data/3D_RPF_8000_10kevery100",
+        dataset_path: str = "datasets/3D_RPF_8000_10kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):
@@ -285,13 +275,20 @@ class RPF3D(H5Dataset):
             is_rollout=is_rollout,
             nl_backend=nl_backend,
         )
+    
+    def external_force_fn(self, position):
+        return jnp.where(
+            position[1] > 1.0,
+            jnp.array([-1.0, 0.0, 0.0]),
+            jnp.array([1.0, 0.0, 0.0]),
+        )
 
 
 class LDC2D(H5Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str = "data/2D_LDC_2500_10kevery100",
+        dataset_path: str = "datasets/2D_LDC_2500_10kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):
@@ -311,7 +308,7 @@ class LDC3D(H5Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str = "data/3D_LDC_8160_10kevery100",
+        dataset_path: str = "datasets/3D_LDC_8160_10kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):
@@ -331,7 +328,7 @@ class DAM2D(H5Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str = "data/2D_DB_5740_20kevery100",
+        dataset_path: str = "datasets/2D_DB_5740_20kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
     ):

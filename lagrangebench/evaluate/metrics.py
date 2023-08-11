@@ -25,7 +25,7 @@ class MetricsComputer:
         input_seq_length: int,
         stride: int = 10,
         loss_ranges: Optional[List] = None,
-        ot_backend: str = "pot",
+        ot_backend: str = "ott",
     ):
         """Init the metric computer.
 

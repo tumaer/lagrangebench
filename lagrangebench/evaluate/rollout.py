@@ -208,7 +208,7 @@ def infer(
         rollout_dir: Path to rollout directory.
         eval_n_trajs: Number of trajectories to evaluate.
         n_rollout_steps: Number of rollout steps.
-        out_type: Output type.
+        out_type: Output type. Either "none", "vtk" or "pkl".
         n_extrap_steps: Number of extrapolation steps.
         seed: Seed.
 
