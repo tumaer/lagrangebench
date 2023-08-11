@@ -231,7 +231,6 @@ def O3Embedding(embed_irreps: Irreps, embed_edges: bool = True) -> Callable:
     def _embedding(
         st_graph: SteerableGraphsTuple,
     ) -> SteerableGraphsTuple:
-        # TODO update
         graph = st_graph.graph
         nodes = O3TensorProduct(
             embed_irreps,

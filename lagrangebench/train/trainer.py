@@ -61,7 +61,7 @@ def _mse(
 
 @partial(jax.jit, static_argnames=["loss_fn", "opt_update"])
 def _update(
-    params: hk.Module,
+    params: hk.Params,
     state: hk.State,
     features_batch: Tuple[jraph.GraphsTuple, ...],
     target_batch: Tuple[jnp.ndarray, ...],
@@ -89,13 +89,19 @@ def _update(
 
 
 def Trainer(
-    model: hk.Module,
+    model: hk.TransformedWithState,
     case,
     dataset_train: H5Dataset,
     dataset_eval: H5Dataset,
+    lr_start: float = defaults.lr_start,
+    batch_size: int = defaults.batch_size,
+    input_seq_length: int = defaults.input_seq_length,
+    pushforward: Optional[PushforwardConfig] = None,
+    noise_std: float = defaults.noise_std,
     metrics: Optional[Dict] = None,
     seed: int = defaults.seed,
-):
+    **kwargs,
+) -> Callable:
     """
     Trainer builder function. Returns a function that trains the model on the given
     case and dataset_train, evaluating it on dataset_eval with the specified metrics.
@@ -105,15 +111,85 @@ def Trainer(
         case: Case setup class.
         dataset_train: Training dataset.
         dataset_eval: Validation dataset.
+        lr_start: Initial learning rate.
+        batch_size: Training batch size.
+        input_seq_length: Input sequence length. Default is 6.
+        pushforward: Pushforward configuration.
+        noise_std: Noise standard deviation for the GNS-style noise.
         metrics: Metrics to evaluate the model on.
         seed: Random seed.
+
+    Keyword Args:
+        lr_end: Final learning rate.
+        lr_steps: Number of steps to reach the final learning rate.
+        lr_decay_rate: Learning rate decay rate.
+        loss_weight: Loss weight object.
+        n_rollout_steps: Number of autoregressive rollout steps.
+        eval_n_trajs: Number of trajectories to evaluate.
+        rollout_dir: Rollout directory.
+        out_type: Output type.
+        log_steps: Wandb/screen logging frequency.
+        eval_steps: Evaluation and checkpointing frequency.
+
 
     Returns:
         Configured training function.
     """
 
+    assert isinstance(
+        model, hk.TransformedWithState
+    ), "Model must be passed as an Haiku transformed function."
+
     base_key, seed_worker, generator = set_seed(seed)
 
+    # dataloaders
+    loader_train = DataLoader(
+        dataset=dataset_train,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=4,
+        collate_fn=numpy_collate,
+        drop_last=True,
+        worker_init_fn=seed_worker,
+        generator=generator,
+    )
+    loader_eval = DataLoader(
+        dataset=dataset_eval,
+        batch_size=1,
+        collate_fn=numpy_collate,
+        worker_init_fn=seed_worker,
+        generator=generator,
+    )
+
+    # learning rate decays from lr_start to lr_end over lr_steps exponentially
+    lr_scheduler = optax.exponential_decay(
+        init_value=lr_start,
+        transition_steps=kwargs.get("lr_steps", defaults.lr_steps),
+        decay_rate=kwargs.get("lr_decay_rate", defaults.lr_decay_rate),
+        end_value=kwargs.get("lr_end", defaults.lr_end),
+    )
+    # optimizer
+    opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
+
+    # loss config
+    loss_weight = kwargs.get("loss_weight", None)
+    if loss_weight is None:
+        loss_weight = LossConfig()
+    # pushforward config
+    pushforward = kwargs.get("pushforward", None)
+    if pushforward is None:
+        pushforward = PushforwardConfig()
+
+    # trajectory and rollout
+    n_rollout_steps = kwargs.get("n_rollout_steps", defaults.n_rollout_steps)
+    eval_n_trajs = kwargs.get("eval_n_trajs", defaults.eval_n_trajs)
+    rollout_dir = kwargs.get("rollout_dir", defaults.rollout_dir)
+    out_type = kwargs.get("out_type", defaults.out_type)
+    # logging and checkpointing
+    log_steps = kwargs.get("log_steps", defaults.log_steps)
+    eval_steps = kwargs.get("eval_steps", defaults.eval_steps)
+
+    # metrics computer config
     metrics_computer = MetricsComputer(
         metrics,
         dist_fn=case.displacement,
@@ -122,78 +198,30 @@ def Trainer(
     )
 
     def _train(
-        lr_start: float = defaults.lr_start,
         step_max: int = defaults.step_max,
-        batch_size: int = defaults.batch_size,
-        pushforward: Optional[PushforwardConfig] = defaults.pushforward,
-        noise_std: float = defaults.noise_std,
         params: Optional[hk.Params] = None,
         state: Optional[hk.State] = None,
+        opt_state: Optional[optax.OptState] = None,
         store_checkpoint: Optional[str] = None,
         load_checkpoint: Optional[str] = None,
         wandb_run: Optional[Run] = None,
-        **kwargs,
-    ):
+    ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
         Training function. Trains and evals the model on the given case and dataset, and
         saves the model checkpoints and best models.
 
         Args:
-            lr_start: Initial learning rate.
             step_max: Maximum number of training steps.
-            batch_size: Training batch size.
-            pushforward: Pushforward configuration.
-            noise_std: Noise standard deviation for the GNS-style noise.
             params: Optional model parameters. If provided, training continues from it.
             state: Optional model state.
+            opt_state: Optional optimizer state.
             store_checkpoint: Checkpoints destination. Without it params aren't saved.
             load_checkpoint: Initial checkpoint directory. If provided resumes training.
             wandb_run: Wandb run.
 
-        Keyword Args:
-            lr_end: Final learning rate.
-            lr_steps: Number of steps to reach the final learning rate.
-            lr_decay_rate: Learning rate decay rate.
-            input_seq_length: Input sequence length. Default is 6.
-            n_rollout_steps: Number of autoregressive rollout steps.
-            eval_n_trajs: Number of trajectories to evaluate.
-            rollout_dir: Rollout directory.
-            out_type: Output type.
-            log_steps: Wandb/screen logging frequency.
-            eval_steps: Evaluation and checkpointing frequency.
-            loss_weight: Loss weight object.
-
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
         """
-        # dataloaders
-        loader_train = DataLoader(
-            dataset=dataset_train,
-            batch_size=batch_size,
-            shuffle=True,
-            num_workers=4,
-            collate_fn=numpy_collate,
-            drop_last=True,
-            worker_init_fn=seed_worker,
-            generator=generator,
-        )
-        loader_eval = DataLoader(
-            dataset=dataset_eval,
-            batch_size=1,
-            collate_fn=numpy_collate,
-            worker_init_fn=seed_worker,
-            generator=generator,
-        )
-
-        # trajectory and rollout config
-        input_seq_length = kwargs.get("input_seq_length", defaults.input_seq_length)
-        n_rollout_steps = kwargs.get("n_rollout_steps", defaults.n_rollout_steps)
-        eval_n_trajs = kwargs.get("eval_n_trajs", defaults.eval_n_trajs)
-        rollout_dir = kwargs.get("rollout_dir", defaults.rollout_dir)
-        out_type = kwargs.get("out_type", defaults.out_type)
-
-        log_steps = kwargs.get("log_steps", defaults.log_steps)
-        eval_steps = kwargs.get("eval_steps", defaults.eval_steps)
 
         assert n_rollout_steps <= dataset_eval.subsequence_length - input_seq_length, (
             "If you want to evaluate the loss on more than the ground truth trajectory "
@@ -203,23 +231,10 @@ def Trainer(
             loader_eval
         ), "eval_n_trajs must be <= len(loader_valid)"
 
-        # learning rate decays from lr_start to lr_end over lr_steps exponentially
-        lr_scheduler = optax.exponential_decay(
-            init_value=lr_start,
-            transition_steps=kwargs.get("lr_steps", defaults.lr_steps),
-            decay_rate=kwargs.get("lr_decay_rate", defaults.lr_decay_rate),
-            end_value=kwargs.get("lr_end", defaults.lr_end),
-        )
-        # optimizer
-        opt_init, opt_update = optax.adamw(
-            learning_rate=lr_scheduler, weight_decay=1e-8
-        )
-
         # Precompile model for evaluation
         model_apply = jax.jit(model.apply)
 
         # loss and update functions
-        loss_weight = kwargs.get("loss_weight", LossConfig())
         loss_fn = partial(_mse, model_fn=model_apply, loss_weight=loss_weight)
         update_fn = partial(_update, loss_fn=loss_fn, opt_update=opt_update)
 
@@ -228,6 +243,7 @@ def Trainer(
         sample = (pos_input_and_target[0], particle_type[0])
         key, features, _, neighbors = case.allocate(base_key, sample)
 
+        step = 0
         if params is not None:
             # continue training from params
             if state is None:
@@ -240,9 +256,9 @@ def Trainer(
             key, subkey = jax.random.split(key, 2)
             params, state = model.init(subkey, (features, particle_type[0]))
 
-        if load_checkpoint is None:
+        # initialize optimizer state
+        if opt_state is None:
             opt_state = opt_init(params)
-            step = 0
 
         # create new checkpoint directory
         if store_checkpoint is not None:
@@ -336,7 +352,7 @@ def Trainer(
                     metrics = averaged_metrics(eval_metrics)
                     metadata_ckp = {
                         "step": step,
-                        "loss": metrics["val/loss"],
+                        "loss": metrics.get("val/loss", None),
                     }
                     if store_checkpoint is not None:
                         save_haiku(

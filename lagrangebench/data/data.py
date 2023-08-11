@@ -1,26 +1,38 @@
 import bisect
-import os
-from typing import Dict
+import json
+import os.path as osp
+import re
+from typing import Optional
 
 import h5py
 import jax.numpy as jnp
 import numpy as np
 from torch.utils.data import Dataset
 
+# TODO update in final version
+URLS = {
+    "tgv2d": "https://drive.google.com/drive/folders/140_qJ4wwCWryCLv8Dm5syrHjOSlFGj5F",
+    "rpf2d": "https://drive.google.com/drive/folders/1axqZFRDSlXCsEf_LGz1JRq1rLrOTabmh",
+    "ldc2d": "https://drive.google.com/drive/folders/153inM2p7pJn27bXs1WaJnfCuY9mW75oY",
+    "dam2d": "https://drive.google.com/drive/folders/1X-KhmgNNb1mC7acW6WA-vAVZhg4rDPjF",
+    "tgv3d": "https://drive.google.com/drive/folders/1j20G6AMK47AwHre0QGtGmtW_hKceBX35",
+    "rpf3d": "https://drive.google.com/drive/folders/1ov9Xds6VSNLSGboht4EasDTRpx2QBFWX",
+    "ldc3d": "https://drive.google.com/drive/folders/1FjRFjKKuFdjmX5x3Zso5WA4Hk4BjuOHF",
+}
+
 
 class H5Dataset(Dataset):
-    """Dataset for loading h5 simulation trajectories."""
+    """Dataset for loading HDF5 simulation trajectories."""
 
     def __init__(
         self,
-        dataset_path: str,
         split: str,
-        metadata: Dict,
+        dataset_path: str,
+        name: Optional[str] = None,
         input_seq_length: int = 6,
         split_valid_traj_into_n: int = 1,
         is_rollout: bool = False,
         nl_backend: str = "jaxmd_vmap",
-        name: str = "",
     ):
         """
         Reference on parallel loading of h5 samples see:
@@ -29,14 +41,32 @@ class H5Dataset(Dataset):
         Implementation inspired by:
         https://github.com/Open-Catalyst-Project/ocp/blob/main/ocpmodels/datasets/lmdb_dataset.py
 
+        Args:
+            split: "train", "valid", or "test"
+            dataset_path: Path to the dataset
+            name: Name of the dataset. If None, it is inferred from the path.
+            input_seq_length: Length of the input sequence
+            split_valid_traj_into_n: Number splits per validation trajectory
+            is_rollout: Whether to return trajectories (valid) or subsequences (train)
+            nl_backend: Which backend to use for the neighbor list
         """
 
+        if not osp.exists(dataset_path):
+            name, dataset_path = self.download(name, dataset_path)
+
+        assert split in ["train", "valid", "test"]
+
         self.dataset_path = dataset_path
-        self.file_path = os.path.join(dataset_path, split + ".h5")
+        self.file_path = osp.join(dataset_path, split + ".h5")
         self.input_seq_length = input_seq_length
         self.split_valid_traj_into_n = split_valid_traj_into_n
         self.nl_backend = nl_backend
-        self.metadata = metadata
+
+        self.external_force_fn = None
+
+        # load metadata
+        with open(osp.join(dataset_path, "metadata.json"), "r") as f:
+            self.metadata = json.loads(f.read())
 
         self.db_hdf5 = None
 
@@ -60,6 +90,27 @@ class H5Dataset(Dataset):
             self.num_samples = sum(keylens)
 
             self.getter = self.get_window
+
+    def download(self, name: str, path: str) -> str:
+        import gdown
+
+        if name is None:
+            name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
+            assert name is not None, (
+                f"No valid dataset name found in path {path}. "
+                "Valid name formats: {2D|3D}_{TGV|RPF|LDC|DAM}"
+            )
+            name = name.group(0)
+            name = f"{name.split('_')[1]}{name.split('_')[0]}".lower()
+
+        assert name in URLS, f"Dataset {name} not available."
+        url = URLS[name]
+
+        # TODO temporary from google drive
+        # download folder
+        path = gdown.download_folder(url, output=path, quiet=False)
+        path = osp.split(path[0])[0]
+        return name, path
 
     def open_hdf5(self) -> h5py.File:
         if self.db_hdf5 is None:
@@ -141,3 +192,156 @@ class H5Dataset(Dataset):
 
     def __len__(self):
         return self.num_samples
+
+
+class TGV2D(H5Dataset):
+    def __init__(
+        self,
+        split: str,
+        dataset_path: str = "data/2D_TGV_2500_10kevery100",
+        is_rollout=False,
+        nl_backend="jaxmd_vmap",
+    ):
+        super().__init__(
+            split,
+            dataset_path,
+            name="tgv2d",
+            input_seq_length=6,
+            split_valid_traj_into_n=1,
+            is_rollout=is_rollout,
+            nl_backend=nl_backend,
+        )
+
+        # TODO compute this from metadata
+        self.n_rollout_steps = 20
+
+    def external_force_fn(self, position):
+        return jnp.where(
+            position[1] > 1.0,
+            jnp.array([-1.0, 0.0]),
+            jnp.array([1.0, 0.0]),
+        )
+
+
+class TGV3D(H5Dataset):
+    def __init__(
+        self,
+        split: str,
+        dataset_path: str = "data/3D_TGV_8000_10kevery100",
+        is_rollout=False,
+        nl_backend="jaxmd_vmap",
+    ):
+        super().__init__(
+            split,
+            dataset_path,
+            name="tgv3d",
+            input_seq_length=6,
+            split_valid_traj_into_n=1,
+            is_rollout=is_rollout,
+            nl_backend=nl_backend,
+        )
+
+    def external_force_fn(self, position):
+        return jnp.where(
+            position[1] > 1.0,
+            jnp.array([-1.0, 0.0, 0.0]),
+            jnp.array([1.0, 0.0, 0.0]),
+        )
+
+
+class RPF2D(H5Dataset):
+    def __init__(
+        self,
+        split: str,
+        dataset_path: str = "data/2D_RPF_3200_20kevery100",
+        is_rollout=False,
+        nl_backend="jaxmd_vmap",
+    ):
+        super().__init__(
+            split,
+            dataset_path,
+            name="rpf2d",
+            input_seq_length=6,
+            split_valid_traj_into_n=384,
+            is_rollout=is_rollout,
+            nl_backend=nl_backend,
+        )
+
+
+class RPF3D(H5Dataset):
+    def __init__(
+        self,
+        split: str,
+        dataset_path: str = "data/3D_RPF_8000_10kevery100",
+        is_rollout=False,
+        nl_backend="jaxmd_vmap",
+    ):
+        super().__init__(
+            split,
+            dataset_path,
+            name="rpf3d",
+            input_seq_length=6,
+            split_valid_traj_into_n=192,
+            is_rollout=is_rollout,
+            nl_backend=nl_backend,
+        )
+
+
+class LDC2D(H5Dataset):
+    def __init__(
+        self,
+        split: str,
+        dataset_path: str = "data/2D_LDC_2500_10kevery100",
+        is_rollout=False,
+        nl_backend="jaxmd_vmap",
+    ):
+        super().__init__(
+            split,
+            dataset_path,
+            name="ldc2d",
+            input_seq_length=6,
+            # TODO compute this from metadata
+            split_valid_traj_into_n=192,
+            is_rollout=is_rollout,
+            nl_backend=nl_backend,
+        )
+
+
+class LDC3D(H5Dataset):
+    def __init__(
+        self,
+        split: str,
+        dataset_path: str = "data/3D_LDC_8160_10kevery100",
+        is_rollout=False,
+        nl_backend="jaxmd_vmap",
+    ):
+        super().__init__(
+            split,
+            dataset_path,
+            name="ldc3d",
+            input_seq_length=6,
+            # TODO compute this from metadata and n_rollout_steps
+            split_valid_traj_into_n=192,
+            is_rollout=is_rollout,
+            nl_backend=nl_backend,
+        )
+
+
+class DAM2D(H5Dataset):
+    def __init__(
+        self,
+        split: str,
+        dataset_path: str = "data/2D_DB_5740_20kevery100",
+        is_rollout=False,
+        nl_backend="jaxmd_vmap",
+    ):
+        super().__init__(
+            split,
+            dataset_path,
+            name="dam2d",
+            input_seq_length=6,
+            # TODO compute this from metadata and n_rollout_steps
+            split_valid_traj_into_n=15,
+            is_rollout=is_rollout,
+            nl_backend=nl_backend,
+        )

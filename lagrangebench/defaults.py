@@ -5,8 +5,6 @@ from typing import List
 
 import jax.numpy as jnp
 
-from lagrangebench.utils import PushforwardConfig
-
 
 @dataclass(frozen=True)
 class defaults:
@@ -24,9 +22,7 @@ class defaults:
     lr_steps: int = 5e6
     lr_decay_rate: float = 0.1
 
-    # training tricks
     noise_std: float = 1e-4
-    pushforward: PushforwardConfig = PushforwardConfig()
 
     # evaluation
     input_seq_length: int = 6

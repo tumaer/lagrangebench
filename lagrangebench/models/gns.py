@@ -15,12 +15,12 @@ class GNS(BaseModel):
 
     def __init__(
         self,
-        particle_dimension,
-        latent_size,
-        num_mlp_layers,
-        num_message_passing_steps,
-        num_particle_types,
-        particle_type_embedding_size,
+        particle_dimension: int,
+        latent_size: int,
+        num_mlp_layers: int,
+        num_message_passing_steps: int,
+        particle_type_embedding_size: int,
+        num_particle_types: int = NodeType.SIZE,
     ):
         super().__init__()
         self._output_size = particle_dimension
