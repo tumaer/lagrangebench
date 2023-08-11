@@ -14,8 +14,8 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-if [ ! -d "data" ]; then
-    mkdir data
+if [ ! -d "datasets" ]; then
+    mkdir datasets
 fi
 
 # download the data
@@ -23,9 +23,9 @@ if [ $1 == "all" ]; then
     echo "Downloading all datasets"
     for key in ${!gdrive[@]}; do
         echo "Downloading $key"
-        gdown --folder --continue  ${gdrive[$key]} -O data/
+        gdown --folder --continue  ${gdrive[$key]} -O datasets/
     done
 else
     echo "Downloading $1"
-    gdown --folder --continue ${gdrive[$1]} -O data/
+    gdown --folder --continue ${gdrive[$1]} -O datasets/
 fi

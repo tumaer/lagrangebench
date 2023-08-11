@@ -1,13 +1,14 @@
 # experiments
-ckp
-rollout
+ckp/
+rollout/
+rollouts/
 wandb
 *.out
 datasets
 baselines
 partition_*
 *.pkl
-data/
+datasets/
 # dev
 .vscode
 __pycache__
