@@ -4,7 +4,7 @@ import bisect
 import json
 import os.path as osp
 import re
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 import h5py
 import jax.numpy as jnp
@@ -25,7 +25,7 @@ URLS = {
 
 class H5Dataset(Dataset):
     """Dataset for loading HDF5 simulation trajectories.
-    
+
     Reference on parallel loading of h5 samples see:
     https://github.com/pytorch/pytorch/issues/11929
 
@@ -251,7 +251,7 @@ class RPF2D(H5Dataset):
                 jnp.array([-1.0, 0.0]),
                 jnp.array([1.0, 0.0]),
             )
-        
+
         super().__init__(
             split,
             dataset_path,
@@ -271,13 +271,14 @@ class RPF3D(H5Dataset):
         dataset_path: str = "datasets/3D_RPF_8000_10kevery100",
         is_rollout=False,
         nl_backend="jaxmd_vmap",
-    ):    
+    ):
         def external_force_fn(position):
             return jnp.where(
                 position[1] > 1.0,
                 jnp.array([-1.0, 0.0, 0.0]),
                 jnp.array([1.0, 0.0, 0.0]),
             )
+
         super().__init__(
             split,
             dataset_path,
