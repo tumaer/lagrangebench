@@ -39,7 +39,7 @@ The datasets are temporarily hosted on Google Drive. When creating a new dataset
 
 
 ## Directory structure
-```python
+```
 📦lagrangebench
  ┣ 📂case_setup     # Case setup manager
  ┃ ┣ 📜case.py      # CaseSetupFn class
