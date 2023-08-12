@@ -1,3 +1,5 @@
+"""Simple baseline linear model."""
+
 from typing import Dict, Tuple, Type
 
 import haiku as hk
@@ -12,6 +14,11 @@ class Linear(BaseModel):
     """Model defining linear relation between input nodes and targets."""
 
     def __init__(self, dim_out):
+        """Initialize the model.
+
+        Args:
+            dim_out: Output dimensionality.
+        """
         super().__init__()
         self.mlp = hk.Linear(dim_out)
 

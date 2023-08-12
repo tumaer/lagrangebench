@@ -1,3 +1,5 @@
+"""Metrics for evaluation end testing."""
+
 import warnings
 from collections import defaultdict
 from functools import partial
@@ -13,7 +15,15 @@ MetricsDict = Dict[str, Dict[str, jnp.ndarray]]
 
 
 class MetricsComputer:
-    """Metrics between predicted and target rollouts."""
+    """
+    Metrics between predicted and target rollouts.
+
+    Currently implemented:
+    * MSE, mean squared error
+    * MAE, mean absolute error
+    * Sinkhorn distance, measures the similarity of two particle distributions
+    * Kinetic energy, physical quantity of interest
+    """
 
     METRICS = ["mse", "mae", "sinkhorn", "e_kin"]
 
@@ -30,13 +40,13 @@ class MetricsComputer:
         """Init the metric computer.
 
         Args:
-            active_metrics: list of metrics to compute
-            dist_fn: distance function
-            metadata: metadata of the dataset
-            loss_ranges: list of horizon lengths to compute the loss for
-            input_seq_length: length of the input sequence
-            stride: rollout subsample frequency for sinkhorn
-            ot_backend: backend for sinkhorn computation. "ott" or "pot"
+            active_metrics: List of metrics to compute.
+            dist_fn: Distance function.
+            metadata: Metadata of the dataset.
+            loss_ranges: List of horizon lengths to compute the loss for.
+            input_seq_length: Length of the input sequence.
+            stride: Rollout subsample frequency for Sinkhorn.
+            ot_backend: Backend for sinkhorn computation. "ott" or "pot".
         """
         if active_metrics is None:
             active_metrics = []
@@ -59,6 +69,15 @@ class MetricsComputer:
     def __call__(
         self, pred_rollout: jnp.ndarray, target_rollout: jnp.ndarray
     ) -> MetricsDict:
+        """Compute the metrics between two rollouts.
+
+        Args:
+            pred_rollout: Predicted rollout.
+            target_rollout: Target rollout.
+
+        Returns:
+            Dictionary of metrics.
+        """
         # both rollouts of shape (traj_len - t_window, n_nodes, dim)
         target_rollout = jnp.asarray(target_rollout, dtype=pred_rollout.dtype)
         metrics = {}
@@ -119,14 +138,17 @@ class MetricsComputer:
 
     @partial(jax.jit, static_argnums=(0,))
     def mse(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:
+        """Compute the mean squared error between two rollouts."""
         return (self._dist_vmap(pred, target) ** 2).mean()
 
     @partial(jax.jit, static_argnums=(0,))
     def mae(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:
+        """Compute the mean absolute error between two rollouts."""
         return (jnp.abs(self._dist_vmap(pred, target))).mean()
 
     @partial(jax.jit, static_argnums=(0,))
     def sinkhorn(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:
+        """Compute the sinkhorn distance between two rollouts."""
         if self.ot_backend == "ott":
             return self._sinkhorn_ott(pred, target)
         else:
@@ -134,7 +156,7 @@ class MetricsComputer:
 
     @partial(jax.jit, static_argnums=(0,))
     def e_kin(self, frame: jnp.ndarray) -> float:
-        """Computes the kinetic energy of a frame"""
+        """Compute the kinetic energy of a frame."""
         return jnp.sum(frame**2)  # * dx ** 3
 
     def _sinkhorn_ott(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:

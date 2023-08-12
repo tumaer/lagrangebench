@@ -1,3 +1,5 @@
+"""Graph Network-based Simulator (GNS) model."""
+
 from typing import Dict, Tuple, Type
 
 import haiku as hk
@@ -11,7 +13,10 @@ from .utils import build_mlp
 
 
 class GNS(BaseModel):
-    """Model definition for Graph Network-based Simulator (GNS)"""
+    """Model definition for Graph Network-based Simulator (GNS).
+
+    Original paper: https://arxiv.org/abs/2002.09405
+    """
 
     def __init__(
         self,
@@ -22,6 +27,16 @@ class GNS(BaseModel):
         particle_type_embedding_size: int,
         num_particle_types: int = NodeType.SIZE,
     ):
+        """Initialize the model.
+
+        Args:
+            particle_dimension: Space dimensionality (e.g. 2 or 3).
+            latent_size: Size of the latent representations.
+            num_mlp_layers: Number of MLP layers per block.
+            num_message_passing_steps: Number of message passing steps.
+            particle_type_embedding_size: Size of the particle type embedding.
+            num_particle_types: Max number of particle types.
+        """
         super().__init__()
         self._output_size = particle_dimension
         self._latent_size = latent_size
@@ -34,7 +49,7 @@ class GNS(BaseModel):
         )  # (9, 16)
 
     def _encoder(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
-        """MLP graph encoder"""
+        """MLP graph encoder."""
         node_latents = build_mlp(
             self._latent_size, self._latent_size, self._num_layers
         )(graph.nodes)
@@ -52,7 +67,7 @@ class GNS(BaseModel):
         )
 
     def _processor(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
-        """Sequence of 15 Graph Network blocks"""
+        """Sequence of Graph Network blocks."""
 
         def update_edge_features(
             edge_features, sender_node_features, receiver_node_features, _  # globals_
@@ -92,7 +107,7 @@ class GNS(BaseModel):
         return graph
 
     def _decoder(self, graph: jraph.GraphsTuple):
-        """MLP graph node decoder"""
+        """MLP graph node decoder."""
         return build_mlp(
             self._latent_size, self._output_size, self._num_layers, is_layer_norm=False
         )(graph.nodes)

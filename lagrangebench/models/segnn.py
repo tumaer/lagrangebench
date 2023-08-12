@@ -133,7 +133,7 @@ class O3TensorProduct(hk.Module):
     def __call__(
         self, x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None, **kwargs
     ) -> e3nn.IrrepsArray:
-        """Applies an O(3) equivariant linear parametrized tensor product layer.
+        """Apply an O(3) equivariant linear parametrized tensor product layer.
 
         Args:
             x (IrrepsArray): Left tensor
@@ -142,7 +142,6 @@ class O3TensorProduct(hk.Module):
         Returns:
             The output to the weighted tensor product (IrrepsArray).
         """
-
         if not y:
             y = e3nn.IrrepsArray("1x0e", jnp.ones((1, 1), dtype=x.dtype))
 
@@ -187,7 +186,6 @@ def O3TensorProductGate(
     Returns:
         Function that applies the gated tensor product layer.
     """
-
     if not isinstance(output_irreps, e3nn.Irreps):
         output_irreps = e3nn.Irreps(output_irreps)
 
@@ -285,7 +283,7 @@ def O3Decoder(
 
 class SEGNNLayer(hk.Module):
     """
-    Steerable E(3) equivariant layer.
+    Steerable E(3) equivariant layer [#segnn].
 
     Applies a message passing step (GN) with equivariant message and update functions.
     """
@@ -400,8 +398,16 @@ def weight_balanced_irreps(
     scalar_units: int, irreps_right: Irreps, lmax: int = None
 ) -> Irreps:
     """
-    Determines left Irreps such that the weighted tensor product left x right has
-    (at least) scalar_units weights.
+    Determine left irreps so that the tensor product with irreps_right has at least
+    scalar_units weights.
+
+    Args:
+        scalar_units: Number of weights
+        irreps_right: Right irreps
+        lmax: Maximum L of the left irreps
+
+    Returns:
+        Left irreps
     """
     # irrep order
     if lmax is None:
@@ -427,9 +433,12 @@ def weight_balanced_irreps(
 
 
 class SEGNN(BaseModel):
-    """Steerable E(3) equivariant network.
+    """Steerable E(3) equivariant network [#segnn].
 
-    Original paper https://arxiv.org/abs/2110.02905.
+    References:
+        [#segnn] Brandstetter, Hesselink, van der Pol, Bekkers, Welling
+        Geometric and Physical Quantities improve {E(3)} Equivariant Message Passing.
+        ICLR 2021, https://arxiv.org/abs/2110.02905
     """
 
     def __init__(
@@ -445,7 +454,6 @@ class SEGNN(BaseModel):
         velocity_aggregate: str = "avg",
         homogeneous_particles: bool = True,
         norm: Optional[str] = None,
-        # TODO fix
         blocks_per_layer: int = 2,
         embed_msg_features: bool = False,
     ):
@@ -478,6 +486,8 @@ class SEGNN(BaseModel):
         self._num_layers = num_layers
         self._embed_msg_features = embed_msg_features
         self._norm = norm
+        self._blocks_per_layer = blocks_per_layer
+
         self._embedding = O3Embedding(
             self._hidden_irreps,
             embed_edges=self._embed_msg_features,
@@ -486,6 +496,7 @@ class SEGNN(BaseModel):
         self._decoder = O3Decoder(
             latent_irreps=self._hidden_irreps,
             output_irreps=output_irreps,
+            blocks=self._blocks_per_layer,
         )
 
         # transform
@@ -589,7 +600,9 @@ class SEGNN(BaseModel):
         st_graph = self._embedding(st_graph)
         # message passing
         for n in range(self._num_layers):
-            st_graph = SEGNNLayer(self._hidden_irreps, n, norm=self._norm)(st_graph)
+            st_graph = SEGNNLayer(
+                self._hidden_irreps, n, blocks=self._blocks_per_layer, norm=self._norm
+            )(st_graph)
         # readout
         nodes = self._decoder(st_graph)
         out = self._postprocess(nodes, dim)

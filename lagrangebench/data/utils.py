@@ -1,3 +1,5 @@
+"""Data utils."""
+
 import warnings
 from typing import Dict, List
 
@@ -10,6 +12,16 @@ def get_dataset_stats(
     is_isotropic_norm: bool,
     noise_std: float,
 ) -> Dict[str, Dict[str, jnp.ndarray]]:
+    """Return the dataset statistics based on the metadata dictionary.
+
+    Args:
+        metadata: Metadata dictionary.
+        is_isotropic_norm: Whether to use isotropic normalization.
+        noise_std: Standard deviation of the noise.
+
+    Returns:
+        Dictionary with the dataset statistics.
+    """
     acc_mean = jnp.array(metadata["acc_mean"])
     acc_std = jnp.array(metadata["acc_std"])
     vel_mean = jnp.array(metadata["vel_mean"])
@@ -40,6 +52,7 @@ def get_dataset_stats(
 
 
 def numpy_collate(batch) -> np.ndarray:
+    """Collate helper for torch dataloaders."""
     # NOTE: to numpy to avoid copying twice (dataloader timeout).
     if isinstance(batch[0], np.ndarray):
         return np.stack(batch)

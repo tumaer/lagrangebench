@@ -44,7 +44,8 @@ class H5Dataset(Dataset):
         nl_backend: str = "jaxmd_vmap",
         external_force_fn: Optional[Callable] = None,
     ):
-        """
+        """Initialize the dataset. If the dataset is not present, it is downloaded.
+
         Args:
             split: "train", "valid", or "test"
             dataset_path: Path to the dataset
@@ -55,7 +56,6 @@ class H5Dataset(Dataset):
             nl_backend: Which backend to use for the neighbor list
             external_force_fn: Function that returns the position-wise external force
         """
-
         if not osp.exists(dataset_path):
             name, dataset_path = self.download(name, dataset_path)
 
@@ -97,6 +97,12 @@ class H5Dataset(Dataset):
             self.getter = self.get_window
 
     def download(self, name: str, path: str) -> str:
+        """Download the dataset.
+
+        Args:
+            name: Name of the dataset
+            path: Destination path to the downloaded dataset
+        """
         import gdown
 
         if name is None:
@@ -117,13 +123,13 @@ class H5Dataset(Dataset):
         path = osp.split(path[0])[0]
         return name, path
 
-    def open_hdf5(self) -> h5py.File:
+    def _open_hdf5(self) -> h5py.File:
         if self.db_hdf5 is None:
             return h5py.File(self.file_path, "r")
         else:
             return self.db_hdf5
 
-    def matscipy_pad(self, pos_input, particle_type):
+    def _matscipy_pad(self, pos_input, particle_type):
         padding_size = self.metadata["num_particles_max"] - pos_input.shape[0] + 1
         pos_input = np.pad(
             pos_input,
@@ -137,8 +143,9 @@ class H5Dataset(Dataset):
         return pos_input, particle_type
 
     def get_trajectory(self, idx: int):
+        """Get a (full) trajectory and index idx."""
         # open the database file
-        self.db_hdf5 = self.open_hdf5()
+        self.db_hdf5 = self._open_hdf5()
 
         if self.split_valid_traj_into_n > 1:
             traj_idx = idx // self.split_valid_traj_into_n
@@ -159,11 +166,12 @@ class H5Dataset(Dataset):
         particle_type = traj["particle_type"][:]
 
         if self.nl_backend == "matscipy":
-            pos_input, particle_type = self.matscipy_pad(pos_input, particle_type)
+            pos_input, particle_type = self._matscipy_pad(pos_input, particle_type)
 
         return pos_input, particle_type
 
     def get_window(self, idx: int):
+        """Get a window of the trajectory and index idx."""
         # figure out which trajectory this should be indexed from.
         traj_idx = bisect.bisect(self._keylen_cumulative, idx)
         # extract index of element within that trajectory.
@@ -173,7 +181,7 @@ class H5Dataset(Dataset):
         assert el_idx >= 0
 
         # open the database file
-        self.db_hdf5 = self.open_hdf5()
+        self.db_hdf5 = self._open_hdf5()
 
         # get a pointer to the trajectory. That is not yet the real trajectory.
         traj = self.db_hdf5[f"{self.traj_keys[traj_idx]}"]
@@ -186,7 +194,7 @@ class H5Dataset(Dataset):
         particle_type = traj["particle_type"][:]
 
         if self.nl_backend == "matscipy":
-            pos_input_and_target, particle_type = self.matscipy_pad(
+            pos_input_and_target, particle_type = self._matscipy_pad(
                 pos_input_and_target, particle_type
             )
 
@@ -200,6 +208,8 @@ class H5Dataset(Dataset):
 
 
 class TGV2D(H5Dataset):
+    """Taylor-Green Vortex 2D dataset. 2.5K particles."""
+
     def __init__(
         self,
         split: str,
@@ -219,6 +229,8 @@ class TGV2D(H5Dataset):
 
 
 class TGV3D(H5Dataset):
+    """Taylor-Green Vortex 3D dataset. 8K particles."""
+
     def __init__(
         self,
         split: str,
@@ -238,6 +250,8 @@ class TGV3D(H5Dataset):
 
 
 class RPF2D(H5Dataset):
+    """Reverse Poiseuille Flow 2D dataset. 3.2K particles."""
+
     def __init__(
         self,
         split: str,
@@ -265,6 +279,8 @@ class RPF2D(H5Dataset):
 
 
 class RPF3D(H5Dataset):
+    """Reverse Poiseuille Flow 3D dataset. 8K particles."""
+
     def __init__(
         self,
         split: str,
@@ -292,6 +308,8 @@ class RPF3D(H5Dataset):
 
 
 class LDC2D(H5Dataset):
+    """Lid-Driven Cabity 2D dataset. 2.5K particles."""
+
     def __init__(
         self,
         split: str,
@@ -312,6 +330,8 @@ class LDC2D(H5Dataset):
 
 
 class LDC3D(H5Dataset):
+    """Lid-Driven Cabity 3D dataset. 8.2K particles."""
+
     def __init__(
         self,
         split: str,
@@ -332,6 +352,8 @@ class LDC3D(H5Dataset):
 
 
 class DAM2D(H5Dataset):
+    """Dam break 2D dataset. 5.7K particles."""
+
     def __init__(
         self,
         split: str,

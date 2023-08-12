@@ -1,3 +1,5 @@
+"""Case setup functions."""
+
 from typing import Callable, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
@@ -74,7 +76,6 @@ def case_builder(
         neighbor_list_multiplier: Capacity multiplier of the neighbor list.
         dtype: Data type.
     """
-
     normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
 
     # apply PBC in all directions or not at all
@@ -193,7 +194,6 @@ def case_builder(
     @jit
     def integrate_fn(normalized_in, position_sequence):
         """Euler integrator to get position shift."""
-
         assert any([key in normalized_in for key in ["pos", "vel", "acc"]])
 
         if "pos" in normalized_in:

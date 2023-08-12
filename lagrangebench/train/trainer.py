@@ -103,7 +103,9 @@ def Trainer(
     **kwargs,
 ) -> Callable:
     """
-    Trainer builder function. Returns a function that trains the model on the given
+    Trainer builder function.
+
+    Returns a function that trains the model on the given
     case and dataset_train, evaluating it on dataset_eval with the specified metrics.
 
     Args:
@@ -135,7 +137,6 @@ def Trainer(
     Returns:
         Configured training function.
     """
-
     assert isinstance(
         model, hk.TransformedWithState
     ), "Model must be passed as an Haiku transformed function."
@@ -207,8 +208,10 @@ def Trainer(
         wandb_run: Optional[Run] = None,
     ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
-        Training function. Trains and evals the model on the given case and dataset, and
-        saves the model checkpoints and best models.
+        Training function.
+
+        Trains and evals the model on the given case and dataset, and saves the model
+        checkpoints and best models.
 
         Args:
             step_max: Maximum number of training steps.
@@ -222,7 +225,6 @@ def Trainer(
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
         """
-
         assert n_rollout_steps <= dataset_eval.subsequence_length - input_seq_length, (
             "If you want to evaluate the loss on more than the ground truth trajectory "
             "length, then use the --eval_n_more_steps argument."

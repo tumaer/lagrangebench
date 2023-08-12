@@ -20,12 +20,12 @@ def add_gns_noise(
     """GNS-style noise-walk injection on the input_seq_length trajectory.
 
     Args:
-        key: Random key
-        pos_input: Clean input positions
-        particle_type: Particle type vector
-        input_seq_length: Input sequence length
-        noise_std: Noise standard deviation
-        shift_fn: Shift function
+        key: Random key.
+        pos_input: Clean input positions.
+        particle_type: Particle type vector.
+        input_seq_length: Input sequence length.
+        noise_std: Noise standard deviation.
+        shift_fn: Shift function.
     """
     isl = input_seq_length
     # add noise to the input and adjust the target accordingly
@@ -50,7 +50,13 @@ def add_gns_noise(
 def _get_random_walk_noise_for_pos_sequence(
     key, position_sequence, noise_std_last_step
 ):
-    """Returns random-walk noise in the velocity applied to the position."""
+    """Return random-walk noise in the velocity applied to the position.
+
+    Args:
+        key: Random key.
+        position_sequence: Position sequence.
+        noise_std_last_step: Standard deviation of the noise at the last step.
+    """
     key, subkey = jax.random.split(key)
     velocity_sequence_shape = list(position_sequence.shape)
     velocity_sequence_shape[1] -= 1

@@ -1,8 +1,10 @@
+"""Evaluation and inference functions for generating rollouts."""
+
 import os
 import pickle
 import time
 import warnings
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Callable, Dict, Iterable, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -24,17 +26,34 @@ from lagrangebench.utils import (
 
 
 def eval_single_rollout(
+    model_apply: Callable,
     case,
-    metrics_computer: MetricsComputer,
-    model_apply: hk.TransformedWithState,
     params: hk.Params,
     state: hk.State,
-    neighbors: partition.NeighborList,
     traj_i: Tuple[jnp.ndarray, jnp.ndarray],
+    neighbors: partition.NeighborList,
+    metrics_computer: MetricsComputer,
     n_rollout_steps: int,
     t_window: int,
     n_extrap_steps: int = 0,
 ) -> Tuple[jnp.ndarray, MetricsDict, jnp.ndarray]:
+    """Compute the rollout on a single trajectory.
+
+    Args:
+        model_apply: Model function.
+        case: CaseSetupFn class.
+        params: Haiku params.
+        state: Haiku state.
+        traj_i: Trajectory to evaluate.
+        neighbors: Neighbor list.
+        metrics_computer: MetricsComputer with the desired metrics.
+        n_rollout_steps: Number of rollout steps.
+        t_window: Length of the input sequence.
+        n_extrap_steps: Number of extrapolation steps (beyond the ground truth rollout).
+
+    Returns:
+        A tuple with (predicted rollout, metrics, neighbor list).
+    """
     pos_input, particle_type = traj_i
     # if n_rollout_steps set to -1, use the whole trajectory
     if n_rollout_steps < 0:
@@ -96,19 +115,38 @@ def eval_single_rollout(
 
 
 def eval_rollout(
-    model_apply: hk.TransformedWithState,
+    model_apply: Callable,
     case,
-    metrics_computer: MetricsComputer,
     params: hk.Params,
     state: hk.State,
-    neighbors: partition.NeighborList,
     loader_eval: Iterable,
+    neighbors: partition.NeighborList,
+    metrics_computer: MetricsComputer,
     n_rollout_steps: int,
     n_trajs: int,
     rollout_dir: str,
     out_type: str = "none",
     n_extrap_steps: int = 0,
-) -> Tuple[MetricsDict, jnp.ndarray]:
+) -> MetricsDict:
+    """Compute the rollout and evaluate the metrics.
+
+    Args:
+        model_apply: Model function.
+        case: CaseSetupFn class.
+        params: Haiku params.
+        state: Haiku state.
+        loader_eval: Evaluation data loader.
+        neighbors: Neighbor list.
+        metrics_computer: MetricsComputer with the desired metrics.
+        n_rollout_steps: Number of rollout steps.
+        n_trajs: Number of ground truth trajectories to evaluate.
+        rollout_dir: Parent directory path where to store the rollout and metrics dict.
+        out_type: Output type. Either "none", "vtk" or "pkl".
+        n_extrap_steps: Number of extrapolation steps (beyond the ground truth rollout).
+
+    Returns:
+        Metrics per trajectory.
+    """
     t_window = loader_eval.dataset.input_seq_length
     eval_metrics = {}
 
@@ -121,13 +159,13 @@ def eval_rollout(
         traj_i = broadcast_from_batch(traj_i, index=0)  # (nodes, t, dim)
 
         example_rollout, metrics, neighbors = eval_single_rollout(
-            case=case,
-            metrics_computer=metrics_computer,
             model_apply=model_apply,
+            case=case,
             params=params,
             state=state,
-            neighbors=neighbors,
             traj_i=traj_i,
+            neighbors=neighbors,
+            metrics_computer=metrics_computer,
             n_rollout_steps=n_rollout_steps,
             t_window=t_window,
             n_extrap_steps=n_extrap_steps,
@@ -176,7 +214,7 @@ def eval_rollout(
         with open(f"{rollout_dir}/metrics{t}.pkl", "wb") as f:
             pickle.dump(eval_metrics, f)
 
-    return eval_metrics, neighbors
+    return eval_metrics
 
 
 def infer(
@@ -248,7 +286,7 @@ def infer(
     sample = (pos_input_and_target[0], particle_type[0])
     key, _, _, neighbors = case.allocate(key, sample)
 
-    eval_metrics, _ = eval_rollout(
+    eval_metrics = eval_rollout(
         model_apply=model_apply,
         case=case,
         metrics_computer=metrics_computer,

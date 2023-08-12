@@ -1,3 +1,5 @@
+"""General utils and config structures."""
+
 import enum
 import json
 import os
@@ -16,6 +18,8 @@ import torch
 
 # TODO look for a better place to put this and get_kinematic_mask
 class NodeType(enum.IntEnum):
+    """Particle types."""
+
     FLUID = 0
     SOLID_WALL = 1
     MOVING_WALL = 2
@@ -24,25 +28,26 @@ class NodeType(enum.IntEnum):
 
 
 def get_kinematic_mask(particle_type):
-    """Returns a boolean mask, set to true for all kinematic (obstacle) particles."""
+    """Return a boolean mask, set to true for all kinematic (obstacle) particles."""
     return jnp.logical_or(
         particle_type == NodeType.SOLID_WALL, particle_type == NodeType.MOVING_WALL
     )
 
 
 def broadcast_to_batch(sample, batch_size: int):
-    """Broadcast a pytree to a batched one with first dimension batch_size"""
+    """Broadcast a pytree to a batched one with first dimension batch_size."""
     assert batch_size > 0
     return jax.tree_map(lambda x: jnp.repeat(x[None, ...], batch_size, axis=0), sample)
 
 
 def broadcast_from_batch(batch, index: int):
-    """Broadcast a batched pytree to the sample `index` out of the batch"""
+    """Broadcast a batched pytree to the sample `index` out of the batch."""
     assert index >= 0
     return jax.tree_map(lambda x: x[index], batch)
 
 
 def save_pytree(ckp_dir: str, pytree_obj, name) -> None:
+    """Save a pytree to a directory."""
     with open(os.path.join(ckp_dir, f"{name}_array.npy"), "wb") as f:
         for x in jax.tree_leaves(pytree_obj):
             np.save(f, x, allow_pickle=False)
@@ -53,13 +58,12 @@ def save_pytree(ckp_dir: str, pytree_obj, name) -> None:
 
 
 def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
-    """
-    Saves params, state and optimizer state to ckp_dir. Additionally also tracks and
-    saves the best model to ckp_dir/best.
+    """Save params, state and optimizer state to ckp_dir.
+
+    Additionally it tracks and saves the best model to ckp_dir/best.
 
     See: https://github.com/deepmind/dm-haiku/issues/18
     """
-
     save_pytree(ckp_dir, params, "params")
     save_pytree(ckp_dir, state, "state")
 
@@ -92,7 +96,7 @@ def save_haiku(ckp_dir: str, params, state, opt_state, metadata_ckp) -> None:
 
 
 def load_pytree(model_dir: str, name):
-    """load a pytree from a directory"""
+    """Load a pytree from a directory."""
     with open(os.path.join(model_dir, f"{name}_tree.pkl"), "rb") as f:
         tree_struct = pickle.load(f)
 
@@ -105,8 +109,10 @@ def load_pytree(model_dir: str, name):
 
 
 def load_haiku(model_dir: str):
-    """https://github.com/deepmind/dm-haiku/issues/18"""
+    """Load params, state, optimizer state and last training step from model_dir.
 
+    See: https://github.com/deepmind/dm-haiku/issues/18
+    """
     params = load_pytree(model_dir, "params")
     state = load_pytree(model_dir, "state")
 
@@ -122,7 +128,7 @@ def load_haiku(model_dir: str):
 
 
 def get_num_params(params):
-    """Get the number of parameters in a Haiku model"""
+    """Get the number of parameters in a Haiku model."""
     return sum(np.prod(p.shape) for p in jax.tree_leaves(params))
 
 
@@ -135,7 +141,7 @@ def print_params_shapes(params, prefix=""):
 
 
 def write_vtk(data_dict, path):
-    """Store a .vtk file for ParaView"""
+    """Store a .vtk file for ParaView."""
     r = np.asarray(data_dict["r"])
     N, dim = r.shape
 
@@ -181,7 +187,7 @@ def set_seed(seed: int) -> Tuple[jax.random.KeyArray, Callable, torch.Generator]
 
 @dataclass(frozen=True)
 class LossConfig:
-    """Weights for the different targets in the loss function"""
+    """Weights for the different targets in the loss function."""
 
     pos: float = 0.0
     vel: float = 0.0

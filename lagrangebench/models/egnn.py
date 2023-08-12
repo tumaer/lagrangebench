@@ -58,25 +58,7 @@ class MLPXav(hk.nets.MLP):
 
 
 class EGNNLayer(hk.Module):
-    """EGNN layer.
-
-    Args:
-        layer_num: layer number
-        hidden_size: hidden size
-        output_size: output size
-        displacement_fn: Displacement function for the acceleration computation.
-        shift_fn: Shift function for updating positions
-        blocks: number of blocks in the node and edge MLPs
-        act_fn: activation function
-        pos_aggregate_fn: position aggregation function
-        msg_aggregate_fn: message aggregation function
-        residual: whether to use residual connections
-        attention: whether to use attention
-        normalize: whether to normalize the coordinates
-        tanh: whether to use tanh in the position update
-        dt: position update step size
-        eps: small number to avoid division by zero
-    """
+    """EGNN layer."""
 
     def __init__(
         self,
@@ -96,6 +78,25 @@ class EGNNLayer(hk.Module):
         dt: float = 0.001,
         eps: float = 1e-8,
     ):
+        """Initialize the layer.
+
+        Args:
+            layer_num: layer number
+            hidden_size: hidden size
+            output_size: output size
+            displacement_fn: Displacement function for the acceleration computation.
+            shift_fn: Shift function for updating positions
+            blocks: number of blocks in the node and edge MLPs
+            act_fn: activation function
+            pos_aggregate_fn: position aggregation function
+            msg_aggregate_fn: message aggregation function
+            residual: whether to use residual connections
+            attention: whether to use attention
+            normalize: whether to normalize the coordinates
+            tanh: whether to use tanh in the position update
+            dt: position update step size
+            eps: small number to avoid division by zero
+        """
         super().__init__(f"layer_{layer_num}")
 
         self._displacement_fn = displacement_fn
@@ -239,6 +240,11 @@ class EGNNLayer(hk.Module):
 class EGNN(BaseModel):
     r"""
     E(n) Graph Neural Network (https://arxiv.org/abs/2102.09844).
+
+    This differs from the original in two places:
+    * because our datasets can have periodic boundary conditions, we use shift and
+      displacement functions that take care of it when operations on positions are done.
+    * we apply a simple integrator after the last layer to get the acceleration.
 
     Original implementation: https://github.com/vgsatorras/egnn
     """

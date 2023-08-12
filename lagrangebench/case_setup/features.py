@@ -1,3 +1,5 @@
+"""Feature extraction utilities."""
+
 from typing import Callable, Dict, List, Optional
 
 import jax
@@ -18,7 +20,7 @@ def physical_feature_builder(
     magnitudes: bool = False,
     external_force_fn: Optional[Callable] = None,
 ) -> Callable:
-    """Builds a physical feature transform function.
+    """Build a physical feature transform function.
 
     Transform raw coordinates to
         * Absolute positions
@@ -37,7 +39,6 @@ def physical_feature_builder(
         magnitudes: Whether to include the magnitude of the velocity.
         external_force_fn: Function that returns the external force field (optional).
     """
-
     displacement_fn_vmap = vmap(displacement_fn, in_axes=(0, 0))
     displacement_fn_dvmap = vmap(displacement_fn_vmap, in_axes=(0, 0))
 
@@ -48,6 +49,7 @@ def physical_feature_builder(
         nbrs: partition.NeighborList,
     ) -> FeatureDict:
         """Feature engineering.
+
         Returns:
             Dict of features, with possible keys
                 * "abs_pos", bsolute positions
@@ -58,7 +60,6 @@ def physical_feature_builder(
                 * "rel_disp", relative displacement vectors
                 * "rel_dist", relative distance vectors
         """
-
         features = {}
 
         n_total_points = pos_input.shape[0]

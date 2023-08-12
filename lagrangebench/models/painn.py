@@ -1,3 +1,5 @@
+"""Modified PaiNN implementation for general vectorial inputs and outputs."""
+
 from typing import Callable, Dict, NamedTuple, Optional, Tuple, Type
 
 import haiku as hk
@@ -37,7 +39,7 @@ class LinearXav(hk.Linear):
 
 
 class GatedEquivariantBlock(hk.Module):
-    """Gated equivariant block (restricted to vectorial features). FIG 3 in the paper.
+    """Gated equivariant block (restricted to vectorial features). FIG 3 in [#painn1].
 
     References:
         [#painn1] Schütt, Unke, Gastegger:
@@ -56,6 +58,18 @@ class GatedEquivariantBlock(hk.Module):
         eps: float = 1e-8,
         name: str = "gated_equivariant_block",
     ):
+        """Initialize the layer.
+
+        Args:
+            hidden_size: Number of hidden channels.
+            scalar_out_channels: Number of scalar output channels.
+            vector_out_channels: Number of vector output channels.
+            activation: Gate activation function.
+            scalar_activation: Activation function for the scalar output.
+            eps: Constant added in norm to prevent derivation instabilities.
+            name: Name of the module.
+
+        """
         super().__init__(name)
 
         assert scalar_out_channels > 0 and vector_out_channels > 0
@@ -176,13 +190,16 @@ def PaiNNReadout(
     eps: float = 1e-8,
 ) -> ReadoutFn:
     """
-    PaiNN readout block.
+    PaiNN readout block, adapted from [#painn1].
 
     Args:
         hidden_size: Number of hidden channels.
         scalar_out_channels: Number of scalar/vector output channels.
         activation: Activation function.
         blocks: Number of readout blocks.
+
+    Returns:
+        Configured readout function.
     """
 
     def _readout(graph: jraph.GraphsTuple) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -346,7 +363,11 @@ class PaiNNLayer(hk.Module):
 
 
 class PaiNN(hk.Module):
-    """PaiNN - polarizable interaction neural network.
+    """PaiNN - polarizable interaction neural network [#painn1].
+
+    In order to accomodate general inputs/outputs, this PaiNN is different from the
+    original in a few ways; the main change is that inputs vectors are not initialized
+    to 0 anymore but to the time average of velocity.
 
     References:
         [#painn1] Schütt, Unke, Gastegger:

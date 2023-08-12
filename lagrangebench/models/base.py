@@ -1,3 +1,5 @@
+"""Base model class. All models should inherit from this class."""
+
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, Type
 
