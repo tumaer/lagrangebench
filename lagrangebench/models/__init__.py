@@ -1,3 +1,5 @@
+"""Baseline models."""
+
 from typing import Callable, Tuple, Type
 
 from .egnn import EGNN

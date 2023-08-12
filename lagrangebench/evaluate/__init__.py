@@ -1,3 +1,5 @@
+"""Evaluation and rollout generation tools."""
+
 from .metrics import MetricsComputer, MetricsDict, averaged_metrics
 from .rollout import eval_rollout, infer
 

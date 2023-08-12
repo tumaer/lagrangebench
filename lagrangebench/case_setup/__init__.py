@@ -1,3 +1,5 @@
+"""Case setup manager."""
+
 from .case import CaseSetupFn, case_builder
 from .partition import neighbor_list
 
