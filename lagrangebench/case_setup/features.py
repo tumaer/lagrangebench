@@ -52,7 +52,7 @@ def physical_feature_builder(
 
         Returns:
             Dict of features, with possible keys
-                * "abs_pos", bsolute positions
+                * "abs_pos", absolute positions
                 * "vel_hist", historical velocity sequence
                 * "vel_mag", velocity magnitudes
                 * "bound", distance to boundaries

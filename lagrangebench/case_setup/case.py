@@ -148,10 +148,15 @@ def case_builder(
 
         # allocate the neighbor list
         most_recent_position = pos_input[:, input_seq_length - 1]
+        num_particles = (particle_type != -1).sum()
         if is_allocate:
-            neighbors = neighbor_fn.allocate(most_recent_position)
+            neighbors = neighbor_fn.allocate(
+                most_recent_position, num_particles=num_particles
+            )
         else:
-            neighbors = neighbors.update(most_recent_position)
+            neighbors = neighbors.update(
+                most_recent_position, num_particles=num_particles
+            )
 
         # selected features
         features = feature_transform(pos_input[:, :input_seq_length], neighbors)

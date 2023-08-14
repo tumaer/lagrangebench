@@ -1,4 +1,4 @@
-"""Training tricks and strategies, namely: noise-walk injection and push forward."""
+"""Training tricks and strategies, currently: random-walk noise and push forward."""
 
 from typing import Tuple
 
@@ -17,7 +17,7 @@ def add_gns_noise(
     noise_std: float,
     shift_fn: space.ShiftFn,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """GNS-style noise-walk injection on the input_seq_length trajectory.
+    """GNS-style random-walk noise injection on the input_seq_length trajectory.
 
     Args:
         key: Random key.

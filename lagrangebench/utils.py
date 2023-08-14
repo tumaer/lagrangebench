@@ -20,6 +20,7 @@ import torch
 class NodeType(enum.IntEnum):
     """Particle types."""
 
+    PAD_VALUE = -1
     FLUID = 0
     SOLID_WALL = 1
     MOVING_WALL = 2
@@ -29,9 +30,12 @@ class NodeType(enum.IntEnum):
 
 def get_kinematic_mask(particle_type):
     """Return a boolean mask, set to true for all kinematic (obstacle) particles."""
-    return jnp.logical_or(
+    res = jnp.logical_or(
         particle_type == NodeType.SOLID_WALL, particle_type == NodeType.MOVING_WALL
     )
+    # In datasets with variable number of particles we treat padding as kinematic nodes
+    res = jnp.logical_or(res, particle_type == NodeType.PAD_VALUE)
+    return res
 
 
 def broadcast_to_batch(sample, batch_size: int):

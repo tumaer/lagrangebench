@@ -242,8 +242,8 @@ def Trainer(
 
         # init values
         pos_input_and_target, particle_type = next(iter(loader_train))
-        sample = (pos_input_and_target[0], particle_type[0])
-        key, features, _, neighbors = case.allocate(base_key, sample)
+        raw_sample = (pos_input_and_target[0], particle_type[0])
+        key, features, _, neighbors = case.allocate(base_key, raw_sample)
 
         step = 0
         if params is not None:
@@ -337,7 +337,7 @@ def Trainer(
 
                 if step % eval_steps == 0 and step > 0:
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
-                    eval_metrics, nbrs = eval_rollout(
+                    eval_metrics = eval_rollout(
                         case=case,
                         metrics_computer=metrics_computer,
                         model_apply=model_apply,
