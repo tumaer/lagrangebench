@@ -1,7 +1,6 @@
 from .case_setup.case import case_builder
 from .data import DAM2D, LDC2D, LDC3D, RPF2D, RPF3D, TGV2D, TGV3D, H5Dataset
 from .evaluate import infer
-from .models import get_model
 from .train.trainer import Trainer
 from .utils import PushforwardConfig
 
@@ -17,7 +16,6 @@ __all__ = [
     "LDC2D",
     "LDC3D",
     "DAM2D",
-    "get_model",
     "PushforwardConfig",
 ]
 

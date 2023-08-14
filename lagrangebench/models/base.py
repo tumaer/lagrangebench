@@ -1,7 +1,7 @@
 """Base model class. All models should inherit from this class."""
 
 from abc import ABC, abstractmethod
-from typing import Dict, Tuple, Type
+from typing import Dict, Tuple
 
 import haiku as hk
 import jax.numpy as jnp
@@ -30,15 +30,5 @@ class BaseModel(hk.Module, ABC):
                 * "acc", (normalized) acceleration
                 * "vel", (normalized) velocity
                 * "pos", (absolute) next position
-        """
-        raise NotImplementedError
-
-    @classmethod
-    @abstractmethod
-    def setup_model(cls, *args, **kwargs) -> Tuple["BaseModel", Type]:
-        """Setup model based on args.
-
-        Returns:
-            Tuple with model instance and class.
         """
         raise NotImplementedError

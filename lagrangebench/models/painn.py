@@ -1,6 +1,6 @@
 """Modified PaiNN implementation for general vectorial inputs and outputs."""
 
-from typing import Callable, Dict, NamedTuple, Optional, Tuple, Type
+from typing import Callable, Dict, NamedTuple, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -527,25 +527,3 @@ class PaiNN(hk.Module):
 
         _, v = self._readout(graph)
         return {"acc": v}
-
-    @classmethod
-    def setup_model(
-        cls,
-        input_seq_length: int,
-        metadata: Dict,
-        latent_dim: int = 128,
-        num_mp_steps: int = 5,
-        **kwargs,
-    ) -> Tuple["PaiNN", Type]:
-        _ = kwargs
-        radius = metadata["default_connectivity_radius"] * 1.5
-        rbf = gaussian_rbf(20, radius, trainable=True)
-        cutoff = cosine_cutoff(radius)
-        return cls(
-            hidden_size=latent_dim,
-            output_size=1,
-            n_vels=input_seq_length - 1,
-            radial_basis_fn=rbf,
-            cutoff_fn=cutoff,
-            n_layers=num_mp_steps,
-        )

@@ -1,6 +1,6 @@
 """Graph Network-based Simulator (GNS) model."""
 
-from typing import Dict, Tuple, Type
+from typing import Dict, Tuple
 
 import haiku as hk
 import jax.numpy as jnp
@@ -149,22 +149,3 @@ class GNS(BaseModel):
             graph = graph._replace(nodes=new_node_features)
         acc = self._decoder(self._processor(self._encoder(graph)))
         return {"acc": acc}
-
-    @classmethod
-    def setup_model(
-        cls,
-        metadata: Dict,
-        latent_dim: int = 128,
-        num_mp_steps: int = 10,
-        num_mlp_layers: int = 2,
-        **kwargs,
-    ) -> Tuple["GNS", Type]:
-        _ = kwargs
-        return cls(
-            particle_dimension=metadata["dim"],
-            latent_size=latent_dim,
-            num_mlp_layers=num_mlp_layers,
-            num_message_passing_steps=num_mp_steps,
-            num_particle_types=NodeType.SIZE,
-            particle_type_embedding_size=16,
-        )

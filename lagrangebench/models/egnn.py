@@ -1,5 +1,5 @@
 """E(3) equivariant GNN. Model + feature transform, everything in one file."""
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Type
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -394,50 +394,3 @@ class EGNN(BaseModel):
         # position finite differencing to get acceleration
         out = self._postprocess(next_pos, props)
         return out
-
-    @classmethod
-    def setup_model(
-        cls,
-        input_seq_length: int,
-        metadata: Dict,
-        normalization_stats: Dict,
-        dtype: jnp.dtype,
-        box: Tuple[float, float, float],
-        latent_dim: int = 128,
-        num_mp_steps: int = 5,
-        **kwargs,
-    ) -> Tuple["EGNN", Type]:
-        _ = kwargs
-
-        def displacement_fn(x, y):
-            return jax.lax.cond(
-                jnp.array(metadata["periodic_boundary_conditions"]).any(),
-                lambda x, y: space.periodic(jnp.array(box))[0](x, y).astype(dtype),
-                lambda x, y: space.free()[0](x, y).astype(dtype),
-                x,
-                y,
-            )
-
-        def shift_fn(x, y):
-            return jax.lax.cond(
-                jnp.array(metadata["periodic_boundary_conditions"]).any(),
-                lambda x, y: space.periodic(jnp.array(box))[1](x, y).astype(dtype),
-                lambda x, y: space.free()[1](x, y).astype(dtype),
-                x,
-                y,
-            )
-
-        displacement_fn = jax.vmap(displacement_fn, in_axes=(0, 0))
-        shift_fn = jax.vmap(shift_fn, in_axes=(0, 0))
-
-        return cls(
-            hidden_size=latent_dim,
-            output_size=1,
-            dt=metadata["dt"] * metadata["write_every"],
-            displacement_fn=displacement_fn,
-            shift_fn=shift_fn,
-            normalization_stats=normalization_stats,
-            num_layers=num_mp_steps,
-            n_vels=input_seq_length - 1,
-            residual=True,
-        )
