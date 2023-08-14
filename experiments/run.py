@@ -9,12 +9,10 @@ import jmp
 import numpy as np
 import yaml
 
-import wandb
-from experiments.data import setup_data
+from experiments.utils import setup_data, setup_model
 from lagrangebench import Trainer, infer
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
-from lagrangebench.models import get_model
 from lagrangebench.utils import PushforwardConfig
 
 
@@ -45,18 +43,12 @@ def train_or_infer(args: Namespace):
     _, particle_type = data_train[0]
 
     args.info.homogeneous_particles = particle_type.max() == particle_type.min()
+    args.metadata = data_train.metadata
+    args.normalization_stats = case.normalization_stats
+    args.config.has_external_force = data_train.external_force_fn is not None
 
     # setup model from configs
-    model_kwargs = {
-        "metadata": data_train.metadata,
-        "box": args.box,
-        "normalization_stats": case.normalization_stats,
-        "dtype": (jnp.float64 if args.config.f64 else jnp.float32),
-        # TODO replace with data_train.has_external_force
-        "has_external_force": args.info.has_external_force,
-        **vars(args.config),
-    }
-    model, MODEL = get_model(args.config.model, **model_kwargs)
+    model, MODEL = setup_model(args)
     model = hk.without_apply_rng(hk.transform_with_state(model))
 
     # mixed precision training based on this reference:

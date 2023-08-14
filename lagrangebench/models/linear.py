@@ -1,6 +1,6 @@
 """Simple baseline linear model."""
 
-from typing import Dict, Tuple, Type
+from typing import Dict, Tuple
 
 import haiku as hk
 import jax.numpy as jnp
@@ -35,8 +35,3 @@ class Linear(BaseModel):
         # call
         acc = vmap(self.mlp)(jnp.concatenate(x, axis=-1))
         return {"acc": acc}
-
-    @classmethod
-    def setup_model(cls, metadata: Dict, **kwargs) -> Tuple["Linear", Type]:
-        _ = kwargs
-        return cls(dim_out=metadata["dim"])
