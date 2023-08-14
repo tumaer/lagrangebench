@@ -10,6 +10,7 @@ import h5py
 import jax.numpy as jnp
 import numpy as np
 from torch.utils.data import Dataset
+from lagrangebench.utils import NodeType
 
 # TODO update in final version
 URLS = {
@@ -50,11 +51,17 @@ class H5Dataset(Dataset):
             split: "train", "valid", or "test"
             dataset_path: Path to the dataset
             name: Name of the dataset. If None, it is inferred from the path.
-            input_seq_length: Length of the input sequence
-            split_valid_traj_into_n: Number splits per validation trajectory
+            input_seq_length: Length of the input sequence. The number of historic
+                velocities is input_seq_length - 1. And during training, the returned
+                number of past positions is input_seq_length + 1, to compute target 
+                acceleration.
+            split_valid_traj_into_n: Number of splits per validation trajectory. If the 
+                length of each trajectory is 1000, we want to compute a 20-step MSE, and 
+                intput_seq_length=6, then we should split the trajectory into 
+                split_valid_traj_into_n = 1000 // (20 + input_seq_length) chunks.
             is_rollout: Whether to return trajectories (valid) or subsequences (train)
             nl_backend: Which backend to use for the neighbor list
-            external_force_fn: Function that returns the position-wise external force
+            external_force_fn: Function that returns the position-wise external force            
         """
         if not osp.exists(dataset_path):
             name, dataset_path = self.download(name, dataset_path)
@@ -130,15 +137,18 @@ class H5Dataset(Dataset):
             return self.db_hdf5
 
     def _matscipy_pad(self, pos_input, particle_type):
-        padding_size = self.metadata["num_particles_max"] - pos_input.shape[0] + 1
+        padding_size = self.metadata["num_particles_max"] - pos_input.shape[0]
         pos_input = np.pad(
             pos_input,
             ((0, padding_size), (0, 0), (0, 0)),
             mode="constant",
-            constant_values=self.metadata["num_particles_max"],
+            constant_values=0.0,
         )
         particle_type = np.pad(
-            particle_type, (0, padding_size), mode="constant", constant_values=9
+            particle_type, 
+            (0, padding_size), 
+            mode="constant", 
+            constant_values=NodeType.PAD_VALUE
         )
         return pos_input, particle_type
 
@@ -166,7 +176,7 @@ class H5Dataset(Dataset):
         particle_type = traj["particle_type"][:]
 
         if self.nl_backend == "matscipy":
-            pos_input, particle_type = self._matscipy_pad(pos_input, particle_type)
+            pos_input, particle_type = self._matscipy_pad(pos_input, particle_type) 
 
         return pos_input, particle_type
 

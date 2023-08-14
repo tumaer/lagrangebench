@@ -1,5 +1,7 @@
 # Demonstration on how to train the GNS model on one of its original 2D datasets
 
+> Check out the full notebook under [`notebooks/gns_data.ipynb`](../notebooks/gns_data.ipynb).
+
 ## Download data
 
 ```bash
@@ -13,9 +15,7 @@ First, you need the `tensorflow` and `tensorflow-datasets` libraries. We recomme
 
 ```bash
 python3 -m venv venv_tf
-source venv_tf/bin/activate
-pip install -r requirements.txt
-pip install tensorflow tensorflow-datasets
+venv_tf/bin/pip install tensorflow tensorflow-datasets
 ```
 
 Then, transform the data via
