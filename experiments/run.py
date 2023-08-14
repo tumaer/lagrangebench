@@ -1,14 +1,15 @@
 import copy
 import os
 from argparse import Namespace
+from datetime import datetime
 
 import haiku as hk
 import jax.numpy as jnp
 import jmp
 import numpy as np
-import wandb
 import yaml
 
+import wandb
 from experiments.data import setup_data
 from lagrangebench import Trainer, infer
 from lagrangebench.case_setup import case_builder
@@ -66,10 +67,8 @@ def train_or_infer(args: Namespace):
     if args.config.mode == "train":
         # save config file
         run_prefix = f"{args.config.model}_{data_train.name}"
-        i = 0
-        while os.path.isdir(os.path.join(args.config.ckp_dir, f"{run_prefix}_{i}")):
-            i += 1
-        args.info.run_name = f"{run_prefix}_{i}"
+        data_and_time = datetime.today().strftime("%Y%m%d-%H%M%S")
+        args.info.run_name = f"{run_prefix}_{data_and_time}"
 
         args.config.new_checkpoint = os.path.join(
             args.config.ckp_dir, args.info.run_name
@@ -110,15 +109,21 @@ def train_or_infer(args: Namespace):
             case,
             data_train,
             data_eval,
+            pushforward=pf_config,
             metrics=args.config.metrics,
             seed=args.config.seed,
             batch_size=args.config.batch_size,
+            input_seq_length=args.config.input_seq_length,
             noise_std=args.config.noise_std,
-            pushforward=pf_config,
             lr_start=args.config.lr_start,
             lr_end=args.config.lr_final,
             lr_steps=args.config.lr_decay_steps,
             lr_decay_rate=args.config.lr_decay_rate,
+            loss_weight=args.config.loss_weight,
+            n_rollout_steps=args.config.n_rollout_steps,
+            eval_n_trajs=args.config.eval_n_trajs,
+            rollout_dir=args.config.rollout_dir,
+            out_type=args.config.out_type,
             log_steps=args.config.log_steps,
             eval_steps=args.config.eval_steps,
         )

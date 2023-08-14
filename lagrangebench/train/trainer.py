@@ -23,6 +23,7 @@ from lagrangebench.utils import (
     broadcast_from_batch,
     broadcast_to_batch,
     get_kinematic_mask,
+    get_num_params,
     load_haiku,
     save_haiku,
     set_seed,
@@ -122,8 +123,8 @@ def Trainer(
         seed: Random seed.
 
     Keyword Args:
-        lr_end: Final learning rate.
-        lr_steps: Number of steps to reach the final learning rate.
+        lr_final: Final learning rate.
+        lr_decay_steps: Number of steps to reach the final learning rate.
         lr_decay_rate: Learning rate decay rate.
         loss_weight: Loss weight object.
         n_rollout_steps: Number of autoregressive rollout steps.
@@ -162,12 +163,12 @@ def Trainer(
         generator=generator,
     )
 
-    # learning rate decays from lr_start to lr_end over lr_steps exponentially
+    # learning rate decays from lr_start to lr_final over lr_decay_steps exponentially
     lr_scheduler = optax.exponential_decay(
         init_value=lr_start,
-        transition_steps=kwargs.get("lr_steps", defaults.lr_steps),
+        transition_steps=kwargs.get("lr_decay_steps", defaults.lr_decay_steps),
         decay_rate=kwargs.get("lr_decay_rate", defaults.lr_decay_rate),
-        end_value=kwargs.get("lr_end", defaults.lr_end),
+        end_value=kwargs.get("lr_final", defaults.lr_final),
     )
     # optimizer
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
@@ -176,6 +177,8 @@ def Trainer(
     loss_weight = kwargs.get("loss_weight", None)
     if loss_weight is None:
         loss_weight = LossConfig()
+    else:
+        loss_weight = LossConfig(**loss_weight)
     # pushforward config
     pushforward = kwargs.get("pushforward", None)
     if pushforward is None:
@@ -257,6 +260,10 @@ def Trainer(
             # initialize new model
             key, subkey = jax.random.split(key, 2)
             params, state = model.init(subkey, (features, particle_type[0]))
+
+        if wandb_run is not None:
+            wandb_run.log({"info/num_params": get_num_params(params)})
+            wandb_run.log({"info/step_start": step})
 
         # initialize optimizer state
         if opt_state is None:

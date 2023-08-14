@@ -23,6 +23,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
     data_train = H5Dataset(
         "train",
         dataset_path=args.config.data_dir,
+        name=args.info.dataset_name,
         input_seq_length=train_seq_l,
         is_rollout=False,
         nl_backend=args.config.neighbor_list_backend,
@@ -30,6 +31,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
     data_eval = H5Dataset(
         "test" if args.config.test else "valid",
         dataset_path=args.config.data_dir,
+        name=args.info.dataset_name,
         input_seq_length=args.config.input_seq_length,
         split_valid_traj_into_n=args.config.split_valid_traj_into_n,
         is_rollout=True,

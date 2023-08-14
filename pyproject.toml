@@ -44,7 +44,7 @@ url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
 
 [tool.ruff]
-ignore = ["F811"]
+ignore = ["F811", "E402"]
 exclude = [
     ".git",
     ".venv",

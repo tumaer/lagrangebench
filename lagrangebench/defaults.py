@@ -20,8 +20,8 @@ class defaults:
 
     # learning rate
     lr_start: float = 1e-4  # initial learning rate
-    lr_end: float = 1e-6  # final learning rate (after exponential decay)
-    lr_steps: int = 5e6  # number of steps to decay learning rate
+    lr_final: float = 1e-6  # final learning rate (after exponential decay)
+    lr_decay_steps: int = 5e6  # number of steps to decay learning rate
     lr_decay_rate: float = 0.1  # learning rate decay rate
 
     noise_std: float = 1e-4  # standard deviation of the GNS-style noise
