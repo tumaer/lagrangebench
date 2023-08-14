@@ -74,7 +74,7 @@ def main(args):
         hf = h5py.File(h5_file_path, "r")
         for k, v in hf.items():
             max_particles = max(v["particle_type"].shape[0], max_particles)
-        print(f'Max number of particles in {file_name}: {max_particles}')
+        print(f"Max number of particles in {file_name}: {max_particles}")
         hf.close()
 
     metadata_path = os.path.join(args.dataset_path, "metadata.json")
