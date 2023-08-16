@@ -3,13 +3,13 @@ import os.path as osp
 from argparse import Namespace
 from typing import Callable, Tuple, Type
 
-from e3nn_jax import Irreps
-import jax.numpy as jnp
 import jax
+import jax.numpy as jnp
+from e3nn_jax import Irreps
 from jax_md import space
 
-from lagrangebench.data import H5Dataset
 from lagrangebench import models
+from lagrangebench.data import H5Dataset
 from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
 
@@ -29,6 +29,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
     data_train = H5Dataset(
         "train",
         dataset_path=args.config.data_dir,
+        name=args.info.dataset_name,
         input_seq_length=train_seq_l,
         is_rollout=False,
         nl_backend=args.config.neighbor_list_backend,
@@ -36,6 +37,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
     data_eval = H5Dataset(
         "test" if args.config.test else "valid",
         dataset_path=args.config.data_dir,
+        name=args.info.dataset_name,
         input_seq_length=args.config.input_seq_length,
         split_valid_traj_into_n=args.config.split_valid_traj_into_n,
         is_rollout=True,

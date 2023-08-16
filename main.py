@@ -7,9 +7,9 @@ from experiments.config import NestedLoader, cli_arguments
 
 if __name__ == "__main__":
     cli_args = cli_arguments()
-    if "config" in cli_args:
+    if "config" in cli_args: # to restart training
         config_path = cli_args["config"]
-    elif "model_dir" in cli_args:
+    elif "model_dir" in cli_args: # to run inference
         config_path = os.path.join(cli_args["model_dir"], "config.yaml")
 
     with open(config_path, "r") as f:

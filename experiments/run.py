@@ -9,6 +9,7 @@ import jmp
 import numpy as np
 import yaml
 
+import wandb
 from experiments.utils import setup_data, setup_model
 from lagrangebench import Trainer, infer
 from lagrangebench.case_setup import case_builder

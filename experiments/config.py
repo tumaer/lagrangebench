@@ -150,7 +150,21 @@ def cli_arguments() -> Dict:
         action=argparse.BooleanOptionalAction,
         help="Whether to use double precision.",
     )
-
+    
+    parser.add_argument(
+        "--eval_n_trajs",
+        required=False, 
+        type=int,
+        help="Number of trajectories to evaluate.",
+    )
+    
+    parser.add_argument(
+        "--metrics", 
+        required=False, 
+        nargs="+", 
+        help="Metrics to evaluate. Choose from mse, mae, sinkhorn, e_kin",
+    )
+    
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 
