@@ -1,5 +1,7 @@
+# Fallback parameters for the config file. These are overwritten by the config file.
+extends:
 # Model settings
-# Model architecture name. gns, segnn, hae_segnn
+# Model architecture name. gns, segnn, egnn
 model:
 # Length of the position input sequence
 input_seq_length: 6
@@ -18,20 +20,14 @@ lmax_attributes: 1
 lmax_hidden: 1
 # SEGNN normalization. instance, batch, none
 segnn_norm: instance
-# Number of attribute embedding layers. 1 for linear layer
-attribute_embedding_blocks: 1
-# Whether to use the last velocity as steerable attribute in the embedding
-right_attribute: False
-# Method to aggregate velocity. avg, sum, last, all
+# SEGNN velocity aggregation. avg or last
 velocity_aggregate: avg
-# Method to compose attributes. add, concat
-attribute_mode: add
 
 # Optimization settings
 # Max steps
-step_max: 2.e+7
+step_max: 20000000
 # Batch size
-batch_size: 2
+batch_size: 1
 # Starting learning rate
 lr_start: 1.e-4
 # Final learning rate after decay
@@ -55,6 +51,11 @@ pushforward:
   # Which probability ratio to keep between the unrolls, e.g. [5, 4, 1]
   probs: [1.,]
 
+# Loss settings
+# Loss weight for position, acceleration, and velocity components
+loss_weight:
+  acc: 1.0
+
 # Run settings
 # train, infer
 mode:
@@ -77,17 +78,21 @@ seed: 0
 gpu: 0
 # Double precision everywhere other than the ML model
 f64: True
+# Neighbour list backend. jaxmd_vmap, jaxmd_scan, matscipy
+neighbor_list_backend: jaxmd_vmap
+# Neighbour list capacity multiplier
+neighbor_list_capacity_multiplier: 1.25
 
 # Logging settings
 # Use wandb for logging
 wandb: False
 wandb_project: False
+# Change this with your own entity
+wandb_entity: lagrangebench
 # Number of steps between training logging
 log_steps: 1000
 # Number of steps between evaluation
 eval_steps: 5000
-# Number of steps between checkpoints
-save_steps: 5000
 # Checkpoint directory
 ckp_dir: ckp
 # Rollout/metrics directory

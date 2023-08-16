@@ -8,17 +8,19 @@ cloudpickle
 # JAX
 dm_haiku==0.0.9
 e3nn_jax==0.17.0
+gdown
 h5py
-jax[cuda]==0.4.7
+jax[cuda11_pip]==0.4.10
 jax_md==0.2.3
-jaxlib[cuda]==0.4.7
 jmp==0.0.4
 jraph==0.0.6.dev0
+matscipy==0.8.0
 
 # Misc
 numpy
-optax==0.1.3
+optax==0.1.5
+ott-jax==0.4.0
 pyvista
 PyYAML
-torch==1.13.0+cpu
+torch==1.13.1+cpu
 wandb

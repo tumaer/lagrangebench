@@ -1,7 +1,7 @@
 [tool.poetry]
-name = "equisph"
+name = "lagrangebench"
 version = "0.1.0"
-description = "Learning Lagrangian Fluid Mechanics with E(3)-Equivariant Graph Neural Networks"
+description = "LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite"
 authors = ["Artur Toshev <artur.toshev@tum.de>", "Gianluca Galletti <g.galletti@tum.de"]
 license = "MIT"
 readme = "README.md"
@@ -14,14 +14,18 @@ PyYAML = "^6.0"
 numpy = "^1.24.3"
 wandb = "^0.15.1"
 pyvista = "^0.38.6"
-jax = { version = "0.4.8", source = "jax" }
+jax = "0.4.10"
+jaxlib = { version = "0.4.10+cuda11.cudnn86", source = "jax" }
 dm-haiku = "0.0.9"
 e3nn-jax = "0.17.0"
 jax-md = "0.2.3"
 jmp = "0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.5"
+ott-jax = "^0.4.0"
 torch = { version = "1.13.1", source = "torchcpu" }
+gdown = "^4.7.1"
+matscipy = "^0.8.0"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.3.1"
@@ -32,17 +36,15 @@ ruff = "0.0.265"
 [[tool.poetry.source]]
 name = "jax"
 url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
-default = false
-secondary = true
+priority = "explicit"
 
 [[tool.poetry.source]]
 name = "torchcpu"
 url = "https://download.pytorch.org/whl/cpu"
-default = false
-secondary = true
+priority = "explicit"
 
 [tool.ruff]
-ignore = ["F811"]
+ignore = ["F811", "E402"]
 exclude = [
     ".git",
     ".venv",
