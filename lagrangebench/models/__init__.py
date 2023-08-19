@@ -1,6 +1,5 @@
 """Baseline models."""
 
-
 from .egnn import EGNN
 from .gns import GNS
 from .linear import Linear
