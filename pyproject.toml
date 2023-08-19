@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lagrangebench"
-version = "0.1.0"
+version = "0.0.1"
 description = "LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite"
 authors = ["Artur Toshev <artur.toshev@tum.de>", "Gianluca Galletti <g.galletti@tum.de"]
 license = "MIT"
@@ -14,12 +14,11 @@ PyYAML = "^6.0"
 numpy = "^1.24.3"
 wandb = "^0.15.1"
 pyvista = "^0.38.6"
-jax = "0.4.10"
-jaxlib = { version = "0.4.10+cuda11.cudnn86", source = "jax" }
-dm-haiku = "0.0.9"
+jax = "^0.4.10"
+dm-haiku = "^0.0.10"
 e3nn-jax = "0.17.0"
 jax-md = "0.2.3"
-jmp = "0.0.4"
+jmp = "^0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.5"
 ott-jax = "^0.4.0"
@@ -32,6 +31,7 @@ pre-commit = "^3.3.1"
 pytest = "^7.3.1"
 black = "^23.3.0"
 ruff = "0.0.265"
+ipykernel = "^6.25.1"
 
 [[tool.poetry.source]]
 name = "jax"
