@@ -24,7 +24,6 @@ cd lagrangebench
 Install the dependencies with Poetry (>1.5.0)
 ```
 poetry install
-source .venv/bin/activate
 ```
 Alternatively, a `requirements.txt` file is provided
 ```
@@ -35,7 +34,7 @@ pip install -r requirements.txt
 ### Standalone benchmark library
 A general tutorial is provided in the example notebook "Training GNS on the 2D Taylor Green Vortex" under `./notebooks/tutorial.ipynb` on the [LagrangeBench repository](https://github.com/tumaer/lagrangebench). The notebook covers the basics of LagrangeBench, such as loading a dataset, setting up a case, training a model from scratch and evaluating it's performance.
 
-Two additional notebooks are provided: `./notebooks/tutorial.ipynb` with more details on the datasets and `./notebooks/gns_data.ipynb` showing how to train models within LagrangeBench on DeepMind datasets.
+Two additional notebooks are provided: `./notebooks/datasets.ipynb` with more details on the datasets, and `./notebooks/gns_data.ipynb` showing how to train models within LagrangeBench on DeepMind datasets.
 
 ### Running in a local clone (`main.py`)
 Alternatively, experiments are also setup with by `main.py`, based around extensive YAML config files and cli arguments. By default, passed cli arguments will overwrite the YAML config. When loading a saved model with `--model_dir` the config from the checkpoint is automatically loaded and training is restarted.
