@@ -2,7 +2,10 @@
 name = "lagrangebench"
 version = "0.0.1"
 description = "LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite"
-authors = ["Artur Toshev <artur.toshev@tum.de>", "Gianluca Galletti <g.galletti@tum.de"]
+authors = [
+    "Artur Toshev <artur.toshev@tum.de>",
+    "Gianluca Galletti <g.galletti@tum.de>",
+]
 license = "MIT"
 readme = "README.md"
 
