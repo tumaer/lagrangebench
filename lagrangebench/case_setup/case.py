@@ -32,7 +32,24 @@ IntegrateFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
 @dataclass
 class CaseSetupFn:
-    """Dataclass that contains all functions required to setup the case and simulate."""
+    """Dataclass that contains all functions required to setup the case and simulate.
+
+    Attributes:
+        allocate: AllocateFn, runs the preprocessing without having a NeighborList as
+            input.
+        preprocess: PreprocessFn, takes positions from the dataloader, computes
+            velocities, adds random-walk noise if needed, then updates the neighbor
+            list, and return the inputs to the neural network as well as the targets.
+        allocate_eval: AllocateEvalFn, same as allocate, but without noise addition
+            and without targets.
+        preprocess_eval: PreprocessEvalFn, same as allocate_eval, but jit-able.
+        integrate: IntegrateFn, semi-implicit Euler integrations step respecting
+            all boundary conditions.
+        displacement: space.DisplacementFn, displacement function aware of boundary
+            conditions (periodic on non-periodic).
+        normalization_stats: Dict, normalization statisticss for input velocities and
+            output acceleration.
+    """
 
     allocate: AllocateFn = static_field()
     preprocess: PreprocessFn = static_field()
