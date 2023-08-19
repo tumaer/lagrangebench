@@ -37,11 +37,6 @@ ruff = "0.0.265"
 ipykernel = "^6.25.1"
 
 [[tool.poetry.source]]
-name = "jax"
-url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html"
-priority = "explicit"
-
-[[tool.poetry.source]]
 name = "torchcpu"
 url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
