@@ -1,6 +1,5 @@
 # LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite
 
-
 ## Installation
 ### Standalone library
 To install the core `lagrangebench` library
@@ -10,7 +9,9 @@ pip install lagrangebench
 
 Additionally, for GPU support follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
 ```bash
-pip install --upgrade jax[cuda] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade jax[cuda11_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# or, for cuda 12
+pip install --upgrade jax[cuda12_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
 
 ### Full clone
