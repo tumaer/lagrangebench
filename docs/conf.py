@@ -33,10 +33,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
-    "sphinx.ext.autosummary",
 ]
-
-autosummary_generate = True
 
 numfig = True
 
