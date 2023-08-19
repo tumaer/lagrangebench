@@ -1,4 +1,5 @@
 """E(3) equivariant GNN. Model + feature transform, everything in one file."""
+
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
 import haiku as hk
@@ -242,9 +243,10 @@ class EGNN(BaseModel):
     E(n) Graph Neural Network (https://arxiv.org/abs/2102.09844).
 
     This differs from the original in two places:
-    * because our datasets can have periodic boundary conditions, we use shift and
+
+    - because our datasets can have periodic boundary conditions, we use shift and
       displacement functions that take care of it when operations on positions are done.
-    * we apply a simple integrator after the last layer to get the acceleration.
+    - we apply a simple integrator after the last layer to get the acceleration.
 
     Original implementation: https://github.com/vgsatorras/egnn
     """
@@ -283,10 +285,10 @@ class EGNN(BaseModel):
             residual: Use residual connections, we recommend not changing this one
             attention: Whether using attention or not
             normalize: Normalizes the coordinates messages such that:
-                x^{l+1}_i = x^{l}_i + \sum(x_i - x_j)\phi_x(m_{ij})\|x_i - x_j\|
+                ``x^{l+1}_i = x^{l}_i + \sum(x_i - x_j)\phi_x(m_{ij})\|x_i - x_j\|``
                 It may help in the stability or generalization. Not used in the paper.
-            tanh: Sets a tanh activation function at the output of \phi_x(m_{ij}). It
-                bounds the output of \phi_x(m_{ij}) which definitely improves in
+            tanh: Sets a tanh activation function at the output of ``\phi_x(m_{ij})``.
+                It bounds the output of ``\phi_x(m_{ij})`` which definitely improves in
                 stability but it may decrease in accuracy. Not used in the paper.
         """
         super().__init__()

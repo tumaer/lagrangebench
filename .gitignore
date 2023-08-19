@@ -19,3 +19,6 @@ venv
 rollouts
 profile
 dist
+
+# Sphinx documentation
+docs/_build/

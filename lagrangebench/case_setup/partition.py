@@ -491,13 +491,52 @@ def neighbor_list(
     num_partitions: int = 1,
     pbc: jnp.ndarray = None,
 ) -> NeighborFn:
-    """Neighbor lists wrapper.
+    """Neighbor lists wrapper. Its arguments are mainly based on the jax-md ones.
 
     Args:
-        backend: The backend to use. One of "jaxmd_vmap", "jaxmd_scan", "matscipy".
-            * "jaxmd_vmap": Default jax-md neighbor list. Uses vmap. Fast.
-            * "jaxmd_scan": Modified jax-md neighbor list. Uses scan. Memory efficient.
-            * "matscipy": Matscipy neighbor list. Runs on cpu, allows dynamic shapes.
+        displacement: A function `d(R_a, R_b)` that computes the displacement
+            between pairs of points.
+        box_size: Either a float specifying the size of the box or an array of
+            shape `[spatial_dim]` specifying the box size in each spatial dimension.
+        r_cutoff: A scalar specifying the neighborhood radius.
+        dr_threshold: A scalar specifying the maximum distance particles can move
+            before rebuilding the neighbor list.
+        backend: The backend to use. Can be one of: 1) ``jaxmd_vmap`` - the default
+            jax-md neighbor list which vectorizes the computations. 2) ``jaxmd_scan`` -
+            a modified jax-md neighbor list which serializes the search into
+            ``num_partitions`` chunks to improve the memory efficiency. 3) ``matscipy``
+            - a jit-able implementation with the matscipy neighbor list backend, which
+            runs on CPU and takes variable number of particles smaller or equal to
+            ``num_particles``.
+        capacity_multiplier: A floating point scalar specifying the fractional
+            increase in maximum neighborhood occupancy we allocate compared with the
+            maximum in the example positions.
+        disable_cell_list: An optional boolean. If set to `True` then the neighbor
+            list is constructed using only distances. This can be useful for
+            debugging but should generally be left as `False`.
+        mask_self: An optional boolean. Determines whether points can consider
+            themselves to be their own neighbors.
+        custom_mask_function: An optional function. Takes the neighbor array
+            and masks selected elements. Note: The input array to the function is
+            `(n_particles, m)` where the index of particle 1 is in index in the first
+            dimension of the array, the index of particle 2 is given by the value in
+            the array
+        fractional_coordinates: An optional boolean. Specifies whether positions will
+            be supplied in fractional coordinates in the unit cube, :math:`[0, 1]^d`.
+            If this is set to True then the `box_size` will be set to `1.0` and the
+            cell size used in the cell list will be set to `cutoff / box_size`.
+        format: The format of the neighbor list; see the :meth:`NeighborListFormat` enum
+            for details about the different choices for formats. Defaults to `Dense`.
+        num_particles_max: only used with the ``matscipy`` backend. Based
+            on the largest particles system in a dataset.
+        num_partitions: only used with the ``jaxmd_scan`` backend
+        pbc: only used with the ``matscipy`` backend. Defines the boundary conditions
+            for each dimension individually. Can have shape (2,) or (3,).
+        **static_kwargs: kwargs that get threaded through the calculation of
+            example positions.
+    Returns:
+        A NeighborListFns object that contains a method to allocate a new neighbor
+        list and a method to update an existing neighbor list.
     """
     assert backend in BACKENDS, f"Unknown backend {backend}"
 

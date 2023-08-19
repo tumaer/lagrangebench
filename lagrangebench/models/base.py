@@ -21,18 +21,21 @@ class BaseModel(hk.Module, ABC):
         and the dimensionality of the feature vectors dim.
 
         Args:
-            sample: Tuple with feature dictionary and particle type. Possible features:
-                * "abs_pos" (N, K+1, dim), absolute positions
-                * "vel_hist" (N, K*dim), historical velocity sequence
-                * "vel_mag" (N,), velocity magnitudes
-                * "bound" (N, 2*dim), distance to boundaries
-                * "force" (N, dim), external force field
-                * "rel_disp" (E, dim), relative displacement vectors
-                * "rel_dist" (E, 1), relative distances, i.e. magnitude of displacements
+            sample: Tuple with feature dictionary and particle type. Possible features
+
+                - "abs_pos" (N, K+1, dim), absolute positions
+                - "vel_hist" (N, K*dim), historical velocity sequence
+                - "vel_mag" (N,), velocity magnitudes
+                - "bound" (N, 2*dim), distance to boundaries
+                - "force" (N, dim), external force field
+                - "rel_disp" (E, dim), relative displacement vectors
+                - "rel_dist" (E, 1), relative distances, i.e. magnitude of displacements
         Returns:
-            Dict with model output. The keys must be at least one of:
-                * "acc" (N, dim), (normalized) acceleration
-                * "vel" (N, dim), (normalized) velocity
-                * "pos" (N, dim), (absolute) next position
+            Dict with model output.
+            The keys must be at least one of the following:
+
+                - "acc" (N, dim), (normalized) acceleration
+                - "vel" (N, dim), (normalized) velocity
+                - "pos" (N, dim), (absolute) next position
         """
         raise NotImplementedError
