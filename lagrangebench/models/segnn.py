@@ -1,4 +1,5 @@
 """Steerable E(3) equivariant GNN. Model + feature transform, everything in one file."""
+
 import warnings
 from math import prod
 from typing import Any, Callable, Dict, Optional, Tuple, Union
