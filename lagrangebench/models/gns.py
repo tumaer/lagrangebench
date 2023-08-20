@@ -1,4 +1,7 @@
-"""Graph Network-based Simulator (GNS) model."""
+"""
+Graph Network-based Simulator (https://arxiv.org/abs/2002.09405).
+GNS model and feature transform.
+"""
 
 from typing import Dict, Tuple
 
@@ -13,9 +16,19 @@ from .utils import build_mlp
 
 
 class GNS(BaseModel):
-    """Model definition for Graph Network-based Simulator (GNS).
+    r"""Graph Network-based Simulator (https://arxiv.org/abs/2002.09405).
 
-    Original paper: https://arxiv.org/abs/2002.09405
+    GNS is the simples graph neural network applied to particle dynamics. It is built on
+    the usual Graph Network architecture, with an encoder, a processor, and a decoder.
+
+    .. math::
+        \begin{align}
+            \mathbf{m}_{ij}^{(t+1)} &= \phi \left(
+                \mathbf{m}_{ij}^{(t)}, \mathbf{h}_i^{(t)}, \mathbf{h}_j^{(t)} \right) \\
+            \mathbf{h}_i^{(t+1)} &= \psi \left(
+                \mathbf{h}_i^{(t)}, \sum_{j \in \mathcal{N}(i)} \mathbf{m}_{ij}^{(t+1)}
+                \right) \\
+        \end{align}
     """
 
     def __init__(

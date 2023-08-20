@@ -1,14 +1,38 @@
 """Default lagrangebench values."""
 
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import dataclass
 
 import jax.numpy as jnp
 
 
 @dataclass(frozen=True)
 class defaults:
-    """Default lagrangebench values."""
+    """
+    Default lagrangebench values.
+
+    Attributes:
+        seed: random seed. Default 0.
+        batch_size: batch size. Default 1.
+        step_max: max number of training steps. Default ``1e7``.
+        dtype: data type. Default ``jnp.float32``.
+        magnitude_features: whether to include velocity magnitudes. Default False.
+        isotropic_norm: whether to use isotropic normalization. Default False.
+        lr_start: initial learning rate. Default 1e-4.
+        lr_final: final learning rate (after exponential decay). Default 1e-6.
+        lr_decay_steps: number of steps to decay learning rate
+        lr_decay_rate: learning rate decay rate. Default 0.1.
+        noise_std: standard deviation of the GNS-style noise. Default 1e-4.
+        input_seq_length: number of input steps. Default 6.
+        n_rollout_steps: number of rollout steps. -1 means full rollout. Default -1.
+        eval_n_trajs: number of trajectories to evaluate. Default 1 trajectory.
+        rollout_dir: directory to save rollouts. Default None.
+        out_type: type of output. None means no rollout is stored. Default None.
+        n_extrap_steps: number of extrapolation steps. Default 0.
+        log_steps: number of steps between logs. Default 1000.
+        eval_steps: number of steps between evaluations and checkpoints. Default 5000.
+        neighbor_list_backend: neighbor list routine. Default "jaxmd_vmap".
+        neighbor_list_multiplier: multiplier for neighbor list capacity. Default 1.25.
+    """
 
     # training
     seed: int = 0  # random seed
@@ -34,7 +58,6 @@ class defaults:
     rollout_dir: str = None  # directory to save rollouts
     out_type: str = None  # type of output. None means no rollout is stored
     n_extrap_steps: int = 0  # number of extrapolation steps
-    metrics: List = field(default_factory=lambda: ["mse"])  # evaluation metrics
 
     # logging
     log_steps: int = 1000  # number of steps between logs

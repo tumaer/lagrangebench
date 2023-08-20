@@ -23,12 +23,12 @@ def physical_feature_builder(
     """Build a physical feature transform function.
 
     Transform raw coordinates to
-        * Absolute positions
-        * Historical velocity sequence
-        * Velocity magnitudes
-        * Distance to boundaries
-        * External force field
-        * Relative displacement vectors and distances
+        - Absolute positions
+        - Historical velocity sequence
+        - Velocity magnitudes
+        - Distance to boundaries
+        - External force field
+        - Relative displacement vectors and distances
 
     Args:
         bounds: Each sublist contains the lower and upper bound of a dimension.
@@ -52,13 +52,13 @@ def physical_feature_builder(
 
         Returns:
             Dict of features, with possible keys
-                * "abs_pos", absolute positions
-                * "vel_hist", historical velocity sequence
-                * "vel_mag", velocity magnitudes
-                * "bound", distance to boundaries
-                * "force", external force field
-                * "rel_disp", relative displacement vectors
-                * "rel_dist", relative distance vectors
+                - "abs_pos", absolute positions
+                - "vel_hist", historical velocity sequence
+                - "vel_mag", velocity magnitudes
+                - "bound", distance to boundaries
+                - "force", external force field
+                - "rel_disp", relative displacement vectors
+                - "rel_dist", relative distance vectors
         """
         features = {}
 

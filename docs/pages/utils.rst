@@ -9,4 +9,4 @@ Utils
 Defaults
 --------
 .. automodule:: lagrangebench.defaults
-    :members:
+    :members: __init__
