@@ -1,6 +1,5 @@
 """Data utils."""
 
-import warnings
 from typing import Dict, List
 
 import jax.numpy as jnp
@@ -28,12 +27,6 @@ def get_dataset_stats(
     vel_std = jnp.array(metadata["vel_std"])
 
     if is_isotropic_norm:
-        warnings.warn(
-            "The isotropic normalization is only a simplification of the general case."
-            "It is only valid if the means of the velocity and acceleration are"
-            "isotropic -> we use $max(abs(mean)) < 1% min(std)$ as a heuristic."
-        )
-
         acc_mean = jnp.mean(acc_mean) * jnp.ones_like(acc_mean)
         acc_std = jnp.sqrt(jnp.mean(acc_std**2)) * jnp.ones_like(acc_std)
         vel_mean = jnp.mean(vel_mean) * jnp.ones_like(vel_mean)
