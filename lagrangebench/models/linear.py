@@ -11,7 +11,12 @@ from .base import BaseModel
 
 
 class Linear(BaseModel):
-    """Model defining linear relation between input nodes and targets."""
+    r"""Model defining linear relation between input nodes and targets.
+
+    :math:`\mathbf{a}_i = \mathbf{W} \mathbf{x}_i` where :math:`\mathbf{a}_i` are the
+    output accelerations, :math:`\mathbf{W}` is a learnable weight matrix and
+    :math:`\mathbf{x}_i` are input features.
+    """
 
     def __init__(self, dim_out):
         """Initialize the model.

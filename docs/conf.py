@@ -10,7 +10,7 @@ project = "LagrangeBench"
 copyright = "2023, Chair of Aerodynamics and Fluid Mechanics, TUM"
 author = "Artur Toshev, Gianluca Galletti"
 
-version = "0.1.0"
+version = "0.0.1"
 
 # -- Path setup --------------------------------------------------------------
 

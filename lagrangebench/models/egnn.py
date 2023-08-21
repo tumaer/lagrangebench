@@ -1,4 +1,11 @@
-"""E(3) equivariant GNN. Model + feature transform, everything in one file."""
+"""
+E(n) equivariant GNN (https://arxiv.org/abs/2102.09844).
+EGNN model, layers and feature transform.
+
+Original implementation: https://github.com/vgsatorras/egnn
+
+Standalone implementation + validation: https://github.com/gerkone/egnn-jax
+"""
 
 from typing import Any, Callable, Dict, Iterable, Optional, Tuple
 
@@ -59,7 +66,11 @@ class MLPXav(hk.nets.MLP):
 
 
 class EGNNLayer(hk.Module):
-    """EGNN layer."""
+    r"""E(n)-equivariant EGNN layer.
+
+    Applies a message passing step where the positions are corrected with the velocities
+    and a learnable correction term :math:`\psi_x(\mathbf{h}_i^{(t+1)})`:
+    """
 
     def __init__(
         self,
@@ -242,13 +253,41 @@ class EGNN(BaseModel):
     r"""
     E(n) Graph Neural Network (https://arxiv.org/abs/2102.09844).
 
-    This differs from the original in two places:
+    EGNN doesn't require expensive higher-order representations in intermediate layers;
+    instead it relies on separate scalar and vector channels, which are treated
+    differently by EGNN layers. In this setup, EGNN is similar to a learnable numerical
+    integrator:
+
+    .. math::
+        \begin{align}
+            \mathbf{m}_{ij}^{(t+1)} &= \phi_e \left(
+                \mathbf{m}_{ij}^{(t)}, \mathbf{h}_i^{(t)},
+                \mathbf{h}_j^{(t)}, ||\mathbf{x}_i^{(t)} - \mathbf{x}_j^{(t)}||^2
+                \right) \\
+            \mathbf{\hat{m}}_{ij}^{(t+1)} &= \phi_x(
+                \mathbf{m}_{ij}^{(t+1)}) (\mathbf{x}_i^{(t)} - \mathbf{x}_j^{(t)}
+                ) \\
+        \end{align}
+
+    And the node update with the integrator
+
+    .. math::
+        \begin{align}
+            \mathbf{h}_i^{(t+1)} &= \psi_h \left(
+                \mathbf{h}_i^{(t)}, \sum_{j \in \mathcal{N}(i)} \mathbf{m}_{ij}^{(t+1)}
+                \right) \\
+            \mathbf{x}_i^{(t+1)} &= \mathbf{x}_i^{(t)}
+                + \psi_x(\mathbf{h}_i^{(t+1)}) \mathbf{\hat{m}}_{ij}^{(t+1)}
+        \end{align}
+
+    where :math:`\mathbf{m}_{ij}` and :math:`\mathbf{\hat{m}}_{ij}` are the scalar and
+    vector messages respectively, and :math:`\mathbf{x}_{i}` are the positions.
+
+    This implementation differs from the original in two places:
 
     - because our datasets can have periodic boundary conditions, we use shift and
       displacement functions that take care of it when operations on positions are done.
     - we apply a simple integrator after the last layer to get the acceleration.
-
-    Original implementation: https://github.com/vgsatorras/egnn
     """
 
     def __init__(
@@ -272,18 +311,19 @@ class EGNN(BaseModel):
         Initialize the network.
 
         Args:
-            hidden_size: Number of hidden features
-            output_size: Number of features for 'h' at the output
-            dt: Time step for position and velocity integration
+            hidden_size: Number of hidden features.
+            output_size: Number of features for 'h' at the output.
+            dt: Time step for position and velocity integration. Used to rescale the
+                initialization of the correction MLP.
             n_vels: Number of velocities in the history.
             displacement_fn: Displacement function for the acceleration computation.
-            shift_fn: Shift function for updating positions
-            normalization_stats: Normalization statistics for the input data
-            act_fn: Non-linearity
+            shift_fn: Shift function for updating positions.
+            normalization_stats: Normalization statistics for the input data.
+            act_fn: Non-linearity.
             num_layers: Number of layer for the EGNN
             homogeneous_particles: If all particles are of homogeneous type.
-            residual: Use residual connections, we recommend not changing this one
-            attention: Whether using attention or not
+            residual: Whether to use residual connections.
+            attention: Whether to use attention or not.
             normalize: Normalizes the coordinates messages such that:
                 ``x^{l+1}_i = x^{l}_i + \sum(x_i - x_j)\phi_x(m_{ij})\|x_i - x_j\|``
                 It may help in the stability or generalization. Not used in the paper.

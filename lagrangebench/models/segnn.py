@@ -1,4 +1,14 @@
-"""Steerable E(3) equivariant GNN. Model + feature transform, everything in one file."""
+"""
+Steerable E(3) equivariant GNN.
+(https://arxiv.org/abs/2110.02905python).
+SEGNN model, layers and feature transform.
+
+Original implementation: https://github.com/RobDHess/Steerable-E3-GNN
+
+Standalone implementation + validation: https://github.com/gerkone/segnn-jax
+"""
+
+
 import warnings
 from math import prod
 from typing import Any, Callable, Dict, Optional, Tuple, Union
@@ -433,12 +443,20 @@ def weight_balanced_irreps(
 
 
 class SEGNN(BaseModel):
-    """Steerable E(3) equivariant network [#segnn].
+    r"""
+    Steerable E(3) equivariant network (https://arxiv.org/abs/2110.02905).
 
-    References:
-        [#segnn] Brandstetter, Hesselink, van der Pol, Bekkers, Welling
-        Geometric and Physical Quantities improve {E(3)} Equivariant Message Passing.
-        ICLR 2021, https://arxiv.org/abs/2110.02905
+    SEGNNs are E(3)-equivariant graph neural networks based around tensor products of
+    representations. By design, SEGNNs allow for flexible scalar/vectorial inputs and
+    outputs for both edges and attributes. The message passing is modified as follows:
+
+    .. math::
+        \begin{align}
+            \mathbf{m}_{ij} &= \textit{M}_{\mathbf{\hat{a}}_{ij}}\left(
+                \mathbf{f}_i, \mathbf{f}_j, \| x_i - x_j \|^2 \right), \\
+            \mathbf{f}^{\prime}_i &= \textit{U}_{\mathbf{\hat{a}}_i}\left(
+                \mathbf{f}_i, \sum_{j\in\mathcal{N}(i)} \mathbf{m}_{ij} \right)
+        \end{align}
     """
 
     def __init__(

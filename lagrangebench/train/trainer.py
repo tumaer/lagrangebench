@@ -1,8 +1,8 @@
-"""Trainer method."""
+"""Training utils and functions."""
 
 import os
 from functools import partial
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -99,15 +99,20 @@ def Trainer(
     input_seq_length: int = defaults.input_seq_length,
     pushforward: Optional[PushforwardConfig] = None,
     noise_std: float = defaults.noise_std,
-    metrics: Optional[Dict] = None,
+    metrics: List = ["mse"],
     seed: int = defaults.seed,
     **kwargs,
 ) -> Callable:
     """
-    Trainer builder function.
+    Builds a function that automates model training and evaluation.
 
-    Returns a function that trains the model on the given
-    case and dataset_train, evaluating it on dataset_eval with the specified metrics.
+    Given a model, training and validation datasets and a case this function returns
+    another function that:
+
+    1. Initializes (or resumes from a checkpoint) model, optimizer and loss function.
+    2. Trains the model on dataset_train, using the given pushforward and noise tricks.
+    3. Evaluates the model on dataset_eval on the specified metrics.
+
 
     Args:
         model: (Transformed) Haiku model.
@@ -117,10 +122,10 @@ def Trainer(
         lr_start: Initial learning rate.
         batch_size: Training batch size.
         input_seq_length: Input sequence length. Default is 6.
-        pushforward: Pushforward configuration.
+        pushforward: Pushforward configuration. None for no pushforward.
         noise_std: Noise standard deviation for the GNS-style noise.
         metrics: Metrics to evaluate the model on.
-        seed: Random seed.
+        seed: Random seed for model init, training tricks and dataloading.
 
     Keyword Args:
         lr_final: Final learning rate.
@@ -211,7 +216,7 @@ def Trainer(
         wandb_run: Optional[Run] = None,
     ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
-        Training function.
+        Training loop.
 
         Trains and evals the model on the given case and dataset, and saves the model
         checkpoints and best models.

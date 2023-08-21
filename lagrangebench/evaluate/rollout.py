@@ -4,7 +4,7 @@ import os
 import pickle
 import time
 import warnings
-from typing import Callable, Dict, Iterable, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -224,7 +224,7 @@ def infer(
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,
     load_checkpoint: Optional[str] = None,
-    metrics: Optional[Dict] = None,
+    metrics: List = ["mse"],
     rollout_dir: Optional[str] = None,
     eval_n_trajs: int = defaults.eval_n_trajs,
     n_rollout_steps: int = defaults.n_rollout_steps,

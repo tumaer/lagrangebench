@@ -1,4 +1,12 @@
-"""Modified PaiNN implementation for general vectorial inputs and outputs."""
+"""
+Modified PaiNN implementation for general vectorial inputs and outputs
+(http://proceedings.mlr.press/v139/schutt21a.html).
+PaiNN model, layers and feature transform.
+
+Original implementation: https://github.com/atomistic-machine-learning/schnetpack
+
+Standalone implementation + validation: https://github.com/gerkone/painn-jax
+"""
 
 from typing import Callable, Dict, NamedTuple, Optional, Tuple
 
@@ -363,17 +371,14 @@ class PaiNNLayer(hk.Module):
 
 
 class PaiNN(hk.Module):
-    """PaiNN - polarizable interaction neural network [#painn1].
+    r"""Polarizable interaction Neural Network.
 
     In order to accomodate general inputs/outputs, this PaiNN is different from the
     original in a few ways; the main change is that inputs vectors are not initialized
     to 0 anymore but to the time average of velocity.
 
-    References:
-        [#painn1] Schütt, Unke, Gastegger:
-        Equivariant message passing for the prediction of tensorial properties and
-        molecular spectra.
-        ICML 2021, http://proceedings.mlr.press/v139/schutt21a.html
+    .. image:: https://i.imgur.com/NxZ2rPi.png
+
     """
 
     def __init__(
