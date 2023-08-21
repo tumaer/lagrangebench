@@ -90,8 +90,8 @@ The ``Trainer`` provides a convenient way to train a model.
    trainer = lagrangebench.Trainer(
       model=gns,
       case=case,
-      dataset_train=data_train,
-      dataset_eval=data_eval,
+      data_train=data_train,
+      data_eval=data_eval,
       metrics=["mse"],
       n_rollout_steps=20,
    )

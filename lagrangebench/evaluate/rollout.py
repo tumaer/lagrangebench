@@ -220,7 +220,7 @@ def eval_rollout(
 def infer(
     model: hk.TransformedWithState,
     case,
-    dataset_test: H5Dataset,
+    data_test: H5Dataset,
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,
     load_checkpoint: Optional[str] = None,
@@ -238,7 +238,7 @@ def infer(
     Args:
         model: (Transformed) Haiku model.
         case: Case setup class.
-        dataset_test: Test dataset.
+        data_test: Test dataset.
         params: Haiku params.
         state: Haiku state.
         load_checkpoint: Path to checkpoint directory.
@@ -266,7 +266,7 @@ def infer(
     key, seed_worker, generator = set_seed(seed)
 
     loader_test = DataLoader(
-        dataset=dataset_test,
+        dataset=data_test,
         batch_size=1,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
@@ -275,8 +275,8 @@ def infer(
     metrics_computer = MetricsComputer(
         metrics,
         dist_fn=case.displacement,
-        metadata=dataset_test.metadata,
-        input_seq_length=dataset_test.input_seq_length,
+        metadata=data_test.metadata,
+        input_seq_length=data_test.input_seq_length,
     )
     # Precompile model
     model_apply = jax.jit(model.apply)

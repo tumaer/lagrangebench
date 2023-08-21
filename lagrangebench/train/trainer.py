@@ -92,15 +92,25 @@ def _update(
 def Trainer(
     model: hk.TransformedWithState,
     case,
-    dataset_train: H5Dataset,
-    dataset_eval: H5Dataset,
-    lr_start: float = defaults.lr_start,
-    batch_size: int = defaults.batch_size,
-    input_seq_length: int = defaults.input_seq_length,
+    data_train: H5Dataset,
+    data_eval: H5Dataset,
     pushforward: Optional[PushforwardConfig] = None,
-    noise_std: float = defaults.noise_std,
     metrics: List = ["mse"],
     seed: int = defaults.seed,
+    batch_size: int = defaults.batch_size,
+    input_seq_length: int = defaults.input_seq_length,
+    noise_std: float = defaults.noise_std,
+    lr_start: float = defaults.lr_start,
+    lr_final: float = defaults.lr_final,
+    lr_decay_steps: int = defaults.lr_decay_steps,
+    lr_decay_rate: float = defaults.lr_decay_rate,
+    loss_weight: Optional[LossConfig] = None,
+    n_rollout_steps: int = defaults.n_rollout_steps,
+    eval_n_trajs: int = defaults.eval_n_trajs,
+    rollout_dir: str = defaults.rollout_dir,
+    out_type: str = defaults.out_type,
+    log_steps: int = defaults.log_steps,
+    eval_steps: int = defaults.eval_steps,
     **kwargs,
 ) -> Callable:
     """
@@ -110,24 +120,21 @@ def Trainer(
     another function that:
 
     1. Initializes (or resumes from a checkpoint) model, optimizer and loss function.
-    2. Trains the model on dataset_train, using the given pushforward and noise tricks.
-    3. Evaluates the model on dataset_eval on the specified metrics.
-
+    2. Trains the model on data_train, using the given pushforward and noise tricks.
+    3. Evaluates the model on data_eval on the specified metrics.
 
     Args:
         model: (Transformed) Haiku model.
         case: Case setup class.
-        dataset_train: Training dataset.
-        dataset_eval: Validation dataset.
-        lr_start: Initial learning rate.
-        batch_size: Training batch size.
-        input_seq_length: Input sequence length. Default is 6.
+        data_train: Training dataset.
+        data_eval: Validation dataset.
         pushforward: Pushforward configuration. None for no pushforward.
-        noise_std: Noise standard deviation for the GNS-style noise.
         metrics: Metrics to evaluate the model on.
         seed: Random seed for model init, training tricks and dataloading.
-
-    Keyword Args:
+        batch_size: Training batch size.
+        input_seq_length: Input sequence length. Default is 6.
+        noise_std: Noise standard deviation for the GNS-style noise.
+        lr_start: Initial learning rate.
         lr_final: Final learning rate.
         lr_decay_steps: Number of steps to reach the final learning rate.
         lr_decay_rate: Learning rate decay rate.
@@ -138,7 +145,6 @@ def Trainer(
         out_type: Output type.
         log_steps: Wandb/screen logging frequency.
         eval_steps: Evaluation and checkpointing frequency.
-
 
     Returns:
         Configured training function.
@@ -151,7 +157,7 @@ def Trainer(
 
     # dataloaders
     loader_train = DataLoader(
-        dataset=dataset_train,
+        dataset=data_train,
         batch_size=batch_size,
         shuffle=True,
         num_workers=4,
@@ -161,7 +167,7 @@ def Trainer(
         generator=generator,
     )
     loader_eval = DataLoader(
-        dataset=dataset_eval,
+        dataset=data_eval,
         batch_size=1,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
@@ -171,39 +177,28 @@ def Trainer(
     # learning rate decays from lr_start to lr_final over lr_decay_steps exponentially
     lr_scheduler = optax.exponential_decay(
         init_value=lr_start,
-        transition_steps=kwargs.get("lr_decay_steps", defaults.lr_decay_steps),
-        decay_rate=kwargs.get("lr_decay_rate", defaults.lr_decay_rate),
-        end_value=kwargs.get("lr_final", defaults.lr_final),
+        transition_steps=lr_decay_steps,
+        decay_rate=lr_decay_rate,
+        end_value=lr_final,
     )
     # optimizer
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
 
     # loss config
-    loss_weight = kwargs.get("loss_weight", None)
     if loss_weight is None:
         loss_weight = LossConfig()
     else:
         loss_weight = LossConfig(**loss_weight)
     # pushforward config
-    pushforward = kwargs.get("pushforward", None)
     if pushforward is None:
         pushforward = PushforwardConfig()
-
-    # trajectory and rollout
-    n_rollout_steps = kwargs.get("n_rollout_steps", defaults.n_rollout_steps)
-    eval_n_trajs = kwargs.get("eval_n_trajs", defaults.eval_n_trajs)
-    rollout_dir = kwargs.get("rollout_dir", defaults.rollout_dir)
-    out_type = kwargs.get("out_type", defaults.out_type)
-    # logging and checkpointing
-    log_steps = kwargs.get("log_steps", defaults.log_steps)
-    eval_steps = kwargs.get("eval_steps", defaults.eval_steps)
 
     # metrics computer config
     metrics_computer = MetricsComputer(
         metrics,
         dist_fn=case.displacement,
-        metadata=dataset_train.metadata,
-        input_seq_length=dataset_train.input_seq_length,
+        metadata=data_train.metadata,
+        input_seq_length=data_train.input_seq_length,
     )
 
     def _train(
@@ -233,7 +228,7 @@ def Trainer(
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
         """
-        assert n_rollout_steps <= dataset_eval.subsequence_length - input_seq_length, (
+        assert n_rollout_steps <= data_eval.subsequence_length - input_seq_length, (
             "If you want to evaluate the loss on more than the ground truth trajectory "
             "length, then use the --eval_n_more_steps argument."
         )
