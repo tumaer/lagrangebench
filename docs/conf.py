@@ -23,6 +23,7 @@ import sys
 
 sys.path.insert(0, os.path.abspath(".."))
 
+import collections
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -55,3 +56,14 @@ autodoc_default_options = {
     "special-members": True,
     "exclude-members": "__repr__, __str__, __weakref__",
 }
+
+
+# drop the docstrings of undocumented the namedtuple attributes
+def remove_namedtuple_attrib_docstring(app, what, name, obj, skip, options):
+    if type(obj) is collections._tuplegetter:
+        return True
+    return skip
+
+
+def setup(app):
+    app.connect("autodoc-skip-member", remove_namedtuple_attrib_docstring)

@@ -43,12 +43,17 @@ def uniform_init(
 
 
 class O3TensorProduct(hk.Module):
-    """
+    r"""
     O(3) equivariant linear parametrized tensor product layer.
 
-    Functionally the same as O3TensorProductLegacy, but around 5-10% faster.
-    FullyConnectedTensorProduct seems faster than tensor_product + linear:
-    https://github.com/e3nn/e3nn-jax/releases/tag/0.14.0
+    Applies a linear (parametrized) tensor product of representations to the input(s).
+
+    .. math::
+        \begin{align}
+            tp(x, y) := \mathbf{x} \otimes_{CG}^{\mathcal{W}} \mathbf{y}
+        \end{align}
+
+    where :math:`\mathcal{W}` are learnable parameters.
     """
 
     def __init__(
@@ -147,7 +152,7 @@ class O3TensorProduct(hk.Module):
 
         Args:
             x (IrrepsArray): Left tensor
-            y (IrrepsArray): Right tensor. If None it defaults to np.ones.
+            y (IrrepsArray): Right tensor. If None it defaults to ones.
 
         Returns:
             The output to the weighted tensor product (IrrepsArray).
@@ -182,9 +187,12 @@ def O3TensorProductGate(
     name: Optional[str] = None,
     init_fn: Optional[Callable] = None,
 ) -> Callable:
-    """Non-linear (gated) O(3) equivariant linear tensor product layer.
+    r"""Non-linear (gated) O(3) equivariant linear tensor product layer.
 
-    The tensor product lifts the input representation to have gating scalars.
+    It applies a linear tensor product of representations to the input(s) and then
+    a gated nonlinearity (https://arxiv.org/abs/1807.02547).
+
+    The input representation is lifted to have gating scalars.
 
     Args:
         output_irreps: Output representation
@@ -293,7 +301,7 @@ def O3Decoder(
 
 class SEGNNLayer(hk.Module):
     """
-    Steerable E(3) equivariant layer [#segnn].
+    Steerable E(3) equivariant layer.
 
     Applies a message passing step (GN) with equivariant message and update functions.
     """
@@ -457,6 +465,29 @@ class SEGNN(BaseModel):
             \mathbf{f}^{\prime}_i &= \textit{U}_{\mathbf{\hat{a}}_i}\left(
                 \mathbf{f}_i, \sum_{j\in\mathcal{N}(i)} \mathbf{m}_{ij} \right)
         \end{align}
+
+    :math:`\mathbf{\hat{a}}_{ij}` and :math:`\mathbf{\hat{a}}_{i}` are edge and
+    node attributes and the operators :math:`\textit{M}_{\mathbf{\hat{a}}_{ij}}` and
+    :math:`\textit{U}_{\mathbf{\hat{a}}_{i}}` are defined as a tensor product of
+    representations :math:`\otimes_{CG}` between the input and the attribues:
+
+    .. math::
+        \begin{align}
+            \textit{U}_{\mathbf{\hat{a}}_i} :=
+            \mathcal{W^n}_{\mathbf{\hat{a}}_i}
+            (\dots \sigma ( \mathcal{W^0}_{\mathbf{\hat{a}}_i} \mathbf{f} ) )
+            \quad \text{with} \quad
+            \mathcal{W}_{\mathbf{\hat{a}}_i} \mathbf{f} :=
+            \mathbf{f} \otimes_{CG}^{\mathcal{W}} \mathbf{\mathbf{\hat{a}}}
+        \end{align}
+
+    where :math`\mathbf{f} = \[\mathbf{f}_i,\sum_{j\in\mathcal{N}(i)} \mathbf{m}_{ij}\]`
+    are node features concatenated to the aggregated messages, :math:`\sigma` is a gated
+    non-linearity and :math:`\mathcal{W}` are the  tensor product parameters.
+    :math:`\textit{M}_{\mathbf{\hat{a}}_{ij}}` is similarly defined, but with the
+    nonlinearity on the last layer, with edge attributes :math:`\mathbf{\hat{a}}_{ij}`
+    and :math`\mathbf{f} = \[ \mathbf{f}_i, \mathbf{f}_j, \|x_i - x_j\|^2 \]`
+
     """
 
     def __init__(

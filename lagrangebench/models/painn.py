@@ -47,13 +47,9 @@ class LinearXav(hk.Linear):
 
 
 class GatedEquivariantBlock(hk.Module):
-    """Gated equivariant block (restricted to vectorial features). FIG 3 in [#painn1].
+    """Gated equivariant block (restricted to vectorial features).
 
-    References:
-        [#painn1] Schütt, Unke, Gastegger:
-        Equivariant message passing for the prediction of tensorial properties and
-        molecular spectra.
-        ICML 2021
+    .. image:: https://i.imgur.com/EMlg2Qi.png
     """
 
     def __init__(
