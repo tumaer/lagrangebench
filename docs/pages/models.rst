@@ -35,3 +35,4 @@ Utils
 -----
 .. automodule:: lagrangebench.models.utils
     :members:
+    :exclude-members: __getnewargs__, __new__, __repr__

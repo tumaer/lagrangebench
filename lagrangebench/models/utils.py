@@ -9,7 +9,15 @@ from lagrangebench.utils import NodeType
 
 
 class SteerableGraphsTuple(NamedTuple):
-    """Pack (steerable) node and edge attributes with jraph.GraphsTuple."""
+    r"""
+    Pack (steerable) node and edge attributes with jraph.GraphsTuple.
+
+    Attributes:
+        graph: jraph.GraphsTuple, graph structure
+        node_attributes: (N, irreps.dim), node attributes :math:`\mathbf{\hat{a}}_i`
+        edge_attributes: (E, irreps.dim), edge attributes :math:`\mathbf{\hat{a}}_{ij}`
+        additional_message_features: (E, edge_dim), optional message features
+    """
 
     graph: jraph.GraphsTuple
     node_attributes: Optional[e3nn.IrrepsArray] = None

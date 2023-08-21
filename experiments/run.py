@@ -127,6 +127,7 @@ def train_or_infer(args: Namespace):
             wandb_run=wandb_run,
         )
     elif args.config.mode == "infer":
+        assert args.config.model_dir, "model_dir must be specified for inference."
         metrics = infer(
             model,
             case,
