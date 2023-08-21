@@ -1,4 +1,9 @@
 #!/bin/bash
+# Download datasets from google drive
+# Usage:
+#   bash download_data.sh <dataset_name> <output_dir>
+# Usage:
+#   bash download_data.sh all datasets/
 
 declare -A gdrive
 gdrive["tgv_2d"]="https://drive.google.com/drive/folders/140_qJ4wwCWryCLv8Dm5syrHjOSlFGj5F"
@@ -9,23 +14,27 @@ gdrive["tgv_3d"]="https://drive.google.com/drive/folders/1j20G6AMK47AwHre0QGtGmt
 gdrive["rpf_3d"]="https://drive.google.com/drive/folders/1ov9Xds6VSNLSGboht4EasDTRpx2QBFWX"
 gdrive["ldc_3d"]="https://drive.google.com/drive/folders/1FjRFjKKuFdjmX5x3Zso5WA4Hk4BjuOHF"
 
-if [ $# -eq 0 ]; then
-    echo "Usage: bash download_data.sh <dataset_name>/all"
+if [ $# -ne 2 ]; then
+    echo "Usage: bash download_data.sh <dataset_name> <output_dir>"
     exit 1
 fi
 
-if [ ! -d "datasets" ]; then
-    mkdir datasets
+DATASET_NAME="$1"
+OUTPUT_DIR="$2"
+
+# Create output directory if it doesn't exist
+if [ ! -d "${OUTPUT_DIR}" ]; then
+    mkdir -P "${OUTPUT_DIR}"
 fi
 
 # download the data
-if [ $1 == "all" ]; then
+if [ "${DATASET_NAME}" == "all" ]; then
     echo "Downloading all datasets"
     for key in ${!gdrive[@]}; do
         echo "Downloading $key"
-        gdown --folder --continue  ${gdrive[$key]} -O datasets/
+        gdown --folder --continue  ${gdrive[$key]} -O "${OUTPUT_DIR}"
     done
 else
-    echo "Downloading $1"
-    gdown --folder --continue ${gdrive[$1]} -O datasets/
+    echo "Downloading ${DATASET_NAME}"
+    gdown --folder --continue ${gdrive[${DATASET_NAME}]} -O "${OUTPUT_DIR}"
 fi

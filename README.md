@@ -42,14 +42,14 @@ Some model presets can be found in `./configs/`.
 
 ## Datasets
 The datasets are temporarily hosted on Google Drive. When creating a new dataset instance the data is automatically downloaded. In alternative, to manually download them use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
-- __Taylor Green Vortex 2D__: `bash download_data.sh tgv_2d`
-- __Reverse Poiseuille Flow 2D__: `bash download_data.sh rpf_2d`
-- __Lid Driven Cavity 2D__: `bash download_data.sh ldc_2d`
-- __Dam break 2D__: `bash download_data.sh dam_2d`
-- __Taylor Green Vortex 3D__: `bash download_data.sh tgv_3d`
-- __Reverse Poiseuille Flow 3D__: `bash download_data.sh rpf_3d`
-- __Lid Driven Cavity 3D__: `bash download_data.sh ldc_3d`
-- __All__: `bash download_data.sh all`
+- __Taylor Green Vortex 2D__: `bash download_data.sh tgv_2d datasets/`
+- __Reverse Poiseuille Flow 2D__: `bash download_data.sh rpf_2d datasets/`
+- __Lid Driven Cavity 2D__: `bash download_data.sh ldc_2d datasets/`
+- __Dam break 2D__: `bash download_data.sh dam_2d datasets/`
+- __Taylor Green Vortex 3D__: `bash download_data.sh tgv_3d datasets/`
+- __Reverse Poiseuille Flow 3D__: `bash download_data.sh rpf_3d datasets/`
+- __Lid Driven Cavity 3D__: `bash download_data.sh ldc_3d datasets/`
+- __All__: `bash download_data.sh all datasets/`
 
 
 ## Directory structure
