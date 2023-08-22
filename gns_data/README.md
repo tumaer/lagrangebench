@@ -21,7 +21,7 @@ venv_tf/bin/pip install tensorflow tensorflow-datasets
 Then, transform the data via
 
 ```bash
-./venv_tf/bin/python gns_data/tfrecord_to_h5.py --dataset_path=/tmp/datasets/WaterDrop
+./venv_tf/bin/python gns_data/tfrecord_to_h5.py --dataset-path=/tmp/datasets/WaterDrop
 ```
 
 and train the usual way.
