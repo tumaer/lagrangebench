@@ -8,7 +8,7 @@ Original implementation: https://github.com/atomistic-machine-learning/schnetpac
 Standalone implementation + validation: https://github.com/gerkone/painn-jax
 """
 
-from typing import Callable, Dict, NamedTuple, Optional, Tuple
+from typing import Callable, Dict, NamedTuple, Tuple
 
 import haiku as hk
 import jax
@@ -18,9 +18,11 @@ import jraph
 
 from lagrangebench.utils import NodeType
 
+from .utils import LinearXav
+
 
 class NodeFeatures(NamedTuple):
-    """Simple container for scalar and vectorial node features."""
+    """Simple container for PaiNN scalar and vectorial node features."""
 
     s: jnp.ndarray = None
     v: jnp.ndarray = None
@@ -28,22 +30,6 @@ class NodeFeatures(NamedTuple):
 
 ReadoutFn = Callable[[jraph.GraphsTuple], Tuple[jnp.ndarray, jnp.ndarray]]
 ReadoutBuilderFn = Callable[..., ReadoutFn]
-
-
-class LinearXav(hk.Linear):
-    """Linear layer with Xavier init. Avoid distracting 'w_init' everywhere."""
-
-    def __init__(
-        self,
-        output_size: int,
-        with_bias: bool = True,
-        w_init: Optional[hk.initializers.Initializer] = None,
-        b_init: Optional[hk.initializers.Initializer] = None,
-        name: Optional[str] = None,
-    ):
-        if w_init is None:
-            w_init = hk.initializers.VarianceScaling(1.0, "fan_avg", "uniform")
-        super().__init__(output_size, with_bias, w_init, b_init, name)
 
 
 class GatedEquivariantBlock(hk.Module):
