@@ -367,7 +367,7 @@ class PaiNN(hk.Module):
         self,
         hidden_size: int,
         output_size: int,
-        n_layers: int,
+        num_mp_steps: int,
         radial_basis_fn: Callable,
         cutoff_fn: Callable,
         n_vels: int,
@@ -382,7 +382,7 @@ class PaiNN(hk.Module):
         Args:
             hidden_size: Determines the size of each embedding vector.
             output_size: Number of output features.
-            n_layers: Number of interaction blocks.
+            num_mp_steps: Number of interaction blocks.
             radial_basis_fn: Expands inter-particle distances in a basis set.
             cutoff_fn: Cutoff function.
             n_vels: Number of historical velocities.
@@ -399,7 +399,7 @@ class PaiNN(hk.Module):
         self._n_vels = n_vels
         self._homogeneous_particles = homogeneous_particles
         self._hidden_size = hidden_size
-        self._n_layers = n_layers
+        self._num_mp_steps = num_mp_steps
         self._eps = eps
         self._shared_filters = shared_filters
         self._shared_interactions = shared_interactions
@@ -416,13 +416,18 @@ class PaiNN(hk.Module):
         if shared_filters:
             self.filter_net = LinearXav(3 * hidden_size, name="filter_net")
         else:
-            self.filter_net = LinearXav(n_layers * 3 * hidden_size, name="filter_net")
+            self.filter_net = LinearXav(
+                num_mp_steps * 3 * hidden_size, name="filter_net"
+            )
 
         if self._shared_interactions:
-            self.layers = [PaiNNLayer(hidden_size, 0, activation, eps=eps)] * n_layers
+            self.layers = [
+                PaiNNLayer(hidden_size, 0, activation, eps=eps)
+            ] * num_mp_steps
         else:
             self.layers = [
-                PaiNNLayer(hidden_size, i, activation, eps=eps) for i in range(n_layers)
+                PaiNNLayer(hidden_size, i, activation, eps=eps)
+                for i in range(num_mp_steps)
             ]
 
         self._readout = PaiNNReadout(self._hidden_size, out_channels=output_size)
@@ -453,9 +458,9 @@ class PaiNN(hk.Module):
         filters = self.filter_net(phi_ij) * norm_ij[:, jnp.newaxis]
         # split into layer-wise filters
         if self._shared_filters:
-            filter_list = [filters] * self._n_layers
+            filter_list = [filters] * self._num_mp_steps
         else:
-            filter_list = jnp.split(filters, self._n_layers, axis=-1)
+            filter_list = jnp.split(filters, self._num_mp_steps, axis=-1)
         return filter_list
 
     def _transform(

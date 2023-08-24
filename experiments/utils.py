@@ -88,8 +88,8 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
             return models.GNS(
                 particle_dimension=metadata["dim"],
                 latent_size=args.config.latent_dim,
-                num_mlp_layers=args.config.num_mlp_layers,
-                num_message_passing_steps=args.config.num_mp_steps,
+                blocks_per_layer=args.config.num_mlp_layers,
+                num_mp_steps=args.config.num_mp_steps,
                 num_particle_types=NodeType.SIZE,
                 particle_type_embedding_size=16,
             )(x)
@@ -115,7 +115,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
                 lmax_hidden=args.config.lmax_hidden,
                 lmax_attributes=args.config.lmax_attributes,
                 output_irreps=Irreps("1x1o"),
-                num_layers=args.config.num_mp_steps,
+                num_mp_steps=args.config.num_mp_steps,
                 n_vels=args.config.input_seq_length - 1,
                 velocity_aggregate=args.config.velocity_aggregate,
                 homogeneous_particles=args.info.homogeneous_particles,
@@ -142,7 +142,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
                 displacement_fn=displacement_fn,
                 shift_fn=shift_fn,
                 normalization_stats=args.normalization_stats,
-                num_layers=args.config.num_mp_steps,
+                num_mp_steps=args.config.num_mp_steps,
                 n_vels=args.config.input_seq_length - 1,
                 residual=True,
             )(x)
@@ -159,7 +159,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
                 n_vels=args.config.input_seq_length - 1,
                 radial_basis_fn=models.painn.gaussian_rbf(20, radius, trainable=True),
                 cutoff_fn=models.painn.cosine_cutoff(radius),
-                n_layers=args.config.num_mp_steps,
+                num_mp_steps=args.config.num_mp_steps,
             )(x)
 
         MODEL = models.PaiNN

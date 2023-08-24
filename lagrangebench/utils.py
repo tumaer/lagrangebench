@@ -12,7 +12,6 @@ import cloudpickle
 import jax
 import jax.numpy as jnp
 import numpy as np
-import pyvista
 import torch
 
 
@@ -146,6 +145,12 @@ def print_params_shapes(params, prefix=""):
 
 def write_vtk(data_dict, path):
     """Store a .vtk file for ParaView."""
+
+    try:
+        import pyvista
+    except ImportError:
+        raise ImportError("Please install pyvista to write VTK files.")
+
     r = np.asarray(data_dict["r"])
     N, dim = r.shape
 

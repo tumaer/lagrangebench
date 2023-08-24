@@ -35,8 +35,8 @@ class GNS(BaseModel):
         self,
         particle_dimension: int,
         latent_size: int,
-        num_mlp_layers: int,
-        num_message_passing_steps: int,
+        blocks_per_layer: int,
+        num_mp_steps: int,
         particle_type_embedding_size: int,
         num_particle_types: int = NodeType.SIZE,
     ):
@@ -45,16 +45,16 @@ class GNS(BaseModel):
         Args:
             particle_dimension: Space dimensionality (e.g. 2 or 3).
             latent_size: Size of the latent representations.
-            num_mlp_layers: Number of MLP layers per block.
-            num_message_passing_steps: Number of message passing steps.
+            blocks_per_layer: Number of MLP layers per block.
+            num_mp_steps: Number of message passing steps.
             particle_type_embedding_size: Size of the particle type embedding.
             num_particle_types: Max number of particle types.
         """
         super().__init__()
         self._output_size = particle_dimension
         self._latent_size = latent_size
-        self._num_layers = num_mlp_layers
-        self._mp_steps = num_message_passing_steps
+        self._blocks_per_layer = blocks_per_layer
+        self._mp_steps = num_mp_steps
         self._num_particle_types = num_particle_types
 
         self._embedding = hk.Embed(
@@ -64,10 +64,10 @@ class GNS(BaseModel):
     def _encoder(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
         """MLP graph encoder."""
         node_latents = build_mlp(
-            self._latent_size, self._latent_size, self._num_layers
+            self._latent_size, self._latent_size, self._blocks_per_layer
         )(graph.nodes)
         edge_latents = build_mlp(
-            self._latent_size, self._latent_size, self._num_layers
+            self._latent_size, self._latent_size, self._blocks_per_layer
         )(graph.edges)
         return jraph.GraphsTuple(
             nodes=node_latents,
@@ -86,7 +86,7 @@ class GNS(BaseModel):
             edge_features, sender_node_features, receiver_node_features, _  # globals_
         ):
             update_fn = build_mlp(
-                self._latent_size, self._latent_size, self._num_layers
+                self._latent_size, self._latent_size, self._blocks_per_layer
             )
             # Calculate sender node features from edge features
             return update_fn(
@@ -103,7 +103,7 @@ class GNS(BaseModel):
             __,  # globals_,
         ):
             update_fn = build_mlp(
-                self._latent_size, self._latent_size, self._num_layers
+                self._latent_size, self._latent_size, self._blocks_per_layer
             )
             features = [node_features, aggr_receiver_edge_features]
             return update_fn(jnp.concatenate(features, axis=-1))
@@ -122,7 +122,10 @@ class GNS(BaseModel):
     def _decoder(self, graph: jraph.GraphsTuple):
         """MLP graph node decoder."""
         return build_mlp(
-            self._latent_size, self._output_size, self._num_layers, is_layer_norm=False
+            self._latent_size,
+            self._output_size,
+            self._blocks_per_layer,
+            is_layer_norm=False,
         )(graph.nodes)
 
     def _transform(

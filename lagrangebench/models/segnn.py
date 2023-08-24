@@ -272,14 +272,14 @@ def O3Embedding(embed_irreps: Irreps, embed_edges: bool = True) -> Callable:
 def O3Decoder(
     latent_irreps: Irreps,
     output_irreps: Irreps,
-    blocks: int = 1,
+    n_blocks: int = 1,
 ):
     """Steerable decoder.
 
     Args:
         latent_irreps: Representation from the previous block
         output_irreps: Output representation
-        blocks: Number of tensor product blocks in the decoder
+        n_blocks: Number of tensor product blocks in the decoder
 
     Returns:
         Decoded latent feature space to output space.
@@ -287,7 +287,7 @@ def O3Decoder(
 
     def _decoder(st_graph: SteerableGraphsTuple):
         nodes = st_graph.graph.nodes
-        for i in range(blocks):
+        for i in range(n_blocks):
             nodes = O3TensorProductGate(latent_irreps, name=f"readout_{i}")(
                 nodes, st_graph.node_attributes
             )
@@ -309,8 +309,8 @@ class SEGNNLayer(hk.Module):
     def __init__(
         self,
         output_irreps: Irreps,
-        layer_num: int,
-        blocks: int = 2,
+        layer_idx: int,
+        n_blocks: int = 2,
         norm: Optional[str] = None,
         aggregate_fn: Optional[Callable] = jraph.segment_sum,
     ):
@@ -319,15 +319,15 @@ class SEGNNLayer(hk.Module):
 
         Args:
             output_irreps: Layer output representation
-            layer_num: Numbering of the layer
-            blocks: Number of tensor product blocks in the layer
+            layer_idx: Numbering of the layer
+            n_blocks: Number of tensor product n_blocks in the layer
             norm: Normalization type. Either be None, 'instance' or 'batch'
             aggregate_fn: Message aggregation function. Defaults to sum.
         """
-        super().__init__(f"layer_{layer_num}")
+        super().__init__(f"layer_{layer_idx}")
         assert norm in ["batch", "instance", "none", None], f"Unknown norm '{norm}'"
         self._output_irreps = output_irreps
-        self._blocks = blocks
+        self._n_blocks = n_blocks
         self._norm = norm
         self._aggregate_fn = aggregate_fn
 
@@ -348,7 +348,7 @@ class SEGNNLayer(hk.Module):
         if additional_message_features is not None:
             msg = e3nn.concatenate([msg, additional_message_features], axis=-1)
         # message mlp (phi_m in the paper) steered by edge attributeibutes
-        for i in range(self._blocks):
+        for i in range(self._n_blocks):
             msg = O3TensorProductGate(self._output_irreps, name=f"tp_{i}")(
                 msg, edge_attribute
             )
@@ -370,12 +370,12 @@ class SEGNNLayer(hk.Module):
         _ = globals_
         x = e3nn.concatenate([nodes, msg], axis=-1)
         # update mlp (phi_f in the paper) steered by node attributeibutes
-        for i in range(self._blocks - 1):
+        for i in range(self._n_blocks - 1):
             x = O3TensorProductGate(self._output_irreps, name=f"tp_{i}")(
                 x, node_attribute
             )
         # last update layer without activation
-        update = O3TensorProduct(self._output_irreps, name=f"tp_{self._blocks - 1}")(
+        update = O3TensorProduct(self._output_irreps, name=f"tp_{self._n_blocks - 1}")(
             x, node_attribute
         )
         # residual connection
@@ -498,12 +498,12 @@ class SEGNN(BaseModel):
         lmax_hidden: int,
         lmax_attributes: int,
         output_irreps: Irreps,
-        num_layers: int,
+        num_mp_steps: int,
         n_vels: int,
         velocity_aggregate: str = "avg",
         homogeneous_particles: bool = True,
         norm: Optional[str] = None,
-        blocks_per_layer: int = 2,
+        blocks_per_step: int = 2,
         embed_msg_features: bool = False,
     ):
         """
@@ -516,12 +516,12 @@ class SEGNN(BaseModel):
             lmax_hidden: Maximum L of the hidden layer representations.
             lmax_attributes: Maximum L of the attributes.
             output_irreps: Output representation.
-            num_layers: Number of message passing layers
+            num_mp_steps: Number of message passing layers
             n_vels: Number of velocities in the history.
             velocity_aggregate: Velocity sequence aggregation method.
             homogeneous_particles: If all particles are of homogeneous type.
             norm: Normalization type. Either None, 'instance' or 'batch'
-            blocks_per_layer: Number of tensor product blocks in each message passing
+            blocks_per_step: Number of tensor product blocks in each message passing
             embed_msg_features: Set to true to also embed edges/message passing features
         """
         super().__init__()
@@ -532,10 +532,10 @@ class SEGNN(BaseModel):
             scalar_units, self._attribute_irreps, lmax_hidden
         )
         self._output_irreps = output_irreps
-        self._num_layers = num_layers
+        self._num_mp_steps = num_mp_steps
         self._embed_msg_features = embed_msg_features
         self._norm = norm
-        self._blocks_per_layer = blocks_per_layer
+        self._blocks_per_step = blocks_per_step
 
         self._embedding = O3Embedding(
             self._hidden_irreps,
@@ -545,7 +545,7 @@ class SEGNN(BaseModel):
         self._decoder = O3Decoder(
             latent_irreps=self._hidden_irreps,
             output_irreps=output_irreps,
-            blocks=self._blocks_per_layer,
+            n_blocks=self._blocks_per_step,
         )
 
         # transform
@@ -648,9 +648,9 @@ class SEGNN(BaseModel):
         # node (and edge) embedding
         st_graph = self._embedding(st_graph)
         # message passing
-        for n in range(self._num_layers):
+        for n in range(self._num_mp_steps):
             st_graph = SEGNNLayer(
-                self._hidden_irreps, n, blocks=self._blocks_per_layer, norm=self._norm
+                self._hidden_irreps, n, n_blocks=self._blocks_per_step, norm=self._norm
             )(st_graph)
         # readout
         nodes = self._decoder(st_graph)

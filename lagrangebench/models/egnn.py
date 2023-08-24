@@ -255,9 +255,9 @@ class EGNN(BaseModel):
         n_vels: int,
         displacement_fn: space.DisplacementFn,
         shift_fn: space.ShiftFn,
-        normalization_stats: Dict[str, jnp.ndarray],
+        normalization_stats: Optional[Dict[str, jnp.ndarray]] = None,
         act_fn: Callable = jax.nn.silu,
-        num_layers: int = 4,
+        num_mp_steps: int = 4,
         homogeneous_particles: bool = True,
         residual: bool = True,
         attention: bool = False,
@@ -277,7 +277,7 @@ class EGNN(BaseModel):
             shift_fn: Shift function for updating positions.
             normalization_stats: Normalization statistics for the input data.
             act_fn: Non-linearity.
-            num_layers: Number of layer for the EGNN
+            num_mp_steps: Number of layer for the EGNN
             homogeneous_particles: If all particles are of homogeneous type.
             residual: Whether to use residual connections.
             attention: Whether to use attention or not.
@@ -293,16 +293,21 @@ class EGNN(BaseModel):
         self._hidden_size = hidden_size
         self._output_size = output_size
         self._act_fn = act_fn
-        self._num_layers = num_layers
+        self._num_mp_steps = num_mp_steps
         self._residual = residual
         self._attention = attention
         self._normalize = normalize
         self._tanh = tanh
 
         # integrator
-        self._dt = dt / num_layers
+        self._dt = dt / num_mp_steps
         self._displacement_fn = displacement_fn
         self._shift_fn = shift_fn
+        if normalization_stats is None:
+            normalization_stats = {
+                "velocity": {"mean": 0.0, "std": 1.0},
+                "acceleration": {"mean": 0.0, "std": 1.0},
+            }
         self._vel_stats = normalization_stats["velocity"]
         self._acc_stats = normalization_stats["acceleration"]
 
@@ -375,7 +380,7 @@ class EGNN(BaseModel):
         prev_vel = prev_vel * self._vel_stats["std"] + self._vel_stats["mean"]
         # message passing
         next_pos = props["pos"].copy()
-        for n in range(self._num_layers):
+        for n in range(self._num_mp_steps):
             graph, next_pos = EGNNLayer(
                 layer_num=n,
                 hidden_size=self._hidden_size,
