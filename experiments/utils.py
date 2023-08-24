@@ -88,7 +88,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
             return models.GNS(
                 particle_dimension=metadata["dim"],
                 latent_size=args.config.latent_dim,
-                blocks_per_layer=args.config.num_mlp_layers,
+                blocks_per_step=args.config.num_mlp_layers,
                 num_mp_steps=args.config.num_mp_steps,
                 num_particle_types=NodeType.SIZE,
                 particle_type_embedding_size=16,
@@ -119,7 +119,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
                 n_vels=args.config.input_seq_length - 1,
                 velocity_aggregate=args.config.velocity_aggregate,
                 homogeneous_particles=args.info.homogeneous_particles,
-                blocks_per_layer=args.config.num_mlp_layers,
+                blocks_per_step=args.config.num_mlp_layers,
                 norm=args.config.segnn_norm,
             )(x)
 
