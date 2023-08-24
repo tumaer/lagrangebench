@@ -10,7 +10,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.9"
+python = ">=3.8,<3.11" # TODO update as soon as jaxmd is compatible with python>3.11
 cloudpickle = ">=2.2.1"
 h5py = ">=3.8.0"
 PyYAML = ">=6.0"
@@ -19,7 +19,7 @@ wandb = ">=0.15.1"
 pyvista = ">=0.38.6"
 jax = "^0.4.10"
 dm-haiku = ">=0.0.10"
-e3nn-jax = "0.17.0"
+e3nn-jax = "0.17.3"
 jax-md = "0.2.3"
 jmp = "^0.0.4"
 jraph = "0.0.6.dev0"
