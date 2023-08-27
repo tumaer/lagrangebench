@@ -180,7 +180,7 @@ def PaiNNReadout(
     eps: float = 1e-8,
 ) -> ReadoutFn:
     """
-    PaiNN readout block, adapted from [#painn1].
+    PaiNN readout block.
 
     Args:
         hidden_size: Number of hidden channels.

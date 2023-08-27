@@ -17,18 +17,27 @@ def add_gns_noise(
     noise_std: float,
     shift_fn: space.ShiftFn,
 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    """GNS-style random-walk noise injection on the input_seq_length trajectory.
+    r"""GNS-like random walk noise injection as described by
+    [Sanchez-Gonzalez et al.](https://arxiv.org/abs/2002.09405).
+
+    Applies random-walk noise to the input positions and adjusts the targets accordingly
+    to keep the trajectory consistent. It works by drawing independent samples from
+    :math:`\mathcal{N^{(t)}}(0, \sigma_v^{(t)})` for each input state. Noise is
+    accummulated as a random walk and added to the velocity seqence.
+    Each :math:`\sigma_v^{(t)}` is set so that the last step of the random walk has
+    :math:`\sigma_v^{(input\_seq\_length)} = noise\_std`. Based on the noised velocities,
+    positions are adjusted such that :math:`p^{t_k} = p^{t_k} − p^{t_{k−1}}`.
 
     Args:
         key: Random key.
         pos_input: Clean input positions.
         particle_type: Particle type vector.
         input_seq_length: Input sequence length.
-        noise_std: Noise standard deviation.
+        noise_std: Noise standard deviation at the last sequence step.
         shift_fn: Shift function.
     """
     isl = input_seq_length
-    # add noise to the input and adjust the target accordingly
+    # random-walk noise in the velocity applied to the position sequence
     key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
         key, pos_input, noise_std_last_step=noise_std
     )
@@ -50,13 +59,6 @@ def add_gns_noise(
 def _get_random_walk_noise_for_pos_sequence(
     key, position_sequence, noise_std_last_step
 ):
-    """Return random-walk noise in the velocity applied to the position.
-
-    Args:
-        key: Random key.
-        position_sequence: Position sequence.
-        noise_std_last_step: Standard deviation of the noise at the last step.
-    """
     key, subkey = jax.random.split(key)
     velocity_sequence_shape = list(position_sequence.shape)
     velocity_sequence_shape[1] -= 1
@@ -80,7 +82,8 @@ def _get_random_walk_noise_for_pos_sequence(
 
 
 def push_forward_sample_steps(key, step, pushforward):
-    """Sample the number of unroll steps based on the current training step.
+    """Sample the number of unroll steps based on the current training step and the 
+    specified pushforward configuration.
 
     Args:
         key: Random key
@@ -105,7 +108,24 @@ def push_forward_sample_steps(key, step, pushforward):
 
 
 def push_forward_build(model_apply, case):
-    """Build the push forward function.
+    r"""Build the push forward function, introduced by
+    [Brandstetter et al.](https://arxiv.org/abs/2202.03376).
+
+    Pushforward works by adding a stability "pushforward" loss term, in the form of an
+    adversarial style loss.
+
+    .. math::
+        L_{pf} = \mathbb{E}_k \mathbb{E}_{u^{k+1} | u^k}
+            \mathbb{E}_{\epsilon} \left[ \mathcal{L}(f(u^k + \epsilon), u^{k-1}) \right]
+
+    where :math:`\epsilon` is :math:`u^k + \epsilon = f(u^{k−1})`, i.e. the 2-step 
+    unroll of the solver :math:`f` (from step :math:`k-1` to :math:`k`).
+    The total loss is then :math:`L_{total}=\mathcal{L}(f(u^k), u^{k-1}) + L_{pf}`.
+    Similarly, for :math:`S > 2` pushforward steps, :math:`L_{pf}` is extended to
+    :math:`u^{k-S} \dots u^{k-1}` with cumulated :math:`\epsilon` perturbations.
+    
+    In practice, this is implemented by unrolling the solver for two steps, but only
+    running gradients through the last unroll step. 
 
     Args:
         model_apply: Model apply function
