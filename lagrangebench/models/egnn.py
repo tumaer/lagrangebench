@@ -221,9 +221,8 @@ class EGNN(BaseModel):
                 \mathbf{m}_{ij}^{(t)}, \mathbf{h}_i^{(t)},
                 \mathbf{h}_j^{(t)}, ||\mathbf{x}_i^{(t)} - \mathbf{x}_j^{(t)}||^2
                 \right) \\
-            \mathbf{\hat{m}}_{ij}^{(t+1)} &= \phi_x(
-                \mathbf{m}_{ij}^{(t+1)}) (\mathbf{x}_i^{(t)} - \mathbf{x}_j^{(t)}
-                ) \\
+            \mathbf{\hat{m}}_{ij}^{(t+1)} &= 
+            (\mathbf{x}_i^{(t)} - \mathbf{x}_j^{(t)}) \phi_x(\mathbf{m}_{ij}^{(t+1)})
         \end{align}
 
     And the node update with the integrator
@@ -234,7 +233,7 @@ class EGNN(BaseModel):
                 \mathbf{h}_i^{(t)}, \sum_{j \in \mathcal{N}(i)} \mathbf{m}_{ij}^{(t+1)}
                 \right) \\
             \mathbf{x}_i^{(t+1)} &= \mathbf{x}_i^{(t)}
-                + \psi_x(\mathbf{h}_i^{(t+1)}) \mathbf{\hat{m}}_{ij}^{(t+1)}
+                + \mathbf{\hat{m}}_{ij}^{(t+1)} \psi_x(\mathbf{h}_i^{(t+1)})
         \end{align}
 
     where :math:`\mathbf{m}_{ij}` and :math:`\mathbf{\hat{m}}_{ij}` are the scalar and
