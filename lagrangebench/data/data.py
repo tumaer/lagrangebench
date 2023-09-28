@@ -225,15 +225,17 @@ class TGV2D(H5Dataset):
         self,
         split: str,
         dataset_path: str = "datasets/2D_TGV_2500_10kevery100",
-        is_rollout=False,
-        nl_backend="jaxmd_vmap",
+        input_seq_length: int = 6,
+        split_valid_traj_into_n: int = 1,
+        is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
             split,
             dataset_path,
             name="tgv2d",
-            input_seq_length=6,
-            split_valid_traj_into_n=1,
+            input_seq_length=input_seq_length,
+            split_valid_traj_into_n=split_valid_traj_into_n,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
         )
@@ -246,15 +248,17 @@ class TGV3D(H5Dataset):
         self,
         split: str,
         dataset_path: str = "datasets/3D_TGV_8000_10kevery100",
-        is_rollout=False,
-        nl_backend="jaxmd_vmap",
+        input_seq_length: int = 6,
+        split_valid_traj_into_n: int = 1,
+        is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
             split,
             dataset_path,
             name="tgv3d",
-            input_seq_length=6,
-            split_valid_traj_into_n=1,
+            input_seq_length=input_seq_length,
+            split_valid_traj_into_n=split_valid_traj_into_n,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
         )
@@ -267,8 +271,10 @@ class RPF2D(H5Dataset):
         self,
         split: str,
         dataset_path: str = "datasets/2D_RPF_3200_20kevery100",
-        is_rollout=False,
-        nl_backend="jaxmd_vmap",
+        input_seq_length: int = 6,
+        split_valid_traj_into_n: int = 384,
+        is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
     ):
         def external_force_fn(position):
             return jnp.where(
@@ -281,8 +287,8 @@ class RPF2D(H5Dataset):
             split,
             dataset_path,
             name="rpf2d",
-            input_seq_length=6,
-            split_valid_traj_into_n=384,
+            input_seq_length=input_seq_length,
+            split_valid_traj_into_n=split_valid_traj_into_n,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
             external_force_fn=external_force_fn,
@@ -296,8 +302,10 @@ class RPF3D(H5Dataset):
         self,
         split: str,
         dataset_path: str = "datasets/3D_RPF_8000_10kevery100",
-        is_rollout=False,
-        nl_backend="jaxmd_vmap",
+        input_seq_length: int = 6,
+        split_valid_traj_into_n: int = 192,
+        is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
     ):
         def external_force_fn(position):
             return jnp.where(
@@ -310,8 +318,8 @@ class RPF3D(H5Dataset):
             split,
             dataset_path,
             name="rpf3d",
-            input_seq_length=6,
-            split_valid_traj_into_n=192,
+            input_seq_length=input_seq_length,
+            split_valid_traj_into_n=split_valid_traj_into_n,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
             external_force_fn=external_force_fn,
@@ -325,16 +333,17 @@ class LDC2D(H5Dataset):
         self,
         split: str,
         dataset_path: str = "datasets/2D_LDC_2500_10kevery100",
-        is_rollout=False,
-        nl_backend="jaxmd_vmap",
+        input_seq_length: int = 6,
+        split_valid_traj_into_n: int = 192,
+        is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
             split,
             dataset_path,
             name="ldc2d",
-            input_seq_length=6,
-            # TODO compute this from metadata
-            split_valid_traj_into_n=192,
+            input_seq_length=input_seq_length,
+            split_valid_traj_into_n=split_valid_traj_into_n,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
         )
@@ -347,16 +356,17 @@ class LDC3D(H5Dataset):
         self,
         split: str,
         dataset_path: str = "datasets/3D_LDC_8160_10kevery100",
-        is_rollout=False,
-        nl_backend="jaxmd_vmap",
+        input_seq_length: int = 6,
+        split_valid_traj_into_n: int = 192,
+        is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
             split,
             dataset_path,
             name="ldc3d",
-            input_seq_length=6,
-            # TODO compute this from metadata and n_rollout_steps
-            split_valid_traj_into_n=192,
+            input_seq_length=input_seq_length,
+            split_valid_traj_into_n=split_valid_traj_into_n,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
         )
@@ -369,16 +379,17 @@ class DAM2D(H5Dataset):
         self,
         split: str,
         dataset_path: str = "datasets/2D_DB_5740_20kevery100",
-        is_rollout=False,
-        nl_backend="jaxmd_vmap",
+        input_seq_length: int = 6,
+        split_valid_traj_into_n: int = 15,
+        is_rollout: bool = False,
+        nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
             split,
             dataset_path,
             name="dam2d",
-            input_seq_length=6,
-            # TODO compute this from metadata and n_rollout_steps
-            split_valid_traj_into_n=15,
+            input_seq_length=input_seq_length,
+            split_valid_traj_into_n=split_valid_traj_into_n,
             is_rollout=is_rollout,
             nl_backend=nl_backend,
         )
