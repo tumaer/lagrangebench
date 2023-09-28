@@ -1,5 +1,5 @@
 """
-Graph Network-based Simulator (https://arxiv.org/abs/2002.09405).
+Graph Network-based Simulator.
 GNS model and feature transform.
 """
 
@@ -16,7 +16,8 @@ from .utils import build_mlp
 
 
 class GNS(BaseModel):
-    r"""Graph Network-based Simulator (https://arxiv.org/abs/2002.09405).
+    r"""Graph Network-based Simulator by
+    `Sanchez-Gonzalez et al. <https://arxiv.org/abs/2002.09405>`_.
 
     GNS is the simples graph neural network applied to particle dynamics. It is built on
     the usual Graph Network architecture, with an encoder, a processor, and a decoder.
