@@ -1,5 +1,5 @@
 """
-E(n) equivariant GNN (https://arxiv.org/abs/2102.09844).
+E(n) equivariant GNN  from `Garcia Satorras et al. <https://arxiv.org/abs/2102.09844>`_.
 EGNN model, layers and feature transform.
 
 Original implementation: https://github.com/vgsatorras/egnn
@@ -208,7 +208,8 @@ class EGNNLayer(hk.Module):
 
 class EGNN(BaseModel):
     r"""
-    E(n) Graph Neural Network (https://arxiv.org/abs/2102.09844).
+    E(n) Graph Neural Network by
+    `Garcia Satorras et al. <https://arxiv.org/abs/2102.09844>`_.
 
     EGNN doesn't require expensive higher-order representations in intermediate layers;
     instead it relies on separate scalar and vector channels, which are treated
@@ -221,7 +222,7 @@ class EGNN(BaseModel):
                 \mathbf{m}_{ij}^{(t)}, \mathbf{h}_i^{(t)},
                 \mathbf{h}_j^{(t)}, ||\mathbf{x}_i^{(t)} - \mathbf{x}_j^{(t)}||^2
                 \right) \\
-            \mathbf{\hat{m}}_{ij}^{(t+1)} &= 
+            \mathbf{\hat{m}}_{ij}^{(t+1)} &=
             (\mathbf{x}_i^{(t)} - \mathbf{x}_j^{(t)}) \phi_x(\mathbf{m}_{ij}^{(t+1)})
         \end{align}
 

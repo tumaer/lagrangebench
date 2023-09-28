@@ -1,6 +1,6 @@
 """
-Steerable E(3) equivariant GNN.
-(https://arxiv.org/abs/2110.02905python).
+Steerable E(3) equivariant GNN from
+`Brandstetter et al. <https://arxiv.org/abs/2110.02905>`_.
 SEGNN model, layers and feature transform.
 
 Original implementation: https://github.com/RobDHess/Steerable-E3-GNN
@@ -190,7 +190,7 @@ def O3TensorProductGate(
     r"""Non-linear (gated) O(3) equivariant linear tensor product layer.
 
     It applies a linear tensor product of representations to the input(s) and then
-    a gated nonlinearity (https://arxiv.org/abs/1807.02547).
+    a gated nonlinearity by `Weiler et al. <https://arxiv.org/abs/1807.02547>`_.
 
     The input representation is lifted to have gating scalars.
 
@@ -452,7 +452,8 @@ def weight_balanced_irreps(
 
 class SEGNN(BaseModel):
     r"""
-    Steerable E(3) equivariant network (https://arxiv.org/abs/2110.02905).
+    Steerable E(3) equivariant network by
+    `Brandstetter et al. <https://arxiv.org/abs/2110.02905>`_.
 
     SEGNNs are E(3)-equivariant graph neural networks based around tensor products of
     representations. By design, SEGNNs allow for flexible scalar/vectorial inputs and

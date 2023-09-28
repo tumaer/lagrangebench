@@ -1,6 +1,6 @@
 """
 Modified PaiNN implementation for general vectorial inputs and outputs
-(http://proceedings.mlr.press/v139/schutt21a.html).
+`Schütt et al. <https://proceedings.mlr.press/v139/schutt21a.html>`_.
 PaiNN model, layers and feature transform.
 
 Original implementation: https://github.com/atomistic-machine-learning/schnetpack
@@ -353,7 +353,8 @@ class PaiNNLayer(hk.Module):
 
 
 class PaiNN(hk.Module):
-    r"""Polarizable interaction Neural Network.
+    r"""Polarizable interaction Neural Network by
+    `Schütt et al. <https://proceedings.mlr.press/v139/schutt21a.html>`_.
 
     In order to accomodate general inputs/outputs, this PaiNN is different from the
     original in a few ways; the main change is that inputs vectors are not initialized
