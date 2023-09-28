@@ -19,13 +19,24 @@ import jax
 import jax.numpy as jnp
 import jraph
 from e3nn_jax import Irreps, IrrepsArray
-from e3nn_jax._src.tensor_products import naive_broadcast_decorator
 from jax.tree_util import Partial, tree_map
 
 from lagrangebench.utils import NodeType
 
 from .base import BaseModel
 from .utils import SteerableGraphsTuple, features_2d_to_3d
+
+
+def naive_broadcast_decorator(func):
+    def wrapper(*args):
+        leading_shape = jnp.broadcast_shapes(*(arg.shape[:-1] for arg in args))
+        args = [arg.broadcast_to(leading_shape + (-1,)) for arg in args]
+        f = func
+        for _ in range(len(leading_shape)):
+            f = jax.vmap(f)
+        return f(*args)
+
+    return wrapper
 
 
 def uniform_init(
