@@ -107,7 +107,7 @@ class O3TensorProduct(hk.Module):
         self, left_irreps: e3nn.Irreps, right_irreps: e3nn.Irreps
     ) -> Callable:
         """Build the tensor product function."""
-        tp = e3nn.FunctionalFullyConnectedTensorProduct(
+        tp = e3nn.legacy.FunctionalFullyConnectedTensorProduct(
             left_irreps,
             right_irreps,
             self.output_irreps,
