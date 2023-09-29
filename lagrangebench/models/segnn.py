@@ -27,18 +27,6 @@ from .base import BaseModel
 from .utils import SteerableGraphsTuple, features_2d_to_3d
 
 
-def naive_broadcast_decorator(func):
-    def wrapper(*args):
-        leading_shape = jnp.broadcast_shapes(*(arg.shape[:-1] for arg in args))
-        args = [arg.broadcast_to(leading_shape + (-1,)) for arg in args]
-        f = func
-        for _ in range(len(leading_shape)):
-            f = jax.vmap(f)
-        return f(*args)
-
-    return wrapper
-
-
 def uniform_init(
     name: str,
     path_shape: Tuple[int, ...],
@@ -65,6 +53,10 @@ class O3TensorProduct(hk.Module):
         \end{align}
 
     where :math:`\mathcal{W}` are learnable parameters.
+
+    Uses :code:`tensor_product` + :code:`Linear' instead of FullyConnectedTensorProduct.
+    From e3nn 0.19.2 (https://github.com/e3nn/e3nn-jax/releases/tag/0.19.2), this is
+    as fast as FullyConnectedTensorProduct.
     """
 
     def __init__(
@@ -73,9 +65,9 @@ class O3TensorProduct(hk.Module):
         *,
         biases: bool = True,
         name: Optional[str] = None,
-        init_fn: Optional[Callable] = None,
-        gradient_normalization: Optional[Union[str, float]] = "element",
-        path_normalization: Optional[Union[str, float]] = "element",
+        init_fn: Callable = uniform_init,
+        gradient_normalization: Union[str, float] = "element",
+        path_normalization: Union[str, float] = "element",
     ):
         """Initialize the tensor product.
 
@@ -84,109 +76,56 @@ class O3TensorProduct(hk.Module):
             biases: If set ot true will add biases
             name: Name of the linear layer params
             init_fn: Weight initialization function. Default is uniform.
-            gradient_normalization: Gradient normalization method.
+            gradient_normalization: Gradient normalization method. Default is "element".
+            NOTE: gradient_normalization="element" is the default in torch and haiku.
             path_normalization: Path normalization method. Default is "element"
         """
-        super().__init__(name)
+        super().__init__(name=name)
 
         if not isinstance(output_irreps, e3nn.Irreps):
             output_irreps = e3nn.Irreps(output_irreps)
         self.output_irreps = output_irreps
 
-        # tp weight init
-        if not init_fn:
-            init_fn = uniform_init
-        self.get_parameter = init_fn
-
-        self._gradient_normalization = gradient_normalization
-        self._path_normalization = path_normalization
-
-        self.biases = biases and "0e" in self.output_irreps
-
-    def _build_tensor_product(
-        self, left_irreps: e3nn.Irreps, right_irreps: e3nn.Irreps
-    ) -> Callable:
-        """Build the tensor product function."""
-        tp = e3nn.legacy.FunctionalFullyConnectedTensorProduct(
-            left_irreps,
-            right_irreps,
+        self._linear = e3nn.haiku.Linear(
             self.output_irreps,
-            gradient_normalization=self._gradient_normalization,
-            path_normalization=self._path_normalization,
+            get_parameter=init_fn,
+            biases=(biases and "0e" in self.output_irreps),
+            gradient_normalization=gradient_normalization,
+            path_normalization=path_normalization,
         )
-        ws = [
-            self.get_parameter(
-                name=(
-                    f"w[{ins.i_in1},{ins.i_in2},{ins.i_out}] "
-                    f"{tp.irreps_in1[ins.i_in1]},"
-                    f"{tp.irreps_in2[ins.i_in2]},"
-                    f"{tp.irreps_out[ins.i_out]}"
-                ),
-                path_shape=ins.path_shape,
-                weight_std=ins.weight_std,
-            )
-            for ins in tp.instructions
-        ]
 
-        def tensor_product(x, y, **kwargs):
-            return tp.left_right(ws, x, y, **kwargs)._convert(self.output_irreps)
-
-        return naive_broadcast_decorator(tensor_product)
-
-    def _build_biases(self) -> Callable:
-        """Build the add bias function."""
-        b = [
-            self.get_parameter(
-                f"b[{i_out}] {self.output_irreps}",
-                path_shape=(mul_ir.dim,),
-                weight_std=1 / jnp.sqrt(mul_ir.dim),
-            )
-            for i_out, mul_ir in enumerate(self.output_irreps)
-            if mul_ir.ir.is_scalar()
-        ]
-        b = e3nn.IrrepsArray(f"{self.output_irreps.count('0e')}x0e", jnp.concatenate(b))
-
-        # TODO: could be improved
-        def _wrapper(x: e3nn.IrrepsArray) -> e3nn.IrrepsArray:
-            scalars = x.filter("0e")
-            other = x.filter(drop="0e")
-            return e3nn.concatenate(
-                [scalars + b.broadcast_to(scalars.shape), other], axis=1
-            )
-
-        return _wrapper
-
-    def __call__(
-        self, x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None, **kwargs
-    ) -> e3nn.IrrepsArray:
-        """Apply an O(3) equivariant linear parametrized tensor product layer.
-
-        Args:
-            x (IrrepsArray): Left tensor
-            y (IrrepsArray): Right tensor. If None it defaults to ones.
-
-        Returns:
-            The output to the weighted tensor product (IrrepsArray).
-        """
+    def _check_input(
+        self, x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None
+    ) -> Tuple[e3nn.IrrepsArray, e3nn.IrrepsArray]:
         if not y:
             y = e3nn.IrrepsArray("1x0e", jnp.ones((1, 1), dtype=x.dtype))
-
         if x.irreps.lmax == 0 and y.irreps.lmax == 0 and self.output_irreps.lmax > 0:
             warnings.warn(
                 f"The specified output irreps ({self.output_irreps}) are not scalars "
                 "but both operands are. This can have undesired behaviour (NaN). Try "
                 "redistributing them into scalars or choose higher orders."
             )
+        miss = self.output_irreps.filter(drop=e3nn.tensor_product(x.irreps, y.irreps))
+        if len(miss) > 0:
+            warnings.warn(f"Output irreps: '{miss}' are unreachable and were ignored.")
+        return x, y
 
-        tp = self._build_tensor_product(x.irreps, y.irreps)
-        output = tp(x, y, **kwargs)
+    def __call__(
+        self, x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None
+    ) -> e3nn.IrrepsArray:
+        """Applies an O(3) equivariant linear parametrized tensor product layer.
 
-        if self.biases:
-            # add biases
-            bias_fn = self._build_biases()
-            return bias_fn(output)
+        Args:
+            x (IrrepsArray): Left tensor
+            y (IrrepsArray): Right tensor. If None it defaults to np.ones.
 
-        return output
+        Returns:
+            The output to the weighted tensor product (IrrepsArray).
+        """
+        x, y = self._check_input(x, y)
+        # tensor product + linear
+        tp = self._linear(e3nn.tensor_product(x, y))
+        return tp
 
 
 def O3TensorProductGate(
