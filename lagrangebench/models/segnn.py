@@ -54,7 +54,7 @@ class O3TensorProduct(hk.Module):
 
     where :math:`\mathcal{W}` are learnable parameters.
 
-    Uses :code:`tensor_product` + :code:`Linear' instead of FullyConnectedTensorProduct.
+    Uses :code:`tensor_product` + :code:`Linear` instead of FullyConnectedTensorProduct.
     From e3nn 0.19.2 (https://github.com/e3nn/e3nn-jax/releases/tag/0.19.2), this is
     as fast as FullyConnectedTensorProduct.
     """
