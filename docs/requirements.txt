@@ -14,5 +14,7 @@ optax>=0.1.7
 ott-jax>=0.4.4
 pyvista
 PyYAML
-torch>=12.0.1+cpu
+sphinx==7.2.6
+sphinx-rtd-theme==1.3.0
+torch>=2.0.1+cpu
 wandb
