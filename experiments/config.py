@@ -41,6 +41,7 @@ def cli_arguments() -> Dict:
         action=argparse.BooleanOptionalAction,
         help="Run test mode instead of validation.",
     )
+    parser.add_argument("--seed", type=int, required=False, help="Random seed.")
     parser.add_argument(
         "--data_dir", type=str, help="Absolute/relative path to the dataset."
     )
