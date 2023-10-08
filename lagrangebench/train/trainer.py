@@ -111,6 +111,7 @@ def Trainer(
     out_type: str = defaults.out_type,
     log_steps: int = defaults.log_steps,
     eval_steps: int = defaults.eval_steps,
+    metrics_stride: int = defaults.metrics_stride,
     **kwargs,
 ) -> Callable:
     """
@@ -199,6 +200,7 @@ def Trainer(
         dist_fn=case.displacement,
         metadata=data_train.metadata,
         input_seq_length=data_train.input_seq_length,
+        stride=metrics_stride,
     )
 
     def _train(

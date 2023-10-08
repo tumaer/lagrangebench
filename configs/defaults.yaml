@@ -102,6 +102,7 @@ out_type: none
 # List of metrics. mse, mae, sinkhorn, e_kin
 metrics:
   - mse
+metrics_stride: 10
 
 # Inference params (on test dataset) with mode: all
 metrics_infer:

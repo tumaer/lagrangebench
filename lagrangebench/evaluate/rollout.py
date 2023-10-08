@@ -231,6 +231,7 @@ def infer(
     out_type: str = defaults.out_type,
     n_extrap_steps: int = defaults.n_extrap_steps,
     seed: int = defaults.seed,
+    metrics_stride: int = defaults.metrics_stride,
 ):
     """
     Infer on a dataset, compute metrics and optionally save rollout in out_type format.
@@ -277,6 +278,7 @@ def infer(
         dist_fn=case.displacement,
         metadata=data_test.metadata,
         input_seq_length=data_test.input_seq_length,
+        stride=metrics_stride,
     )
     # Precompile model
     model_apply = jax.jit(model.apply)
