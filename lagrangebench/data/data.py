@@ -65,7 +65,9 @@ class H5Dataset(Dataset):
             external_force_fn: Function that returns the position-wise external force
         """
         if not osp.exists(dataset_path):
-            name, dataset_path = self.download(name, dataset_path)
+            _, dataset_path = self.download(name, dataset_path)
+
+        self.name = dataset_path.split("/")[-1]  # dataset directory name
 
         assert split in ["train", "valid", "test"]
 
@@ -82,8 +84,6 @@ class H5Dataset(Dataset):
             self.metadata = json.loads(f.read())
 
         self.db_hdf5 = None
-
-        self.name = name
 
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())
