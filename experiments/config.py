@@ -15,7 +15,7 @@ def cli_arguments() -> Dict:
 
     # run arguments
     parser.add_argument(
-        "--mode", type=str, choices=["train", "infer"], help="Train or evaluate."
+        "--mode", type=str, choices=["train", "infer", "all"], help="Train or evaluate."
     )
     parser.add_argument("--batch_size", type=int, required=False, help="Batch size.")
     parser.add_argument(
