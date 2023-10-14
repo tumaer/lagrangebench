@@ -58,6 +58,7 @@ class defaults:
     rollout_dir: str = None  # directory to save rollouts
     out_type: str = None  # type of output. None means no rollout is stored
     n_extrap_steps: int = 0  # number of extrapolation steps
+    metrics_stride: int = 10  # stride for e_kin and sinkhorn
 
     # logging
     log_steps: int = 1000  # number of steps between logs

@@ -8,9 +8,9 @@ import haiku as hk
 import jax.numpy as jnp
 import jmp
 import numpy as np
-import wandb
 import yaml
 
+import wandb
 from experiments.utils import setup_data, setup_model
 from lagrangebench import Trainer, infer
 from lagrangebench.case_setup import case_builder
@@ -156,6 +156,7 @@ def train_or_infer(args: Namespace):
             out_type=args.config.out_type_infer,
             n_extrap_steps=args.config.n_extrap_steps,
             seed=args.config.seed,
+            metrics_stride=args.config.metrics_stride,
         )
 
         print(averaged_metrics(metrics))

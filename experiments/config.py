@@ -87,7 +87,14 @@ def cli_arguments() -> Dict:
         type=str,
         required=False,
         choices=["vtk", "pkl", "none"],
-        help="Output type to store rollouts.",
+        help="Output type to store rollouts during validation.",
+    )
+    parser.add_argument(
+        "--out_type_infer",
+        type=str,
+        required=False,
+        choices=["vtk", "pkl", "none"],
+        help="Output type to store rollouts during inference.",
     )
     parser.add_argument(
         "--rollout_dir", type=str, required=False, help="Directory to write rollouts."
@@ -156,16 +163,33 @@ def cli_arguments() -> Dict:
         "--eval_n_trajs",
         required=False,
         type=int,
-        help="Number of trajectories to evaluate.",
+        help="Number of trajectories to evaluate during validation.",
+    )
+    parser.add_argument(
+        "--eval_n_trajs_infer",
+        required=False,
+        type=int,
+        help="Number of trajectories to evaluate during inference.",
     )
 
     parser.add_argument(
         "--metrics",
         required=False,
         nargs="+",
-        help="Metrics to evaluate. Choose from mse, mae, sinkhorn, e_kin",
+        help="Validation metrics to evaluate. Choose from mse, mae, sinkhorn, e_kin",
     )
-
+    parser.add_argument(
+        "--metrics_infer",
+        required=False,
+        nargs="+",
+        help="Inference metrics to evaluate.",
+    )
+    parser.add_argument(
+        "--metrics_stride",
+        required=False,
+        type=int,
+        help="Stride for Sinkhorn and e_kin evaluation",
+    )
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 

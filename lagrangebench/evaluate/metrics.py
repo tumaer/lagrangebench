@@ -130,8 +130,8 @@ class MetricsComputer:
                         lambda _, x: (None, self.sinkhorn(*x)),
                         None,
                         (
-                            pred_rollout[0 : -1 : self._stride],
-                            target_rollout[0 : -1 : self._stride],
+                            pred_rollout[0 :: self._stride],
+                            target_rollout[0 :: self._stride],
                         ),
                     )[1]
         return metrics
