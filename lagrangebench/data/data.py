@@ -64,6 +64,9 @@ class H5Dataset(Dataset):
             nl_backend: Which backend to use for the neighbor list
             external_force_fn: Function that returns the position-wise external force
         """
+        if dataset_path.endswith("/"): # remove trailing slash in dataset path
+            dataset_path = dataset_path[:-1]
+
         if not osp.exists(dataset_path):
             _, dataset_path = self.download(name, dataset_path)
 

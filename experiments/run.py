@@ -1,5 +1,6 @@
 import copy
 import os
+import os.path as osp
 from argparse import Namespace
 from datetime import datetime
 
@@ -58,6 +59,7 @@ def train_or_infer(args: Namespace):
     hk.mixed_precision.set_policy(MODEL, policy)
 
     if args.config.mode == "train" or args.config.mode == "all":
+        print("Start training...")
         # save config file
         run_prefix = f"{args.config.model}_{data_train.name}"
         data_and_time = datetime.today().strftime("%Y%m%d-%H%M%S")
@@ -120,19 +122,20 @@ def train_or_infer(args: Namespace):
             log_steps=args.config.log_steps,
             eval_steps=args.config.eval_steps,
         )
-        trainer(
+        _, _, _ = trainer(
             step_max=args.config.step_max,
             load_checkpoint=args.config.model_dir,
             store_checkpoint=args.config.new_checkpoint,
             wandb_run=wandb_run,
         )
     if args.config.mode == "infer" or args.config.mode == "all":
+        print("Start inference...")
         if args.config.mode == "all":
             args.config.test = True
             data_train, data_eval = setup_data(args)
 
             args.config.model_dir = os.path.join(args.config.new_checkpoint, "best")
-            assert os.isfile(os.path.join(args.config.model_dir, "params_tree.pkl"))
+            assert osp.isfile(os.path.join(args.config.model_dir, "params_tree.pkl"))
 
             args.config.rollout_dir = args.config.model_dir.replace("ckp", "rollout")
             os.makedirs(args.config.rollout_dir, exist_ok=True)
