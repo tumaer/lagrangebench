@@ -285,7 +285,7 @@ def Trainer(
         neighbors_batch = broadcast_to_batch(neighbors, loader_train.batch_size)
 
         # start training
-        while step < step_max:
+        while step < step_max + 1:
             for raw_batch in loader_train:
                 # numpy to jax
                 raw_batch = jax.tree_map(lambda x: jnp.array(x), raw_batch)
@@ -376,7 +376,7 @@ def Trainer(
                         print(metrics)
 
                 step += 1
-                if step == step_max:
+                if step == step_max + 1:
                     break
 
         return params, state, opt_state
