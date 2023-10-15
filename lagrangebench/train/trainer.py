@@ -264,8 +264,8 @@ def Trainer(
             params, state = model.init(subkey, (features, particle_type[0]))
 
         if wandb_run is not None:
-            wandb_run.log({"info/num_params": get_num_params(params)})
-            wandb_run.log({"info/step_start": step})
+            wandb_run.log({"info/num_params": get_num_params(params)}, 0)
+            wandb_run.log({"info/step_start": step}, 0)
 
         # initialize optimizer state
         if opt_state is None:

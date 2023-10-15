@@ -110,5 +110,5 @@ metrics_infer:
   - sinkhorn
   - e_kin
 metrics_stride_infer: 1
-out_type_infer:
+out_type_infer: pkl
 eval_n_trajs_infer: 100
