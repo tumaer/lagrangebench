@@ -57,7 +57,7 @@ loss_weight:
   acc: 1.0
 
 # Run settings
-# train, infer
+# train, infer, all
 mode:
 # Dataset directory
 data_dir:
@@ -102,3 +102,13 @@ out_type: none
 # List of metrics. mse, mae, sinkhorn, e_kin
 metrics:
   - mse
+metrics_stride: 10
+
+# Inference params (on test dataset) with mode: all
+metrics_infer:
+  - mse
+  - sinkhorn
+  - e_kin
+metrics_stride_infer: 1
+out_type_infer: pkl
+eval_n_trajs_infer: 100

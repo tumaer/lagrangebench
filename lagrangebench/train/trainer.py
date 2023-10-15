@@ -111,6 +111,7 @@ def Trainer(
     out_type: str = defaults.out_type,
     log_steps: int = defaults.log_steps,
     eval_steps: int = defaults.eval_steps,
+    metrics_stride: int = defaults.metrics_stride,
     **kwargs,
 ) -> Callable:
     """
@@ -199,6 +200,7 @@ def Trainer(
         dist_fn=case.displacement,
         metadata=data_train.metadata,
         input_seq_length=data_train.input_seq_length,
+        stride=metrics_stride,
     )
 
     def _train(
@@ -262,8 +264,8 @@ def Trainer(
             params, state = model.init(subkey, (features, particle_type[0]))
 
         if wandb_run is not None:
-            wandb_run.log({"info/num_params": get_num_params(params)})
-            wandb_run.log({"info/step_start": step})
+            wandb_run.log({"info/num_params": get_num_params(params)}, 0)
+            wandb_run.log({"info/step_start": step}, 0)
 
         # initialize optimizer state
         if opt_state is None:
@@ -283,7 +285,7 @@ def Trainer(
         neighbors_batch = broadcast_to_batch(neighbors, loader_train.batch_size)
 
         # start training
-        while step < step_max:
+        while step < step_max + 1:
             for raw_batch in loader_train:
                 # numpy to jax
                 raw_batch = jax.tree_map(lambda x: jnp.array(x), raw_batch)
@@ -374,7 +376,7 @@ def Trainer(
                         print(metrics)
 
                 step += 1
-                if step == step_max:
+                if step == step_max + 1:
                     break
 
         return params, state, opt_state

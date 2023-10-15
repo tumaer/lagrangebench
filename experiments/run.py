@@ -1,5 +1,6 @@
 import copy
 import os
+import os.path as osp
 from argparse import Namespace
 from datetime import datetime
 
@@ -7,9 +8,9 @@ import haiku as hk
 import jax.numpy as jnp
 import jmp
 import numpy as np
-import wandb
 import yaml
 
+import wandb
 from experiments.utils import setup_data, setup_model
 from lagrangebench import Trainer, infer
 from lagrangebench.case_setup import case_builder
@@ -57,7 +58,8 @@ def train_or_infer(args: Namespace):
     policy = jmp.get_policy("params=float32,compute=float32,output=float32")
     hk.mixed_precision.set_policy(MODEL, policy)
 
-    if args.config.mode == "train":
+    if args.config.mode == "train" or args.config.mode == "all":
+        print("Start training...")
         # save config file
         run_prefix = f"{args.config.model}_{data_train.name}"
         data_and_time = datetime.today().strftime("%Y%m%d-%H%M%S")
@@ -119,27 +121,47 @@ def train_or_infer(args: Namespace):
             out_type=args.config.out_type,
             log_steps=args.config.log_steps,
             eval_steps=args.config.eval_steps,
+            metrics_stride=args.config.metrics_stride,
         )
-        trainer(
+        _, _, _ = trainer(
             step_max=args.config.step_max,
             load_checkpoint=args.config.model_dir,
             store_checkpoint=args.config.new_checkpoint,
             wandb_run=wandb_run,
         )
-    elif args.config.mode == "infer":
+
+        if args.config.wandb:
+            wandb.finish()
+
+    if args.config.mode == "infer" or args.config.mode == "all":
+        print("Start inference...")
+        if args.config.mode == "all":
+            args.config.test = True
+            data_train, data_eval = setup_data(args)
+
+            args.config.model_dir = os.path.join(args.config.new_checkpoint, "best")
+            assert osp.isfile(os.path.join(args.config.model_dir, "params_tree.pkl"))
+
+            args.config.rollout_dir = args.config.model_dir.replace("ckp", "rollout")
+            os.makedirs(args.config.rollout_dir, exist_ok=True)
+
+            if args.config.eval_n_trajs_infer is None:
+                args.config.eval_n_trajs_infer = args.config.eval_n_trajs
+
         assert args.config.model_dir, "model_dir must be specified for inference."
         metrics = infer(
             model,
             case,
             data_eval,
             load_checkpoint=args.config.model_dir,
-            metrics=args.config.metrics,
+            metrics=args.config.metrics_infer,
             rollout_dir=args.config.rollout_dir,
-            eval_n_trajs=args.config.eval_n_trajs,
+            eval_n_trajs=args.config.eval_n_trajs_infer,
             n_rollout_steps=args.config.n_rollout_steps,
-            out_type=args.config.out_type,
+            out_type=args.config.out_type_infer,
             n_extrap_steps=args.config.n_extrap_steps,
             seed=args.config.seed,
+            metrics_stride=args.config.metrics_stride_infer,
         )
 
         print(averaged_metrics(metrics))

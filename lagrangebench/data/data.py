@@ -64,8 +64,13 @@ class H5Dataset(Dataset):
             nl_backend: Which backend to use for the neighbor list
             external_force_fn: Function that returns the position-wise external force
         """
+        if dataset_path.endswith("/"):  # remove trailing slash in dataset path
+            dataset_path = dataset_path[:-1]
+
         if not osp.exists(dataset_path):
-            name, dataset_path = self.download(name, dataset_path)
+            _, dataset_path = self.download(name, dataset_path)
+
+        self.name = dataset_path.split("/")[-1]  # dataset directory name
 
         assert split in ["train", "valid", "test"]
 
@@ -82,8 +87,6 @@ class H5Dataset(Dataset):
             self.metadata = json.loads(f.read())
 
         self.db_hdf5 = None
-
-        self.name = name
 
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())

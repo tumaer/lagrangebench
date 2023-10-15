@@ -14,6 +14,8 @@ from jax_md.partition import (
     NeighborList,
     NeighborListFns,
     NeighborListFormat,
+    PartitionError,
+    PartitionErrorCode,
     _displacement_or_metric_to_metric_sq,
     _neighboring_cells,
     _shift_array,
@@ -22,6 +24,8 @@ from jax_md.partition import (
     is_sparse,
 )
 from jax_md.partition import neighbor_list as vmap_neighbor_list
+
+PEC = PartitionErrorCode
 
 
 def get_particle_cells(idx, cl_capacity, N):
@@ -47,7 +51,7 @@ def get_particle_cells(idx, cl_capacity, N):
 
 def _scan_neighbor_list(
     displacement_or_metric: space.DisplacementOrMetricFn,
-    box_size: space.Box,
+    box: space.Box,
     r_cutoff: float,
     dr_threshold: float = 0.0,
     capacity_multiplier: float = 1.25,
@@ -109,7 +113,7 @@ def _scan_neighbor_list(
     Args:
         displacement: A function `d(R_a, R_b)` that computes the displacement
         between pairs of points.
-        box_size: Either a float specifying the size of the box or an array of
+        box: Either a float specifying the size of the box or an array of
         shape `[spatial_dim]` specifying the box size in each spatial dimension.
         r_cutoff: A scalar specifying the neighborhood radius.
         dr_threshold: A scalar specifying the maximum distance particles can move
@@ -140,15 +144,16 @@ def _scan_neighbor_list(
         list and a method to update an existing neighbor list.
     """
     assert disable_cell_list is False, "Works only with a cell list"
+    assert not fractional_coordinates, "Works only with real coordinates"
     assert format == NeighborListFormat.Sparse, "Works only with sparse neighbor list"
     assert custom_mask_function is None, "Custom masking not implemented"
 
     is_format_valid(format)
-    box_size = lax.stop_gradient(box_size)
+    box = lax.stop_gradient(box)
     r_cutoff = lax.stop_gradient(r_cutoff)
     dr_threshold = lax.stop_gradient(dr_threshold)
 
-    box_size = jnp.float32(box_size)
+    box = jnp.float32(box)
 
     cutoff = r_cutoff + dr_threshold
     cutoff_sq = cutoff**2
@@ -156,17 +161,7 @@ def _scan_neighbor_list(
     metric_sq = _displacement_or_metric_to_metric_sq(displacement_or_metric)
 
     cell_size = cutoff
-    if fractional_coordinates:
-        cell_size = cutoff / box_size
-        box_size = (
-            jnp.float32(box_size)
-            if onp.isscalar(box_size)
-            else onp.ones_like(box_size, jnp.float32)
-        )
-
-    assert jnp.all(cell_size < box_size / 3.0), "Don't use scan with very few cells"
-
-    cl_fn = cell_list(box_size, cell_size, capacity_multiplier)
+    assert jnp.all(cell_size < box / 3.0), "Don't use scan with very few cells"
 
     def neighbor_list_fn(
         position: jnp.ndarray,
@@ -174,17 +169,24 @@ def _scan_neighbor_list(
         extra_capacity: int = 0,
         **kwargs,
     ) -> NeighborList:
-        nbrs = neighbors
-
-        def neighbor_fn(position_and_overflow, max_occupancy=None):
-            position, overflow = position_and_overflow
+        def neighbor_fn(position_and_error, max_occupancy=None):
+            position, err = position_and_error
             N, dim = position.shape
+            cl_fn = None
+            cl = None
+            cell_size = None
 
             if neighbors is None:  # cl.shape = (nx, ny, nz, cell_capacity, dim)
+                cell_size = cutoff
+                cl_fn = cell_list(box, cell_size, capacity_multiplier)
                 cl = cl_fn.allocate(position, extra_capacity=extra_capacity)
             else:
-                cl = cl_fn.update(position, neighbors.cell_list_capacity)
-            overflow = overflow | cl.did_buffer_overflow
+                cell_size = neighbors.cell_size
+                cl_fn = neighbors.cell_list_fn
+                if cl_fn is not None:
+                    cl = cl_fn.update(position, neighbors.cell_list_capacity)
+
+            err = err.update(PEC.CELL_LIST_OVERFLOW, cl.did_buffer_overflow)
             cl_capacity = cl.cell_capacity
 
             idx = cl.id_buffer
@@ -283,7 +285,7 @@ def _scan_neighbor_list(
             occupancy, (idx, overflows) = lax.scan(
                 scan_body, carry, xs, length=num_partitions
             )
-            overflow = overflow | overflows.sum()
+            err = err.update(PEC.CELL_LIST_OVERFLOW, overflows.sum())
             idx = idx.transpose(1, 2, 0).reshape(2, -1)
 
             # sort to enable pruning later
@@ -308,15 +310,18 @@ def _scan_neighbor_list(
             return NeighborList(
                 idx,
                 position,
-                overflow | (occupancy > max_occupancy),
+                err.update(PEC.NEIGHBOR_LIST_OVERFLOW, occupancy > max_occupancy),
                 cl_capacity,
                 max_occupancy,
                 format,
+                cell_size,
+                cl_fn,
                 update_fn,
             )  # pytype: disable=wrong-arg-count
 
+        nbrs = neighbors
         if nbrs is None:
-            return neighbor_fn((position, False))
+            return neighbor_fn((position, PartitionError(jnp.zeros((), jnp.uint8))))
 
         neighbor_fn = partial(neighbor_fn, max_occupancy=nbrs.max_occupancy)
 
@@ -325,7 +330,7 @@ def _scan_neighbor_list(
 
         return lax.cond(
             jnp.any(d(position, nbrs.reference_position) > threshold_sq),
-            (position, nbrs.did_buffer_overflow),
+            (position, nbrs.error),
             neighbor_fn,
             nbrs,
             lambda x: x,
@@ -374,6 +379,8 @@ def _matscipy_neighbor_list(
     else:
         pbc = np.asarray(pbc, dtype=bool)
 
+    dtype_idx = jnp.arange(0).dtype  # just to get the correct dtype
+
     def matscipy_wrapper(position, idx_shape, num_particles):
         position = position[:num_particles]
 
@@ -385,10 +392,10 @@ def _matscipy_neighbor_list(
         edge_list = matscipy_nl(
             "ij", cutoff=r_cutoff, positions=position, cell=box_size, pbc=pbc
         )
-        edge_list = np.asarray(edge_list, dtype=np.int32)
+        edge_list = np.asarray(edge_list, dtype=dtype_idx)
         if not mask_self:
             # add self connection, which matscipy does not do
-            self_connect = np.arange(num_particles, dtype=np.int32)
+            self_connect = np.arange(num_particles, dtype=dtype_idx)
             self_connect = np.array([self_connect, self_connect])
             edge_list = np.concatenate((self_connect, edge_list), axis=-1)
 
@@ -396,7 +403,7 @@ def _matscipy_neighbor_list(
             idx_new = np.asarray(edge_list[:, : idx_shape[1]])
             buffer_overflow = np.array(True)
         else:
-            idx_new = np.ones(idx_shape, dtype=np.int32) * num_particles_max
+            idx_new = np.ones(idx_shape, dtype=dtype_idx) * num_particles_max
             idx_new[:, : edge_list.shape[1]] = edge_list
             buffer_overflow = np.array(False)
 
@@ -420,7 +427,9 @@ def _matscipy_neighbor_list(
         return NeighborList(
             idx,
             position,
-            buffer_overflow,
+            neighbors.error.update(PEC.NEIGHBOR_LIST_OVERFLOW, buffer_overflow),
+            None,
+            None,
             None,
             None,
             None,
@@ -441,24 +450,26 @@ def _matscipy_neighbor_list(
         edge_list = matscipy_nl(
             "ij", cutoff=r_cutoff, positions=position, cell=box_size, pbc=pbc
         )
-        edge_list = np.asarray(edge_list, dtype=np.int32)
+        edge_list = jnp.asarray(edge_list, dtype=dtype_idx)
         if not mask_self:
             # add self connection, which matscipy does not do
-            self_connect = np.arange(num_particles, dtype=np.int32)
-            self_connect = np.array([self_connect, self_connect])
-            edge_list = np.concatenate((self_connect, edge_list), axis=-1)
+            self_connect = jnp.arange(num_particles, dtype=dtype_idx)
+            self_connect = jnp.array([self_connect, self_connect])
+            edge_list = jnp.concatenate((self_connect, edge_list), axis=-1)
 
         # in case this is a (2,M) pair list, we pad with N and capacity_multiplier
         factor = capacity_multiplier * num_particles_max / num_particles
         res = num_particles * jnp.ones(
             (2, round(edge_list.shape[1] * factor + extra_capacity)),
-            np.int32,
+            dtype_idx,
         )
         res = res.at[:, : edge_list.shape[1]].set(edge_list)
         return NeighborList(
             res,
             position,
-            jnp.array(False),
+            PartitionError(jnp.zeros((), jnp.uint8)),
+            None,
+            None,
             None,
             None,
             None,
@@ -486,7 +497,7 @@ def neighbor_list(
     mask_self: bool = True,
     custom_mask_function: Optional[MaskFn] = None,
     fractional_coordinates: bool = False,
-    format: NeighborListFormat = NeighborListFormat.Dense,
+    format: NeighborListFormat = NeighborListFormat.Sparse,
     num_particles_max: int = None,
     num_partitions: int = 1,
     pbc: jnp.ndarray = None,
