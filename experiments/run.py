@@ -121,6 +121,7 @@ def train_or_infer(args: Namespace):
             out_type=args.config.out_type,
             log_steps=args.config.log_steps,
             eval_steps=args.config.eval_steps,
+            metrics_stride=args.config.metrics_stride,
         )
         _, _, _ = trainer(
             step_max=args.config.step_max,
@@ -156,7 +157,7 @@ def train_or_infer(args: Namespace):
             out_type=args.config.out_type_infer,
             n_extrap_steps=args.config.n_extrap_steps,
             seed=args.config.seed,
-            metrics_stride=args.config.metrics_stride,
+            metrics_stride=args.config.metrics_stride_infer,
         )
 
         print(averaged_metrics(metrics))

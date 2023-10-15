@@ -176,19 +176,25 @@ def cli_arguments() -> Dict:
         "--metrics",
         required=False,
         nargs="+",
-        help="Validation metrics to evaluate. Choose from mse, mae, sinkhorn, e_kin",
+        help="Validation metrics to evaluate. Choose from: mse, mae, sinkhorn, e_kin.",
     )
     parser.add_argument(
         "--metrics_infer",
         required=False,
         nargs="+",
-        help="Inference metrics to evaluate.",
+        help="Inference metrics to evaluate during inference.",
     )
     parser.add_argument(
         "--metrics_stride",
         required=False,
         type=int,
-        help="Stride for Sinkhorn and e_kin evaluation",
+        help="Stride for Sinkhorn and e_kin during validation",
+    )
+    parser.add_argument(
+        "--metrics_stride_infer",
+        required=False,
+        type=int,
+        help="Stride for Sinkhorn and e_kin during inference.",
     )
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}

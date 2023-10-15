@@ -109,5 +109,6 @@ metrics_infer:
   - mse
   - sinkhorn
   - e_kin
+metrics_stride_infer: 1
 out_type_infer:
 eval_n_trajs_infer: 100
