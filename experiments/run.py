@@ -129,6 +129,10 @@ def train_or_infer(args: Namespace):
             store_checkpoint=args.config.new_checkpoint,
             wandb_run=wandb_run,
         )
+
+        if args.config.wandb:
+            wandb.finish()
+
     if args.config.mode == "infer" or args.config.mode == "all":
         print("Start inference...")
         if args.config.mode == "all":
