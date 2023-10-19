@@ -2,10 +2,12 @@
 
 ## Installation
 ### Standalone library
-To install the core `lagrangebench` library
+Install the core `lagrangebench` library from PyPi as
 ```bash
-pip install lagrangebench
+pip install --extra-index-url=https://download.pytorch.org/whl/cpu lagrangebench
 ```
+
+Note that by default `lagrangebench` is installed without JAX GPU support. For that follow the instructions in the [GPU support](#gpu-support) section.
 
 ### Clone
 Clone this GitHub repository
@@ -14,18 +16,18 @@ git clone https://github.com/tumaer/lagrangebench.git
 cd lagrangebench
 ```
 
-Install the dependencies with Poetry (>1.5.0)
+Install the dependencies with __Poetry (>1.5.0)__
 ```
-poetry install
+poetry install --only main
 ```
 
-Alternatively, a `requirements.txt` file is provided
+Alternatively, a `requirements.txt` file is provided. It directly install the CUDA version of JAX.
 ```
-pip install -r requirements.txt
+pip install -r requirements_cuda.txt
 ```
 
 ### GPU support
-For GPU support follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
+To run JAX on GPU follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
 ```bash
 pip install --upgrade jax[cuda11_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 # or, for cuda 12
