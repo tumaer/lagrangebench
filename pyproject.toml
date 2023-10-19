@@ -17,17 +17,18 @@ PyYAML = ">=6.0"
 numpy = ">=1.24.4"
 wandb = ">=0.15.11"
 pyvista = ">=0.42.2"
-jax = "^0.4.16"
+jax = "0.4.14" # TODO last stable version for now. update together with jax-md
+jaxlib = "0.4.14" # TODO last stable version for now. update together with jax-md
 dm-haiku = ">=0.0.10"
-e3nn-jax = "0.20.0"
+e3nn-jax = "0.20.2"
 jax-md = "0.2.8"
 jmp = "^0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.7"
 ott-jax = "^0.4.4"
-torch = { version = "2.0.1", source = "torchcpu" }
 gdown = "^4.7.1"
 matscipy = "^0.8.0"
+torch = {version = "2.1.0+cpu", source = "torchcpu"}
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = ">=3.3.1"
