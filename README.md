@@ -16,7 +16,7 @@ git clone https://github.com/tumaer/lagrangebench.git
 cd lagrangebench
 ```
 
-Install the dependencies with __Poetry (>1.5.0)__
+Install the dependencies with __Poetry (>1.6.1)__
 ```
 poetry install --only main
 ```
