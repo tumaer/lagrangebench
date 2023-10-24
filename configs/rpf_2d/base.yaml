@@ -1,12 +1,4 @@
 extends: defaults.yaml
 
-noise_std: 3.e-5
-
-mode: train
-n_rollout_steps: 20
-eval_n_trajs: 100
-split_valid_traj_into_n: 384
-
-wandb_project: rpf_2d
-
 data_dir: datasets/2D_RPF_3200_20kevery100
+wandb_project: rpf_2d

@@ -3,16 +3,7 @@ extends: rpf_2d/base.yaml
 model: painn
 num_mp_steps: 5
 latent_dim: 128
+lr_start: 1.e-4
 
 isotropic_norm: True
-
-batch_size: 1
-lr_start: 1.e-4
-lr_final: 1.e-6
-lr_decay_steps: 1.e+5
-pushforward:
-  steps: [-1, 100000, 125000, 150000, 175000, 200000]
-  unrolls: [0, 1, 2, 3, 4, 5]
-  probs: [16, 2, 1, 1, 1, 1]
-
-magnitudes: True
+magnitude_features: True

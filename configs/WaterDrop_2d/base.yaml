@@ -1,14 +1,6 @@
 extends: defaults.yaml
 
-noise_std: 1.e-4
-
-mode: train
-n_rollout_steps: 20
-eval_n_trajs: 10
-split_valid_traj_into_n: 38
-
+data_dir: /tmp/datasets/WaterDrop
 wandb_project: waterdrop_2d
 
 neighbor_list_backend: matscipy
-neighbor_list_capacity_multiplier: 1.25
-data_dir: /tmp/datasets/WaterDrop
