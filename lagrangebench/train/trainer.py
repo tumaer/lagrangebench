@@ -230,9 +230,9 @@ def Trainer(
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
         """
-        assert n_rollout_steps <= data_eval.subsequence_length - input_seq_length, (
-            "If you want to evaluate the loss on more than the ground truth trajectory "
-            "length, then use the --eval_n_more_steps argument."
+        assert n_rollout_steps <= data_eval.subseq_length - input_seq_length, (
+            "You cannot evaluate the loss on longer than a ground truth trajectory "
+            f"({n_rollout_steps}, {data_eval.subseq_length}, {input_seq_length})"
         )
         assert eval_n_trajs <= len(
             loader_eval
