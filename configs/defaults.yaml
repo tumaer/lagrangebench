@@ -76,6 +76,8 @@ test: False
 seed: 0
 # Cuda device
 gpu: 0
+# GPU memory allocation https://jax.readthedocs.io/en/latest/gpu_memory_allocation.html
+xla_mem_fraction: 0.75
 # Double precision everywhere other than the ML model
 f64: True
 # Neighbour list backend. jaxmd_vmap, jaxmd_scan, matscipy

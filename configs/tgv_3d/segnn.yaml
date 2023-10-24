@@ -4,8 +4,8 @@ model: segnn
 num_mp_steps: 10
 latent_dim: 64
 
-isotropic_norm: True
 segnn_norm: none
+isotropic_norm: True
 
 batch_size: 1
 lr_start: 5.e-4

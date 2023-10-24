@@ -45,6 +45,7 @@ def cli_arguments() -> Dict:
     parser.add_argument(
         "--data_dir", type=str, help="Absolute/relative path to the dataset."
     )
+    parser.add_argument("--ckp_dir", type=str, help="Path for checkpoints.")
 
     # model arguments
     parser.add_argument(
