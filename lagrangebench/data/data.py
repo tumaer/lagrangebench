@@ -138,11 +138,11 @@ class H5Dataset(Dataset):
             # Compute the number of splits per validation trajectory. If the length of
             # each trajectory is 1000, we want to compute a 20-step MSE, and
             # intput_seq_length=6, then we should split the trajectory into
-            # split_valid_traj_into_n = 1000 // (20 + 6) chunks.
+            # _split_valid_traj_into_n = 1000 // (20 + 6) chunks.
             self.subseq_length = input_seq_length + n_rollout_steps
-            self.split_valid_traj_into_n = self.sequence_length // self.subseq_length
+            self._split_valid_traj_into_n = self.sequence_length // self.subseq_length
 
-            self.num_samples = self.split_valid_traj_into_n * len(self.traj_keys)
+            self.num_samples = self._split_valid_traj_into_n * len(self.traj_keys)
             self.getter = self.get_trajectory
 
         assert self.sequence_length >= self.subseq_length, (
@@ -205,9 +205,9 @@ class H5Dataset(Dataset):
         # open the database file
         self.db_hdf5 = self._open_hdf5()
 
-        if self.split_valid_traj_into_n > 1:
-            traj_idx = idx // self.split_valid_traj_into_n
-            slice_from = (idx % self.split_valid_traj_into_n) * self.subseq_length
+        if self._split_valid_traj_into_n > 1:
+            traj_idx = idx // self._split_valid_traj_into_n
+            slice_from = (idx % self._split_valid_traj_into_n) * self.subseq_length
             slice_to = slice_from + self.subseq_length
         else:
             traj_idx = idx
