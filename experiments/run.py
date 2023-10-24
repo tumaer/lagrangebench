@@ -19,7 +19,7 @@ from lagrangebench.utils import PushforwardConfig
 
 
 def train_or_infer(args: Namespace):
-    data_train, data_eval = setup_data(args)
+    data_train, data_eval, args = setup_data(args)
 
     # neighbors search
     bounds = np.array(data_train.metadata["bounds"])

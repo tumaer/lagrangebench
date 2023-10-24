@@ -14,7 +14,7 @@ from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
 
 
-def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
+def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     if not osp.isabs(args.config.data_dir):
         args.config.data_dir = osp.join(os.getcwd(), args.config.data_dir)
 
@@ -41,15 +41,12 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
     )
     if args.config.eval_n_trajs == -1:
         args.config.eval_n_trajs = data_eval.num_samples
+    if args.config.eval_n_trajs_infer == -1:
+        args.config.eval_n_trajs_infer = data_eval.num_samples
     assert data_eval.num_samples >= args.config.eval_n_trajs, (
         f"Number of available evaluation trajectories ({data_eval.num_samples}) "
         f"exceeds eval_n_trajs ({args.config.eval_n_trajs})"
     )
-
-    if args.config.n_rollout_steps == -1:
-        args.config.n_rollout_steps = (
-            data_eval.subsequence_length - args.config.input_seq_length
-        )
 
     # TODO: move this to a more suitable place
     if "RPF" in args.info.dataset_name.upper():
@@ -79,7 +76,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
     data_train.external_force_fn = external_force_fn
     data_eval.external_force_fn = external_force_fn
 
-    return data_train, data_eval
+    return data_train, data_eval, args
 
 
 def setup_model(args: Namespace) -> Tuple[Callable, Type]:
