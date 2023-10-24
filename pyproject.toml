@@ -26,9 +26,9 @@ jmp = "^0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.7"
 ott-jax = "^0.4.4"
-gdown = "^4.7.1"
 matscipy = "^0.8.0"
 torch = {version = "2.1.0+cpu", source = "torchcpu"}
+wget = "^3.2"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = ">=3.3.1"
