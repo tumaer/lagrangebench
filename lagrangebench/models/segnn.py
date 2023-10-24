@@ -543,14 +543,15 @@ class SEGNN(BaseModel):
             self._attribute_irreps, vel, normalize=True, normalization="integral"
         )
         # scatter edge attributes to nodes (density)
-        node_attributes = vel_embedding
         scattered_edges = tree_map(
             lambda e: jraph.segment_mean(e, features["receivers"], n_nodes),
             edge_attributes,
         )
-        node_attributes += scattered_edges
-        # scalar attribute to 1 by default
-        node_attributes.array = node_attributes.array.at[..., 0].set(1.0)
+        # node attributes as velocities + edge "density". Scalar default to 1.0
+        node_attributes = e3nn.IrrepsArray(
+            vel_embedding.irreps,
+            (vel_embedding + scattered_edges).array.at[:, 0].set(1.0),
+        )
 
         node_features = [features["vel_hist"].reshape(n_nodes, self._n_vels * 3)]
         node_features += [
