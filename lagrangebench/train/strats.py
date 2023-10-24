@@ -26,13 +26,14 @@ def add_gns_noise(
     accummulated as a random walk and added to the velocity seqence.
     Each :math:`\sigma_v^{(t)}` is set so that the last step of the random walk has
     :math:`\sigma_v^{(input\_seq\_length)}=noise\_std`. Based on the noised velocities,
-    positions are adjusted such that :math:`p^{t_k} = p^{t_k} − p^{t_{k−1}}`.
+    positions are adjusted such that :math:`\dot{p}^{t_k} = p^{t_k} − p^{t_{k−1}}`.
 
     Args:
         key: Random key.
-        pos_input: Clean input positions.
-        particle_type: Particle type vector.
-        input_seq_length: Input sequence length.
+        pos_input: Clean input positions. Shape:
+            (num_particles_max, input_seq_length + pushforward["unrolls"][-1] + 1, dim)
+        particle_type: Particle type vector. Shape: (num_particles_max,)
+        input_seq_length: Input sequence length, as in the configs.
         noise_std: Noise standard deviation at the last sequence step.
         shift_fn: Shift function.
     """
