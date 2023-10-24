@@ -29,9 +29,9 @@ pip install -r requirements_cuda.txt
 ### GPU support
 To run JAX on GPU follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
 ```bash
-pip install --upgrade jax[cuda11_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade jax[cuda11_pip]==0.4.18 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 # or, for cuda 12
-pip install --upgrade jax[cuda12_pip] -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade jax[cuda12_pip]==0.4.18 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
 
 ## Usage
@@ -52,7 +52,7 @@ Some model presets can be found in `./configs/`.
 
 
 ## Datasets
-The datasets are temporarily hosted on Google Drive. When creating a new dataset instance the data is automatically downloaded. In alternative, to manually download them use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
+The datasets are hosted on Zenodo. When creating a new dataset instance the data is automatically downloaded. In alternative, to manually download them use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
 - __Taylor Green Vortex 2D__: `bash download_data.sh tgv_2d datasets/`
 - __Reverse Poiseuille Flow 2D__: `bash download_data.sh rpf_2d datasets/`
 - __Lid Driven Cavity 2D__: `bash download_data.sh ldc_2d datasets/`

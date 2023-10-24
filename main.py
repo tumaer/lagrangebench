@@ -22,7 +22,7 @@ if __name__ == "__main__":
     # specify cuda device
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152 from TensorFlow
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.config.gpu)
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = args.config.xla_mem_fraction
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(args.config.xla_mem_fraction)
 
     if args.config.f64:
         from jax.config import config

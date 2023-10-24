@@ -2,26 +2,28 @@
 
 import bisect
 import json
+import os
 import os.path as osp
 import re
+import zipfile
 from typing import Callable, Optional
 
 import h5py
 import jax.numpy as jnp
 import numpy as np
+import wget
 from torch.utils.data import Dataset
 
 from lagrangebench.utils import NodeType
 
-# TODO update in final version
 URLS = {
-    "tgv2d": "https://drive.google.com/drive/folders/140_qJ4wwCWryCLv8Dm5syrHjOSlFGj5F",
-    "rpf2d": "https://drive.google.com/drive/folders/1axqZFRDSlXCsEf_LGz1JRq1rLrOTabmh",
-    "ldc2d": "https://drive.google.com/drive/folders/153inM2p7pJn27bXs1WaJnfCuY9mW75oY",
-    "dam2d": "https://drive.google.com/drive/folders/1X-KhmgNNb1mC7acW6WA-vAVZhg4rDPjF",
-    "tgv3d": "https://drive.google.com/drive/folders/1j20G6AMK47AwHre0QGtGmtW_hKceBX35",
-    "rpf3d": "https://drive.google.com/drive/folders/1ov9Xds6VSNLSGboht4EasDTRpx2QBFWX",
-    "ldc3d": "https://drive.google.com/drive/folders/1FjRFjKKuFdjmX5x3Zso5WA4Hk4BjuOHF",
+    "tgv2d": "https://zenodo.org/records/10021926/files/2D_TGV_2500_10kevery100.zip",
+    "rpf2d": "https://zenodo.org/records/10021926/files/2D_RPF_3200_20kevery100.zip",
+    "ldc2d": "https://zenodo.org/records/10021926/files/2D_LDC_2708_10kevery100.zip",
+    "dam2d": "https://zenodo.org/records/10021926/files/2D_DAM_5740_20kevery100.zip",
+    "tgv3d": "https://zenodo.org/records/10021926/files/3D_TGV_8000_10kevery100.zip",
+    "rpf3d": "https://zenodo.org/records/10021926/files/3D_RPF_8000_10kevery100.zip",
+    "ldc3d": "https://zenodo.org/records/10021926/files/3D_LDC_8160_10kevery100.zip",
 }
 
 
@@ -114,7 +116,6 @@ class H5Dataset(Dataset):
             name: Name of the dataset
             path: Destination path to the downloaded dataset
         """
-        import gdown
 
         if name is None:
             name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
@@ -128,10 +129,20 @@ class H5Dataset(Dataset):
         assert name in URLS, f"Dataset {name} not available."
         url = URLS[name]
 
-        # TODO temporary from google drive
-        # download folder
-        path = gdown.download_folder(url, output=path, quiet=False)
-        path = osp.split(path[0])[0]
+        # path could be e.g. "./data/2D_TGV_2500_10kevery100/"
+        # remove trailing slash if present and get the root of the datasets
+        path = path[:-1] if path.endswith("/") else path
+        path_root = osp.split(path)[0]  # e.g. # "./data"
+
+        # download the dataset as a zip file, e.g. "./data/2D_TGV_2500_10kevery100.zip"
+        os.makedirs(path_root, exist_ok=True)
+        filename = wget.download(url, out=path_root)
+        print(f"Dataset {name} downloaded to {filename}")
+
+        # unzip the dataset and then remove the zip file
+        zipfile.ZipFile(filename, "r").extractall(path_root)
+        os.remove(filename)
+
         return name, path
 
     def _open_hdf5(self) -> h5py.File:
