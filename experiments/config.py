@@ -72,7 +72,7 @@ def cli_arguments() -> Dict:
         "--latent_dim", type=int, required=False, help="Hidden layer dimension."
     )
     parser.add_argument(
-        "--magnitudes",
+        "--magnitude_features",
         action=argparse.BooleanOptionalAction,
         help="Whether to include velocity magnitudes in node features.",
     )

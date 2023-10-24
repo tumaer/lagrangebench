@@ -39,7 +39,7 @@ lr_decay_steps: 1.e+5
 # Standard deviation for the additive noise
 noise_std: 0.0003
 # Whether to use magnitudes or not
-magnitudes: False
+magnitude_features: False
 # Whether to normalize inputs and outputs with the same value in x, y, ans z.
 isotropic_norm: False
 # Parameters related to the push-forward trick
@@ -81,7 +81,7 @@ f64: True
 # Neighbour list backend. jaxmd_vmap, jaxmd_scan, matscipy
 neighbor_list_backend: jaxmd_vmap
 # Neighbour list capacity multiplier
-neighbor_list_capacity_multiplier: 1.25
+neighbor_list_multiplier: 1.25
 
 # Logging settings
 # Use wandb for logging

@@ -103,7 +103,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
             metadata,
             args.config.input_seq_length,
             args.config.has_external_force,
-            args.config.magnitudes,
+            args.config.magnitude_features,
             args.info.homogeneous_particles,
         )
         # 1o displacement, 0e distance
@@ -151,7 +151,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
 
         MODEL = models.EGNN
     elif model_name == "painn":
-        assert args.config.magnitudes, "PaiNN requires magnitudes"
+        assert args.config.magnitude_features, "PaiNN requires magnitudes"
         radius = metadata["default_connectivity_radius"] * 1.5
 
         def model_fn(x):

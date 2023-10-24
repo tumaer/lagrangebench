@@ -35,10 +35,10 @@ def train_or_infer(args: Namespace):
         input_seq_length=args.config.input_seq_length,
         isotropic_norm=args.config.isotropic_norm,
         noise_std=args.config.noise_std,
-        magnitude_features=args.config.magnitudes,
+        magnitude_features=args.config.magnitude_features,
         external_force_fn=data_train.external_force_fn,
         neighbor_list_backend=args.config.neighbor_list_backend,
-        neighbor_list_multiplier=args.config.neighbor_list_capacity_multiplier,
+        neighbor_list_multiplier=args.config.neighbor_list_multiplier,
         dtype=(jnp.float64 if args.config.f64 else jnp.float32),
     )
 
