@@ -2,13 +2,16 @@
 
 import bisect
 import json
+import os
 import os.path as osp
 import re
+import zipfile
 from typing import Callable, Optional
 
 import h5py
 import jax.numpy as jnp
 import numpy as np
+import wget
 from torch.utils.data import Dataset
 
 from lagrangebench.utils import NodeType
@@ -113,10 +116,6 @@ class H5Dataset(Dataset):
             name: Name of the dataset
             path: Destination path to the downloaded dataset
         """
-        import os
-        import zipfile
-
-        import wget
 
         if name is None:
             name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
