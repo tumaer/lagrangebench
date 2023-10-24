@@ -25,21 +25,25 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
         os.makedirs(args.config.rollout_dir, exist_ok=True)
 
     # dataloader
-    train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
     data_train = H5Dataset(
         "train",
         dataset_path=args.config.data_dir,
-        input_seq_length=train_seq_l,
-        is_rollout=False,
+        input_seq_length=args.config.input_seq_length,
+        n_rollout_steps=args.config.pushforward["unrolls"][-1],
         nl_backend=args.config.neighbor_list_backend,
     )
     data_eval = H5Dataset(
         "test" if args.config.test else "valid",
         dataset_path=args.config.data_dir,
         input_seq_length=args.config.input_seq_length,
-        split_valid_traj_into_n=args.config.split_valid_traj_into_n,
-        is_rollout=True,
+        n_rollout_steps=args.config.n_rollout_steps,
         nl_backend=args.config.neighbor_list_backend,
+    )
+    if args.config.eval_n_trajs == -1:
+        args.config.eval_n_trajs = data_eval.num_samples
+    assert data_eval.num_samples >= args.config.eval_n_trajs, (
+        f"Number of available evaluation trajectories ({data_eval.num_samples}) "
+        f"exceeds eval_n_trajs ({args.config.eval_n_trajs})"
     )
 
     if args.config.n_rollout_steps == -1:
@@ -47,6 +51,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
             data_eval.subsequence_length - args.config.input_seq_length
         )
 
+    # TODO: move this to a more suitable place
     if "RPF" in args.info.dataset_name.upper():
         args.info.has_external_force = True
         if data_train.metadata["dim"] == 2:
