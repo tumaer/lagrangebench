@@ -1,13 +1,7 @@
 extends: defaults.yaml
 
-noise_std: 3.e-5
-
-mode: train
-n_rollout_steps: 20
-eval_n_trajs: 96
-split_valid_traj_into_n: 192
-
+data_dir: datasets/2D_LDC_2708_10kevery100
 wandb_project: ldc_2d
 
-neighbor_list_capacity_multiplier: 1.5
-data_dir: datasets/2D_LDC_2500_10kevery100
+neighbor_list_multiplier: 2.0
+noise_std: 0.001

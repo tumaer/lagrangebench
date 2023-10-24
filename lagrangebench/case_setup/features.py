@@ -17,7 +17,7 @@ def physical_feature_builder(
     connectivity_radius: float,
     displacement_fn: Callable,
     pbc: List[bool],
-    magnitudes: bool = False,
+    magnitude_features: bool = False,
     external_force_fn: Optional[Callable] = None,
 ) -> Callable:
     """Build a physical feature transform function.
@@ -36,7 +36,7 @@ def physical_feature_builder(
         connectivity_radius: Radius of the connectivity graph.
         displacement_fn: Displacement function.
         pbc: Wether to use periodic boundary conditions.
-        magnitudes: Whether to include the magnitude of the velocity.
+        magnitude_features: Whether to include the magnitude of the velocity.
         external_force_fn: Function that returns the external force field (optional).
     """
     displacement_fn_vmap = vmap(displacement_fn, in_axes=(0, 0))
@@ -77,7 +77,7 @@ def physical_feature_builder(
         features["abs_pos"] = pos_input
         features["vel_hist"] = flat_velocity_sequence
 
-        if magnitudes:
+        if magnitude_features:
             # append the magnitude of the velocity of each particle to the node features
             velocity_magnitude_sequence = jnp.linalg.norm(
                 normalized_velocity_sequence, axis=-1

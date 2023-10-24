@@ -27,6 +27,27 @@ URLS = {
 }
 
 
+def get_dataset_name_from_path(path: str) -> str:
+    """Infer the dataset name from the provided path.
+
+    This function assumes that the dataset directory name has the following structure:
+    {2D|3D}_{TGV|RPF|LDC|DAM}_{num_particles_max}_{num_steps}every{sampling_rate}
+
+    The dataset name then becomes one of the following:
+    {tgv2d|tgv3d|rpf2d|rpf3d|ldc2d|ldc3d|dam2d}
+    """
+
+    name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
+    assert name is not None, (
+        f"No valid dataset name found in path {path}. "
+        "Valid name formats: {2D|3D}_{TGV|RPF|LDC|DAM} "
+        "Alternatively, you can specify the dataset name explicitly."
+    )
+    name = name.group(0)
+    name = f"{name.split('_')[1]}{name.split('_')[0]}".lower()
+    return name
+
+
 class H5Dataset(Dataset):
     """Dataset for loading HDF5 simulation trajectories.
 
@@ -43,8 +64,7 @@ class H5Dataset(Dataset):
         dataset_path: str,
         name: Optional[str] = None,
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 1,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
         external_force_fn: Optional[Callable] = None,
     ):
@@ -58,33 +78,33 @@ class H5Dataset(Dataset):
                 velocities is input_seq_length - 1. And during training, the returned
                 number of past positions is input_seq_length + 1, to compute target
                 acceleration.
-            split_valid_traj_into_n: Number of splits per validation trajectory. If the
-                length of each trajectory is 1000, we want to compute a 20-step MSE, and
-                intput_seq_length=6, then we should split the trajectory into
-                split_valid_traj_into_n = 1000 // (20 + input_seq_length) chunks.
-            is_rollout: Whether to return trajectories (valid) or subsequences (train)
+            n_rollout_steps: During training, this is the maximum number of pushforward
+                unroll steps. During validation/testing, this specifies the largest
+                N-step MSE loss we are interested in, e.g. for best model checkpointing.
             nl_backend: Which backend to use for the neighbor list
             external_force_fn: Function that returns the position-wise external force
         """
+
         if dataset_path.endswith("/"):  # remove trailing slash in dataset path
             dataset_path = dataset_path[:-1]
 
+        if name is None:
+            self.name = get_dataset_name_from_path(dataset_path)
         if not osp.exists(dataset_path):
-            _, dataset_path = self.download(name, dataset_path)
-
-        self.name = dataset_path.split("/")[-1]  # dataset directory name
+            dataset_path = self.download(self.name, dataset_path)
 
         assert split in ["train", "valid", "test"]
-
+        assert (
+            input_seq_length > 1
+        ), "To compute at least one past velocity, input_seq_length must be >= 2."
         self.dataset_path = dataset_path
         self.file_path = osp.join(dataset_path, split + ".h5")
         self.input_seq_length = input_seq_length
-        self.split_valid_traj_into_n = split_valid_traj_into_n
         self.nl_backend = nl_backend
 
         self.external_force_fn = external_force_fn
 
-        # load metadata
+        # load dataset metadata
         with open(osp.join(dataset_path, "metadata.json"), "r") as f:
             self.metadata = json.loads(f.read())
 
@@ -93,21 +113,43 @@ class H5Dataset(Dataset):
         with h5py.File(self.file_path, "r") as f:
             self.traj_keys = list(f.keys())
 
+            # (num_steps, num_particles, dim) = f["00000/position"].shape
             self.sequence_length = f["00000/position"].shape[0]
 
-        # subsequence is used to split one long validation trajectory into multiple
-        self.subsequence_length = self.sequence_length // split_valid_traj_into_n
+        if split == "train":
+            # During training, the first input_seq_length steps can only be used as
+            # input, and the last one to compute the target acceleration. If we use
+            # pushforward, then we need to provide n_rollout_steps more steps
+            # from the end of a trajectory. Thus, the number of training samples per
+            # trajectory becomes:
+            self.subseq_length = input_seq_length + 1 + n_rollout_steps
+            samples_per_traj = self.sequence_length - self.subseq_length + 1
 
-        if is_rollout:
-            self.getter = self.get_trajectory
-            self.num_samples = split_valid_traj_into_n * len(self.traj_keys)
-        else:
-            samples_per_traj = self.sequence_length - self.input_seq_length - 1
             keylens = jnp.array([samples_per_traj for _ in range(len(self.traj_keys))])
             self._keylen_cumulative = jnp.cumsum(keylens).tolist()
-            self.num_samples = sum(keylens)
 
+            self.num_samples = sum(keylens)
             self.getter = self.get_window
+
+        else:
+            assert (
+                n_rollout_steps > 0
+            ), "n_rollout_steps must be > 0 for validation and testing."
+            # Compute the number of splits per validation trajectory. If the length of
+            # each trajectory is 1000, we want to compute a 20-step MSE, and
+            # intput_seq_length=6, then we should split the trajectory into
+            # _split_valid_traj_into_n = 1000 // (20 + 6) chunks.
+            self.subseq_length = input_seq_length + n_rollout_steps
+            self._split_valid_traj_into_n = self.sequence_length // self.subseq_length
+
+            self.num_samples = self._split_valid_traj_into_n * len(self.traj_keys)
+            self.getter = self.get_trajectory
+
+        assert self.sequence_length >= self.subseq_length, (
+            f"# steps in dataset trajectory ({self.sequence_length}) must be >= "
+            f"subsequence length ({self.subseq_length}). Reduce either "
+            f"input_seq_length or n_rollout_steps/max pushforward steps."
+        )
 
     def download(self, name: str, path: str) -> str:
         """Download the dataset.
@@ -116,15 +158,6 @@ class H5Dataset(Dataset):
             name: Name of the dataset
             path: Destination path to the downloaded dataset
         """
-
-        if name is None:
-            name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
-            assert name is not None, (
-                f"No valid dataset name found in path {path}. "
-                "Valid name formats: {2D|3D}_{TGV|RPF|LDC|DAM}"
-            )
-            name = name.group(0)
-            name = f"{name.split('_')[1]}{name.split('_')[0]}".lower()
 
         assert name in URLS, f"Dataset {name} not available."
         url = URLS[name]
@@ -172,10 +205,10 @@ class H5Dataset(Dataset):
         # open the database file
         self.db_hdf5 = self._open_hdf5()
 
-        if self.split_valid_traj_into_n > 1:
-            traj_idx = idx // self.split_valid_traj_into_n
-            slice_from = (idx % self.split_valid_traj_into_n) * self.subsequence_length
-            slice_to = slice_from + self.subsequence_length
+        if self._split_valid_traj_into_n > 1:
+            traj_idx = idx // self._split_valid_traj_into_n
+            slice_from = (idx % self._split_valid_traj_into_n) * self.subseq_length
+            slice_to = slice_from + self.subseq_length
         else:
             traj_idx = idx
             slice_from = 0
@@ -213,7 +246,7 @@ class H5Dataset(Dataset):
         # get a pointer to the positions of the traj. Still nothing in memory.
         traj_pos = traj["position"]
         # load only a slice of the positions. Now, this is an array in memory.
-        pos_input_and_target = traj_pos[el_idx : el_idx + self.input_seq_length + 1]
+        pos_input_and_target = traj_pos[el_idx : el_idx + self.subseq_length]
         pos_input_and_target = pos_input_and_target.transpose((1, 0, 2))
 
         particle_type = traj["particle_type"][:]
@@ -240,8 +273,7 @@ class TGV2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_TGV_2500_10kevery100",
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 1,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -249,8 +281,7 @@ class TGV2D(H5Dataset):
             dataset_path,
             name="tgv2d",
             input_seq_length=input_seq_length,
-            split_valid_traj_into_n=split_valid_traj_into_n,
-            is_rollout=is_rollout,
+            n_rollout_steps=n_rollout_steps,
             nl_backend=nl_backend,
         )
 
@@ -263,8 +294,7 @@ class TGV3D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/3D_TGV_8000_10kevery100",
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 1,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -272,8 +302,7 @@ class TGV3D(H5Dataset):
             dataset_path,
             name="tgv3d",
             input_seq_length=input_seq_length,
-            split_valid_traj_into_n=split_valid_traj_into_n,
-            is_rollout=is_rollout,
+            n_rollout_steps=n_rollout_steps,
             nl_backend=nl_backend,
         )
 
@@ -286,8 +315,7 @@ class RPF2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_RPF_3200_20kevery100",
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 384,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         def external_force_fn(position):
@@ -302,8 +330,7 @@ class RPF2D(H5Dataset):
             dataset_path,
             name="rpf2d",
             input_seq_length=input_seq_length,
-            split_valid_traj_into_n=split_valid_traj_into_n,
-            is_rollout=is_rollout,
+            n_rollout_steps=n_rollout_steps,
             nl_backend=nl_backend,
             external_force_fn=external_force_fn,
         )
@@ -317,8 +344,7 @@ class RPF3D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/3D_RPF_8000_10kevery100",
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 192,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         def external_force_fn(position):
@@ -333,8 +359,7 @@ class RPF3D(H5Dataset):
             dataset_path,
             name="rpf3d",
             input_seq_length=input_seq_length,
-            split_valid_traj_into_n=split_valid_traj_into_n,
-            is_rollout=is_rollout,
+            n_rollout_steps=n_rollout_steps,
             nl_backend=nl_backend,
             external_force_fn=external_force_fn,
         )
@@ -348,8 +373,7 @@ class LDC2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_LDC_2500_10kevery100",
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 192,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -357,8 +381,7 @@ class LDC2D(H5Dataset):
             dataset_path,
             name="ldc2d",
             input_seq_length=input_seq_length,
-            split_valid_traj_into_n=split_valid_traj_into_n,
-            is_rollout=is_rollout,
+            n_rollout_steps=n_rollout_steps,
             nl_backend=nl_backend,
         )
 
@@ -371,8 +394,7 @@ class LDC3D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/3D_LDC_8160_10kevery100",
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 192,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -380,8 +402,7 @@ class LDC3D(H5Dataset):
             dataset_path,
             name="ldc3d",
             input_seq_length=input_seq_length,
-            split_valid_traj_into_n=split_valid_traj_into_n,
-            is_rollout=is_rollout,
+            n_rollout_steps=n_rollout_steps,
             nl_backend=nl_backend,
         )
 
@@ -394,8 +415,7 @@ class DAM2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_DB_5740_20kevery100",
         input_seq_length: int = 6,
-        split_valid_traj_into_n: int = 15,
-        is_rollout: bool = False,
+        n_rollout_steps: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -403,7 +423,6 @@ class DAM2D(H5Dataset):
             dataset_path,
             name="dam2d",
             input_seq_length=input_seq_length,
-            split_valid_traj_into_n=split_valid_traj_into_n,
-            is_rollout=is_rollout,
+            n_rollout_steps=n_rollout_steps,
             nl_backend=nl_backend,
         )

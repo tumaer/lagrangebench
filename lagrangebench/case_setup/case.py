@@ -121,7 +121,7 @@ def case_builder(
         connectivity_radius=metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=metadata["periodic_boundary_conditions"],
-        magnitudes=magnitude_features,
+        magnitude_features=magnitude_features,
         external_force_fn=external_force_fn,
     )
 

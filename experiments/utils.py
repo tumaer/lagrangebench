@@ -14,7 +14,7 @@ from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
 
 
-def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
+def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     if not osp.isabs(args.config.data_dir):
         args.config.data_dir = osp.join(os.getcwd(), args.config.data_dir)
 
@@ -25,28 +25,30 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
         os.makedirs(args.config.rollout_dir, exist_ok=True)
 
     # dataloader
-    train_seq_l = args.config.input_seq_length + args.config.pushforward["unrolls"][-1]
     data_train = H5Dataset(
         "train",
         dataset_path=args.config.data_dir,
-        input_seq_length=train_seq_l,
-        is_rollout=False,
+        input_seq_length=args.config.input_seq_length,
+        n_rollout_steps=args.config.pushforward["unrolls"][-1],
         nl_backend=args.config.neighbor_list_backend,
     )
     data_eval = H5Dataset(
         "test" if args.config.test else "valid",
         dataset_path=args.config.data_dir,
         input_seq_length=args.config.input_seq_length,
-        split_valid_traj_into_n=args.config.split_valid_traj_into_n,
-        is_rollout=True,
+        n_rollout_steps=args.config.n_rollout_steps,
         nl_backend=args.config.neighbor_list_backend,
     )
+    if args.config.eval_n_trajs == -1:
+        args.config.eval_n_trajs = data_eval.num_samples
+    if args.config.eval_n_trajs_infer == -1:
+        args.config.eval_n_trajs_infer = data_eval.num_samples
+    assert data_eval.num_samples >= args.config.eval_n_trajs, (
+        f"Number of available evaluation trajectories ({data_eval.num_samples}) "
+        f"exceeds eval_n_trajs ({args.config.eval_n_trajs})"
+    )
 
-    if args.config.n_rollout_steps == -1:
-        args.config.n_rollout_steps = (
-            data_eval.subsequence_length - args.config.input_seq_length
-        )
-
+    # TODO: move this to a more suitable place
     if "RPF" in args.info.dataset_name.upper():
         args.info.has_external_force = True
         if data_train.metadata["dim"] == 2:
@@ -74,7 +76,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Callable]:
     data_train.external_force_fn = external_force_fn
     data_eval.external_force_fn = external_force_fn
 
-    return data_train, data_eval
+    return data_train, data_eval, args
 
 
 def setup_model(args: Namespace) -> Tuple[Callable, Type]:
@@ -101,7 +103,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
             metadata,
             args.config.input_seq_length,
             args.config.has_external_force,
-            args.config.magnitudes,
+            args.config.magnitude_features,
             args.info.homogeneous_particles,
         )
         # 1o displacement, 0e distance
@@ -149,7 +151,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
 
         MODEL = models.EGNN
     elif model_name == "painn":
-        assert args.config.magnitudes, "PaiNN requires magnitudes"
+        assert args.config.magnitude_features, "PaiNN requires magnitudes"
         radius = metadata["default_connectivity_radius"] * 1.5
 
         def model_fn(x):
