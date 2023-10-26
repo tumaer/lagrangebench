@@ -176,7 +176,7 @@ class H5Dataset(Dataset):
         zipfile.ZipFile(filename, "r").extractall(path_root)
         os.remove(filename)
 
-        return name, path
+        return path
 
     def _open_hdf5(self) -> h5py.File:
         if self.db_hdf5 is None:
