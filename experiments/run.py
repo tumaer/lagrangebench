@@ -137,7 +137,7 @@ def train_or_infer(args: Namespace):
         print("Start inference...")
         if args.config.mode == "all":
             args.config.test = True
-            data_train, data_eval = setup_data(args)
+            data_train, data_eval, args = setup_data(args)
 
             args.config.model_dir = os.path.join(args.config.new_checkpoint, "best")
             assert osp.isfile(os.path.join(args.config.model_dir, "params_tree.pkl"))
@@ -164,4 +164,6 @@ def train_or_infer(args: Namespace):
             metrics_stride=args.config.metrics_stride_infer,
         )
 
+        split = "test" if args.config.test else "valid"
+        print(f"Metrics of {args.config.model_dir} on {split} split:")
         print(averaged_metrics(metrics))
