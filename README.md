@@ -4,7 +4,7 @@
 ### Standalone library
 Install the core `lagrangebench` library from PyPi as
 ```bash
-pip install --extra-index-url=https://download.pytorch.org/whl/cpu lagrangebench
+pip install lagrangebench --extra-index-url=https://download.pytorch.org/whl/cpu
 ```
 
 Note that by default `lagrangebench` is installed without JAX GPU support. For that follow the instructions in the [GPU support](#gpu-support) section.
@@ -113,6 +113,6 @@ The associated datasets can be cited as:
   year         = 2023,
   publisher    = {Zenodo},
   version      = {0.0.1},
-  url          = {https://zenodo.org/doi/10.5281/zenodo.10021925}
+  url          = {https://zenodo.org/doi/10.5281/zenodo.10021925},
   doi          = {10.5281/zenodo.10021925},
 }```
