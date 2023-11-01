@@ -10,7 +10,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.9,<3.11" # TODO update as soon as jaxmd is compatible with python>3.11
+python = ">=3.9,<=3.11"
 cloudpickle = ">=2.2.1"
 h5py = ">=3.9.0"
 PyYAML = ">=6.0"
@@ -25,7 +25,7 @@ jax-md = "0.2.8"
 jmp = "^0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.7"
-ott-jax = "^0.4.4"
+ott-jax = "^0.4.2"
 matscipy = "^0.8.0"
 torch = {version = "2.1.0+cpu", source = "torchcpu"}
 wget = "^3.2"

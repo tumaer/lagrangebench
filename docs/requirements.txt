@@ -4,13 +4,13 @@ cloudpickle
 dm_haiku>=0.0.10
 e3nn_jax>=0.20.0
 h5py
-jax[cpu]==0.4.14 # TODO last stable version for now. update together with jax-md
+jax[cpu]==0.4.18
 jax_md>=0.2.8
 jmp>=0.0.4
 jraph>=0.0.6.dev0
 matscipy>=0.8.0
 optax>=0.1.7
-ott-jax>=0.4.4
+ott-jax>=0.4.2
 pyvista
 PyYAML
 sphinx==7.2.6
