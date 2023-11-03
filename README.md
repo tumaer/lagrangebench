@@ -120,4 +120,11 @@ The associated datasets can be cited as:
   version      = {0.0.1},
   url          = {https://zenodo.org/doi/10.5281/zenodo.10021925},
   doi          = {10.5281/zenodo.10021925},
-}```
+}
+```
+
+
+### Publications
+The following further publcations are based on the LagrangeBench codebase:
+
+1. [Learning Lagrangian Fluid Mechanics with E(3)-Equivariant Graph Neural Networks (GSI 2023)](https://arxiv.org/abs/2305.15603), A. P. Toshev, G. Galletti, J. Brandstetter, S. Adami, N. A. Adams
