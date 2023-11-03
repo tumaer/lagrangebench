@@ -110,7 +110,7 @@ def push_forward_sample_steps(key, step, pushforward):
 
 def push_forward_build(model_apply, case):
     r"""Build the push forward function, introduced by
-    `Brandstetter et al. <https://arxiv.org/abs/2202.03376>`.
+    `Brandstetter et al. <https://arxiv.org/abs/2202.03376>`_.
 
     Pushforward works by adding a stability "pushforward" loss term, in the form of an
     adversarial style loss.
