@@ -130,3 +130,5 @@ Contents
    pages/train
    pages/evaluate
    pages/utils
+   pages/tutorial
+   pages/baselines
