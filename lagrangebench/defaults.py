@@ -38,7 +38,7 @@ class defaults:
     seed: int = 0  # random seed
     batch_size: int = 1  # batch size
     step_max: int = 5e5  # max number of training steps
-    dtype: jnp.dtype = jnp.float64  # data type
+    dtype: jnp.dtype = jnp.float64  # data type for preprocessing
     magnitude_features: bool = False  # whether to include velocity magnitude features
     isotropic_norm: bool = False  # whether to use isotropic normalization
 

@@ -21,13 +21,14 @@ Install the dependencies with __Poetry (>=1.6.0)__
 poetry install --only main
 ```
 
-Alternatively, a `requirements.txt` file is provided. It directly installs the CUDA version of JAX.
+Alternatively, a requirements file is provided. It directly installs the CUDA version of JAX.
 ```
 pip install -r requirements_cuda.txt
 ```
+For a CPU version of the requirements file, use the one in `docs/requirements.txt`.
 
 ### GPU support
-To run JAX on GPU follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
+To run JAX on GPU, follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
 ```bash
 pip install --upgrade jax[cuda11_pip]==0.4.18 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 # or, for cuda 12
@@ -37,8 +38,6 @@ pip install --upgrade jax[cuda12_pip]==0.4.18 -f https://storage.googleapis.com/
 ## Usage
 ### Standalone benchmark library
 A general tutorial is provided in the example notebook "Training GNS on the 2D Taylor Green Vortex" under `./notebooks/tutorial.ipynb` on the [LagrangeBench repository](https://github.com/tumaer/lagrangebench). The notebook covers the basics of LagrangeBench, such as loading a dataset, setting up a case, training a model from scratch and evaluating it's performance.
-
-Two additional notebooks are provided: `./notebooks/datasets.ipynb` with more details on the datasets, and `./notebooks/gns_data.ipynb` showing how to train models within LagrangeBench on DeepMind datasets.
 
 ### Running in a local clone (`main.py`)
 Alternatively, experiments can also be set up with `main.py`, based around extensive YAML config files and cli arguments (check `configs/` and `experiments/configs.py`). By default, passed cli arguments will overwrite the YAML config. When loading a saved model with `--model_dir` the config from the checkpoint is automatically loaded and training is restarted.
@@ -62,6 +61,12 @@ The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https
 - __Lid Driven Cavity 3D__: `bash download_data.sh ldc_3d datasets/`
 - __All__: `bash download_data.sh all datasets/`
 
+
+### Notebooks
+
+Two notebooks dedicated to the datases are provided:
+- `./notebooks/datasets.ipynb` with more details and visualizations on the LagrangeBench datasets, and
+- `./notebooks/gns_data.ipynb` showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
 
 ## Directory structure
 ```
