@@ -27,27 +27,6 @@ URLS = {
 }
 
 
-def get_dataset_name_from_path(path: str) -> str:
-    """Infer the dataset name from the provided path.
-
-    This function assumes that the dataset directory name has the following structure:
-    {2D|3D}_{TGV|RPF|LDC|DAM}_{num_particles_max}_{num_steps}every{sampling_rate}
-
-    The dataset name then becomes one of the following:
-    {tgv2d|tgv3d|rpf2d|rpf3d|ldc2d|ldc3d|dam2d}
-    """
-
-    name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
-    assert name is not None, (
-        f"No valid dataset name found in path {path}. "
-        "Valid name formats: {2D|3D}_{TGV|RPF|LDC|DAM} "
-        "Alternatively, you can specify the dataset name explicitly."
-    )
-    name = name.group(0)
-    name = f"{name.split('_')[1]}{name.split('_')[0]}".lower()
-    return name
-
-
 class H5Dataset(Dataset):
     """Dataset for loading HDF5 simulation trajectories.
 
@@ -90,6 +69,8 @@ class H5Dataset(Dataset):
 
         if name is None:
             self.name = get_dataset_name_from_path(dataset_path)
+        else:
+            self.name = name
         if not osp.exists(dataset_path):
             dataset_path = self.download(self.name, dataset_path)
 
@@ -263,6 +244,27 @@ class H5Dataset(Dataset):
 
     def __len__(self):
         return self.num_samples
+
+
+def get_dataset_name_from_path(path: str) -> str:
+    """Infer the dataset name from the provided path.
+
+    This function assumes that the dataset directory name has the following structure:
+    {2D|3D}_{TGV|RPF|LDC|DAM}_{num_particles_max}_{num_steps}every{sampling_rate}
+
+    The dataset name then becomes one of the following:
+    {tgv2d|tgv3d|rpf2d|rpf3d|ldc2d|ldc3d|dam2d}
+    """
+
+    name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
+    assert name is not None, (
+        f"No valid dataset name found in path {path}. "
+        "Valid name formats: {2D|3D}_{TGV|RPF|LDC|DAM} "
+        "Alternatively, you can specify the dataset name explicitly."
+    )
+    name = name.group(0)
+    name = f"{name.split('_')[1]}{name.split('_')[0]}".lower()
+    return name
 
 
 class TGV2D(H5Dataset):
