@@ -45,13 +45,32 @@ A general tutorial is provided in the example notebook "Training GNS on the 2D T
 ### Running in a local clone (`main.py`)
 Alternatively, experiments can also be set up with `main.py`, based around extensive YAML config files and cli arguments (check `configs/` and `experiments/configs.py`). By default, passed cli arguments will overwrite the YAML config. When loading a saved model with `--model_dir` the config from the checkpoint is automatically loaded and training is restarted.
 
+**Train**
+
 For example, to start a _GNS_ run from scratch on the RPF 2D dataset use
 ```
 python main.py --config configs/rpf_2d/gns.yaml
 ```
-
 Some model presets can be found in `./configs/`.
 
+If `--mode=all`, then training (`--mode=train`) and subsequent inference (`--mode=infer`) on the test split will be run in one go.
+
+
+**Restart training**
+
+To restart training from the last checkpoint in `--model_dir` use
+```
+python main.py --model_dir ckp/gns_rpf2d_yyyymmdd-hhmmss
+```
+
+**Inference**
+
+To evaluate a trained model from `--model_dir` on the test split (`--test`) use
+```
+python main.py --model_dir ckp/gns_rpf2d_yyyymmdd-hhmmss/best --rollout_dir rollout/gns_rpf2d_yyyymmdd-hhmmss/best --mode infer --test
+```
+
+If the default `--out_type_infer=pkl` is active, then the generated trajectories and a `metricsYYYY_MM_DD_HH_MM_SS.pkl` file will be written to the `--rollout_dir`. The metrics file contains all `--metrics_infer` properties for each generated rollout.
 
 ## Datasets
 The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https://zenodo.org/doi/10.5281/zenodo.10021925). When creating a new dataset instance, the data is automatically downloaded. Alternatively, to manually download them use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
@@ -125,3 +144,9 @@ The associated datasets can be cited as:
   doi          = {10.5281/zenodo.10021925},
 }
 ```
+
+
+### Publications
+The following further publcations are based on the LagrangeBench codebase:
+
+1. [Learning Lagrangian Fluid Mechanics with E(3)-Equivariant Graph Neural Networks (GSI 2023)](https://arxiv.org/abs/2305.15603), A. P. Toshev, G. Galletti, J. Brandstetter, S. Adami, N. A. Adams
