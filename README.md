@@ -1,5 +1,8 @@
 # LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite
 
+![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs&link=https%3A%2F%2Flagrangebench.readthedocs.io%2Fen%2Flatest%2Findex.html)
+![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv&link=https%3A%2F%2Farxiv.org%2Fabs%2F2309.16342)
+
 ## Installation
 ### Standalone library
 Install the core `lagrangebench` library from PyPi as
@@ -120,4 +123,5 @@ The associated datasets can be cited as:
   version      = {0.0.1},
   url          = {https://zenodo.org/doi/10.5281/zenodo.10021925},
   doi          = {10.5281/zenodo.10021925},
-}```
+}
+```
