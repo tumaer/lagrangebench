@@ -1,7 +1,7 @@
 # LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite
 
-![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs&link=https%3A%2F%2Flagrangebench.readthedocs.io%2Fen%2Flatest%2Findex.html)
-![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv&link=https%3A%2F%2Farxiv.org%2Fabs%2F2309.16342)
+[![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs&link=https%3A%2F%2Flagrangebench.readthedocs.io%2Fen%2Flatest%2Findex.html)](https://lagrangebench.readthedocs.io/en/latest/index.html)
+[![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv&link=https%3A%2F%2Farxiv.org%2Fabs%2F2309.16342)](https://arxiv.org/abs/2309.16342)
 
 ## Installation
 ### Standalone library
