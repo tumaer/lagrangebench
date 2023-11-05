@@ -33,6 +33,12 @@ problems** based on the `JAX <https://jax.readthedocs.io/>`_ library. It provide
   position MSE, kinetic energy MSE, and Sinkhorn distance for the particle distribution.
 
 
+.. note::
+
+   For more details on LagrangeBench usage check out our `tutorials <pages/tutorial.html>`_.
+
+
+
 Data loading and preprocessing
 ------------------------------
 
