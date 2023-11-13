@@ -38,17 +38,18 @@ def add_gns_noise(
         shift_fn: Shift function.
     """
     isl = input_seq_length
-    # random-walk noise in the velocity applied to the position sequence
+    # random-walk noise in the velocity applied to the position sequence w/o pushforward
     key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
-        key, pos_input, noise_std_last_step=noise_std
+        key, pos_input[:, :input_seq_length], noise_std_last_step=noise_std
     )
+
     kinematic_mask = get_kinematic_mask(particle_type)
     pos_input_noise = jnp.where(kinematic_mask[:, None, None], 0.0, pos_input_noise)
     # adjust targets based on the noise from the last input position
-    n_potential_targets = pos_input_noise[:, isl:].shape[1]
-    pos_target_noise = pos_input_noise[:, isl - 1][:, None, :]
+    n_potential_targets = pos_input[:, isl:].shape[1]
+    pos_target_noise = pos_input_noise[:, -1][:, None, :]
     pos_target_noise = jnp.tile(pos_target_noise, (1, n_potential_targets, 1))
-    pos_input_noise = pos_input_noise.at[:, isl:].set(pos_target_noise)
+    pos_input_noise = jnp.concatenate([pos_input_noise, pos_target_noise], axis=1)
 
     shift_vmap = jax.vmap(shift_fn, in_axes=(0, 0))
     shift_dvmap = jax.vmap(shift_vmap, in_axes=(0, 0))
