@@ -38,7 +38,7 @@ def add_gns_noise(
         shift_fn: Shift function.
     """
     isl = input_seq_length
-    # random-walk noise in the velocity applied to the position sequence w/o pushforward
+    # random-walk noise in the velocity applied to the first input_seq_length positions
     key, pos_input_noise = _get_random_walk_noise_for_pos_sequence(
         key, pos_input[:, :input_seq_length], noise_std_last_step=noise_std
     )
