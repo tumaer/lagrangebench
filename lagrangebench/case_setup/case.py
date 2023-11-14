@@ -150,7 +150,7 @@ def case_builder(
         neighbors: Optional[NeighborList] = None,
         is_allocate: bool = False,
         mode: str = "train",
-        **kwargs,  # key, noise_std
+        **kwargs,  # key, noise_std, unroll_steps
     ) -> Union[TrainCaseOut, EvalCaseOut]:
         pos_input = jnp.asarray(sample[0], dtype=dtype)
         particle_type = jnp.asarray(sample[1])

@@ -292,7 +292,7 @@ def Trainer(
 
                 key, unroll_steps = push_forward_sample_steps(key, step, pushforward)
                 # target computation incorporates the sampled number pushforward steps
-                keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
+                _keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
                     keys,
                     raw_batch,
                     noise_std,
@@ -302,6 +302,8 @@ def Trainer(
                 # unroll for push-forward steps
                 _current_pos = raw_batch[0][:, :, :input_seq_length]
                 for _ in range(unroll_steps):
+                    if neighbors_batch.did_buffer_overflow.sum() > 0:
+                        break
                     _current_pos, neighbors_batch, features_batch = push_forward_vmap(
                         features_batch,
                         _current_pos,
@@ -314,18 +316,19 @@ def Trainer(
                 if neighbors_batch.did_buffer_overflow.sum() > 0:
                     # check if the neighbor list is too small for any of the samples
                     # if so, reallocate the neighbor list
-                    ind = jnp.argmax(neighbors_batch.did_buffer_overflow)
-                    edges_ = neighbors_batch.idx[ind].shape
-                    print(f"Reallocate neighbors list {edges_} at step {step}")
-                    sample = broadcast_from_batch(raw_batch, index=ind)
-                    _, _, _, nbrs = case.allocate(keys[0], sample)
-                    print(f"To list {nbrs.idx.shape}")
 
+                    print(f"Reallocate neighbors list at step {step}")
+                    ind = jnp.argmax(neighbors_batch.did_buffer_overflow)
+                    sample = broadcast_from_batch(raw_batch, index=ind)
+
+                    _, _, _, nbrs = case.allocate(keys[ind], sample, noise_std)
+                    print(f"From {neighbors_batch.idx[ind].shape} to {nbrs.idx.shape}")
                     neighbors_batch = broadcast_to_batch(nbrs, loader_train.batch_size)
 
                     # To run the loop N times even if sometimes
                     # did_buffer_overflow > 0 we directly return to the beginning
                     continue
+                keys = _keys
 
                 loss, params, state, opt_state = update_fn(
                     params=params,
