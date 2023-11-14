@@ -303,7 +303,6 @@ def Trainer(
                 _current_pos = raw_batch[0][:, :, :input_seq_length]
                 for _ in range(unroll_steps):
                     if neighbors_batch.did_buffer_overflow.sum() > 0:
-                        print(f"Overflowed neighbor list at push-forward, step {step}")
                         break
                     _current_pos, neighbors_batch, features_batch = push_forward_vmap(
                         features_batch,
