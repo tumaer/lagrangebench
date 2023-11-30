@@ -88,12 +88,12 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
 
         def model_fn(x):
             return models.GNS(
-                particle_dimension=metadata["dim"],
-                latent_size=args.config.latent_dim,
-                blocks_per_step=args.config.num_mlp_layers,
-                num_mp_steps=args.config.num_mp_steps,
-                num_particle_types=NodeType.SIZE,
-                particle_type_embedding_size=16,
+                particle_dimension=metadata["dim"],    #2 for 2d RPF
+                latent_size=args.config.latent_dim,    #128, required for processor block
+                blocks_per_step=args.config.num_mlp_layers, #2 layers per MLP block
+                num_mp_steps=args.config.num_mp_steps,  #10 message passing steps
+                num_particle_types=NodeType.SIZE,   #9 types (lagrangebench/utils.py)
+                particle_type_embedding_size=16,    #16 set to default
             )(x)
 
         MODEL = models.GNS

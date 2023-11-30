@@ -67,7 +67,9 @@ def physical_feature_builder(
         # pos_input.shape = (n_nodes, n_timesteps, dim)
         velocity_sequence = displacement_fn_dvmap(pos_input[:, 1:], pos_input[:, :-1])
         # Normalized velocity sequence, merging spatial an time axis.
-        normalized_velocity_sequence = (
+        #for 2D RPF with 3200 particles and 5 historic velocities: normalized_velocity_sequence = (3200,5,2)
+                                                                 # flat_velocity_sequence = (3200,10) = features["vel_hist"]
+        normalized_velocity_sequence = (                    
             velocity_sequence - velocity_stats["mean"]
         ) / velocity_stats["std"]
         flat_velocity_sequence = normalized_velocity_sequence.reshape(

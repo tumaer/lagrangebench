@@ -45,11 +45,11 @@ isotropic_norm: False
 # Parameters related to the push-forward trick
 pushforward:
   # At which training step to introduce next unroll stage
-  steps: [-1, 200000, 300000, 400000]
-  # For how many steps to unroll
-  unrolls: [0, 1, 2, 3]
+  steps: [-1]
+  # For how many steps to unroll (deactivated)
+  unrolls: [0]
   # Which probability ratio to keep between the unrolls
-  probs: [18, 2, 1, 1]
+  probs: [1]
 
 # Loss settings
 # Loss weight for position, acceleration, and velocity components
@@ -89,8 +89,8 @@ wandb: False
 wandb_project: False
 # Change this with your own entity
 wandb_entity: lagrangebench
-# Number of steps between training logging
-log_steps: 1000
+# Number of steps between training logging (for debugging)
+log_steps: 1
 # Number of steps between evaluation
 eval_steps: 10000
 # Checkpoint directory

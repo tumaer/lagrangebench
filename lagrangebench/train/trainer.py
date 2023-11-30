@@ -31,31 +31,35 @@ from lagrangebench.utils import (
 
 from .strats import push_forward_build, push_forward_sample_steps
 
-
-@partial(jax.jit, static_argnames=["model_fn", "loss_weight"])
+#MSE used to define loss function
+@partial(jax.jit, static_argnames=["model_fn", "loss_weight"]) #
 def _mse(
     params: hk.Params,
     state: hk.State,
     features: Dict[str, jnp.ndarray],
     particle_type: jnp.ndarray,
     target: jnp.ndarray,
-    model_fn: Callable,
-    loss_weight: LossConfig,
+    model_fn: Callable,          #jitted model function
+    loss_weight: LossConfig,     #LossConfig(pos=0.0, vel=0.0, acc=1.0) by default
 ):
-    pred, state = model_fn(params, state, (features, particle_type))
+    pred, state = model_fn(params, state, (features, particle_type)) #returns the predicted state (could be position or velocity or acceleration(default))
+                                                                     #for RPF_2D: (3200,2)
     # check active (non zero) output shapes
-    keys = list(set(loss_weight.nonzero) & set(pred.keys()))
-    assert all(target[k].shape == pred[k].shape for k in keys)
+    keys = list(set(loss_weight.nonzero) & set(pred.keys()))  #keys = ['acc'] 
+    assert all(target[k].shape == pred[k].shape for k in keys)  #asserting if target['acc'] and pred['acc'] have same shape
     # particle mask
-    non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
-    num_non_kinematic = non_kinematic_mask.sum()
+    non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type)) # kinematic massk is for obsatcles like moving wall or rigid wall, 
+                                                                            # logical not will return 'True' for fluid particles
+    num_non_kinematic = non_kinematic_mask.sum() #returns [3200] for batch size 1; [3200,3200] for batch size 2. in this function, the comments are written wrt. batch size 1
     # loss components
     losses = []
     for t in keys:
-        losses.append((loss_weight[t] * (pred[t] - target[t]) ** 2).sum(axis=-1))
-    total_loss = jnp.array(losses).sum(0)
-    total_loss = jnp.where(non_kinematic_mask, total_loss, 0)
-    total_loss = total_loss.sum() / num_non_kinematic
+        losses.append((loss_weight[t] * (pred[t] - target[t]) ** 2).sum(axis=-1)) #pred['acc'].shape =(3200,2) and target['acc'].shape =(3200,2), sum(axis=-1) will result in shape (3200,) 
+                                                                                  #as the last axis (column) is summed, therefore the resulting shape is the rows.
+                                                                                  #but when appended to a list, the shape is (1,3200)
+    total_loss = jnp.array(losses).sum(0)    #now after summing across the row, the shape is (3200,)
+    total_loss = jnp.where(non_kinematic_mask, total_loss, 0) #loss is 0 for 'non-fluid' particles.
+    total_loss = total_loss.sum() / num_non_kinematic #normalizing with the total number of particles
 
     return total_loss, state
 
@@ -71,12 +75,8 @@ def _update(
     loss_fn: Callable,
     opt_update: Callable,
 ) -> Tuple[float, hk.Params, hk.State, optax.OptState]:
-    value_and_grad_vmap = vmap(
-        jax.value_and_grad(loss_fn, has_aux=True), in_axes=(None, None, 0, 0, 0)
-    )
-    (loss, state), grads = value_and_grad_vmap(
-        params, state, features_batch, particle_type_batch, target_batch
-    )
+    value_and_grad_vmap = vmap(jax.value_and_grad(loss_fn, has_aux=True), in_axes=(None, None, 0, 0, 0))
+    (loss, state), grads = value_and_grad_vmap(params, state, features_batch, particle_type_batch, target_batch)
 
     # aggregate over the first (batch) dimension of each leave element
     grads = jax.tree_map(lambda x: x.sum(axis=0), grads)
@@ -161,11 +161,11 @@ def Trainer(
         dataset=data_train,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=4,            #to parallelly fetch data from the dataset
         collate_fn=numpy_collate,
-        drop_last=True,
+        drop_last=True,           #drops the last batch if it is not of batch_size
         worker_init_fn=seed_worker,
-        generator=generator,
+        generator=generator,  
     )
     loader_eval = DataLoader(
         dataset=data_eval,
@@ -177,17 +177,18 @@ def Trainer(
 
     # learning rate decays from lr_start to lr_final over lr_decay_steps exponentially
     lr_scheduler = optax.exponential_decay(
-        init_value=lr_start,
-        transition_steps=lr_decay_steps,
-        decay_rate=lr_decay_rate,
-        end_value=lr_final,
+        init_value=lr_start,  #0.0005
+        transition_steps=lr_decay_steps, #1,00,000
+        decay_rate=lr_decay_rate, #0.1
+        end_value=lr_final, #1e-6
     )
     # optimizer
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
 
-    # loss config
+    # loss config (determines on what the loss would be calculated, would it be position OR velocity OR acceleration)
+    #it can be set in defaults.yaml
     if loss_weight is None:
-        loss_weight = LossConfig()
+        loss_weight = LossConfig()   #the object by default is: LossConfig(pos=0.0, vel=0.0, acc=1.0)
     else:
         loss_weight = LossConfig(**loss_weight)
     # pushforward config
@@ -246,8 +247,9 @@ def Trainer(
         update_fn = partial(_update, loss_fn=loss_fn, opt_update=opt_update)
 
         # init values
-        pos_input_and_target, particle_type = next(iter(loader_train))
-        raw_sample = (pos_input_and_target[0], particle_type[0])
+        pos_input_and_target, particle_type = next(iter(loader_train))  #pos_input_and_target.shape =(1,3200,7,2) and particle_type.shape =(1,3200)
+                                                                        #pos_input_and_target[0].shape =(3200,7,2) and particle_type[0].shape =(3200,)
+        raw_sample = (pos_input_and_target[0], particle_type[0]) #creates an array by concatenating pos_input_and_target[0] and particle_type[0]
         key, features, _, neighbors = case.allocate(base_key, raw_sample)
 
         step = 0
@@ -281,15 +283,18 @@ def Trainer(
         push_forward_vmap = jax.vmap(push_forward, in_axes=(0, 0, 0, 0, None, None))
 
         # prepare for batch training.
-        keys = jax.random.split(key, loader_train.batch_size)
-        neighbors_batch = broadcast_to_batch(neighbors, loader_train.batch_size)
+        keys = jax.random.split(key, loader_train.batch_size) #by default, batch_size =1
+        neighbors_batch = broadcast_to_batch(neighbors, loader_train.batch_size) #finds the neighbour list for several batches. 
+        #For example, if there is a batch of 2, it means we have two different examples which have different initial conditions, each with shape (3200,7,2) 
 
+        #print(jax.tree_map(lambda x: x.shape, params)) # print this in the debug console
+        
         # start training
         while step < step_max + 1:
-            for raw_batch in loader_train:
-                # numpy to jax
-                raw_batch = jax.tree_map(lambda x: jnp.array(x), raw_batch)
-
+            for raw_batch in loader_train:   
+                # numpy to jax  (jax.tree_map converts every item in raw_batch to jnp.array)
+                raw_batch = jax.tree_map(lambda x: jnp.array(x), raw_batch)   #if batch size is 2, raw_batch.shape =(2,3200,7,2)
+                                                                              #if batch_size is 1, raw_batch.shape =(1,3200,7,2)
                 key, unroll_steps = push_forward_sample_steps(key, step, pushforward)
                 # target computation incorporates the sampled number pushforward steps
                 keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
@@ -299,8 +304,9 @@ def Trainer(
                     neighbors_batch,
                     unroll_steps,
                 )
-                # unroll for push-forward steps
-                _current_pos = raw_batch[0][:, :, :input_seq_length]
+                # unroll for push-forward steps 
+                _current_pos = raw_batch[0][:, :, :input_seq_length] 
+                #raw_batch[0].shape =(1,3200,7,2) and _current_pos.shape =(1,3200,6,2)
                 for _ in range(unroll_steps):
                     _current_pos, neighbors_batch, features_batch = push_forward_vmap(
                         features_batch,
@@ -335,7 +341,8 @@ def Trainer(
                     particle_type_batch=raw_batch[1],
                     opt_state=opt_state,
                 )
-
+                
+                #Printing training loss
                 if step % log_steps == 0:
                     loss.block_until_ready()
                     if wandb_run:
@@ -344,7 +351,7 @@ def Trainer(
                         step_str = str(step).zfill(len(str(int(step_max))))
                         print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
-                if step % eval_steps == 0 and step > 0:
+                if step % eval_steps == 0 and step > 0: #evaluation(cross validation every 10,000 steps)
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
                     eval_metrics = eval_rollout(
                         case=case,
@@ -376,7 +383,7 @@ def Trainer(
                         print(metrics)
 
                 step += 1
-                if step == step_max + 1:
+                if step == step_max + 1: #step_max= 500000 set in defaults.yaml
                     break
 
         return params, state, opt_state

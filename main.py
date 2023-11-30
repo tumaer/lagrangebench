@@ -1,4 +1,6 @@
 import os
+os.environ['JAX_DISABLE_JIT'] = '1'
+
 from argparse import Namespace
 
 import yaml
