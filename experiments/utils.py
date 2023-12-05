@@ -29,14 +29,14 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         "train",
         dataset_path=args.config.data_dir,
         input_seq_length=args.config.input_seq_length,
-        n_rollout_steps=args.config.pushforward["unrolls"][-1],
+        extra_seq_length=args.config.pushforward["unrolls"][-1],
         nl_backend=args.config.neighbor_list_backend,
     )
     data_eval = H5Dataset(
         "test" if args.config.test else "valid",
         dataset_path=args.config.data_dir,
         input_seq_length=args.config.input_seq_length,
-        n_rollout_steps=args.config.n_rollout_steps,
+        extra_seq_length=args.config.n_rollout_steps,
         nl_backend=args.config.neighbor_list_backend,
     )
     if args.config.eval_n_trajs == -1:

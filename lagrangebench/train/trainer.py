@@ -112,7 +112,6 @@ def Trainer(
     log_steps: int = defaults.log_steps,
     eval_steps: int = defaults.eval_steps,
     metrics_stride: int = defaults.metrics_stride,
-    **kwargs,
 ) -> Callable:
     """
     Builds a function that automates model training and evaluation.
