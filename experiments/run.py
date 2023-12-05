@@ -30,7 +30,7 @@ def train_or_infer(args: Namespace):
 
     # setup core functions
     # case has the following functions which can be accessed as case.'function_name'
-    #allocate_fn, preprocess_fn, allocate_eval_fn, preprocess_eval_fn, integrate_fn, displacement_fn, normalization_stats,
+    # possible 'function_name': allocate, preprocess, allocate_eval, preprocess_eval, integrate, displacement, normalization_stats,
     
     case = case_builder(
         box=args.box,
@@ -160,7 +160,7 @@ def train_or_infer(args: Namespace):
             load_checkpoint=args.config.model_dir, #check point directory
             metrics=args.config.metrics_infer,  #mse, sink_horn and e_kin
             rollout_dir=args.config.rollout_dir,
-            eval_n_trajs=args.config.eval_n_trajs_infer, #=-1if you want to leave before that , then also it is fine with me. i am just passing the time now by asking useless questions to ChatGPT😅
+            eval_n_trajs=args.config.eval_n_trajs_infer, #=-1
             n_rollout_steps=args.config.n_rollout_steps, #20
             out_type=args.config.out_type_infer, # out_type = 'pkl'
             n_extrap_steps=args.config.n_extrap_steps, #=0

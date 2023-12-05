@@ -219,7 +219,7 @@ def case_builder(
         return _preprocess(sample, neighbors, mode="eval")
 
     @jit
-    def integrate_fn(normalized_in, position_sequence): #Semi Implicit Euler Integrator
+    def integrate_fn(normalized_in, position_sequence): #Semi Implicit Euler Integrator used in rollout.py as csae.integrate
         """Euler integrator to get position shift."""
         assert any([key in normalized_in for key in ["pos", "vel", "acc"]])
 
