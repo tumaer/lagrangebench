@@ -15,7 +15,7 @@ with Graph Networks” <https://arxiv.org/abs/2002.09405>`__, ICLR 2020
 .. code:: ipython3
 
     import os
-    # os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
     
     import lagrangebench
     import haiku as hk
@@ -23,14 +23,13 @@ with Graph Networks” <https://arxiv.org/abs/2002.09405>`__, ICLR 2020
     import matplotlib.pyplot as plt
 
 
-
 Download and preprocess
 -----------------------
 
 The easiest was to download and preprocess the datasets from the GNS
 paper is by following the instructions in
-`gns_data.README.md <https://github.com/tumaer/lagrangebench/blob/aaf7c274d50ceebd001ce3a93a3160e40a8b04bc/gns_data/README.md>`.
-For our demonstration, we choose the 2D WaterDrop dataset.
+```gns_data/README.md`` <../gns_data/README.md>`__. For our
+demonstration, we choose the 2D WaterDrop dataset.
 
 Note: the size of this dataset is around 4.5GB.
 
@@ -38,6 +37,55 @@ Note: the size of this dataset is around 4.5GB.
 
     !mkdir -p ./datasets
     !bash ../gns_data/download_dataset.sh WaterDrop ./datasets
+
+
+.. parsed-literal::
+
+    --2023-10-15 01:39:30--  https://storage.googleapis.com/learning-to-simulate-complex-physics/Datasets/WaterDrop/metadata.json
+    Resolving storage.googleapis.com (storage.googleapis.com)... 142.250.186.91, 172.217.18.27, 142.250.186.59, ...
+    Connecting to storage.googleapis.com (storage.googleapis.com)|142.250.186.91|:443... connected.
+    HTTP request sent, awaiting response... 200 OK
+    Length: 361 [application/octet-stream]
+    Saving to: ‘./datasets/WaterDrop/metadata.json’
+    
+    ./datasets/WaterDro 100%[===================>]     361  --.-KB/s    in 0s      
+    
+    2023-10-15 01:39:30 (400 MB/s) - ‘./datasets/WaterDrop/metadata.json’ saved [361/361]
+    
+    --2023-10-15 01:39:30--  https://storage.googleapis.com/learning-to-simulate-complex-physics/Datasets/WaterDrop/train.tfrecord
+    Resolving storage.googleapis.com (storage.googleapis.com)... 142.250.186.91, 142.250.186.187, 142.250.185.123, ...
+    Connecting to storage.googleapis.com (storage.googleapis.com)|142.250.186.91|:443... connected.
+    HTTP request sent, awaiting response... 200 OK
+    Length: 4541246980 (4.2G) [application/octet-stream]
+    Saving to: ‘./datasets/WaterDrop/train.tfrecord’
+    
+    ./datasets/WaterDro 100%[===================>]   4.23G  30.0MB/s    in 2m 41s  
+    
+    2023-10-15 01:42:11 (26.9 MB/s) - ‘./datasets/WaterDrop/train.tfrecord’ saved [4541246980/4541246980]
+    
+    --2023-10-15 01:42:11--  https://storage.googleapis.com/learning-to-simulate-complex-physics/Datasets/WaterDrop/valid.tfrecord
+    Resolving storage.googleapis.com (storage.googleapis.com)... 142.250.184.251, 142.250.184.219, 216.58.206.59, ...
+    Connecting to storage.googleapis.com (storage.googleapis.com)|142.250.184.251|:443... connected.
+    HTTP request sent, awaiting response... 200 OK
+    Length: 137190408 (131M) [application/octet-stream]
+    Saving to: ‘./datasets/WaterDrop/valid.tfrecord’
+    
+    ./datasets/WaterDro 100%[===================>] 130.83M  28.8MB/s    in 5.1s    
+    
+    2023-10-15 01:42:17 (25.7 MB/s) - ‘./datasets/WaterDrop/valid.tfrecord’ saved [137190408/137190408]
+    
+    --2023-10-15 01:42:17--  https://storage.googleapis.com/learning-to-simulate-complex-physics/Datasets/WaterDrop/test.tfrecord
+    Resolving storage.googleapis.com (storage.googleapis.com)... 172.217.16.155, 172.217.23.123, 142.250.74.219, ...
+    Connecting to storage.googleapis.com (storage.googleapis.com)|172.217.16.155|:443... connected.
+    HTTP request sent, awaiting response... 200 OK
+    Length: 136885800 (131M) [application/octet-stream]
+    Saving to: ‘./datasets/WaterDrop/test.tfrecord’
+    
+    ./datasets/WaterDro 100%[===================>] 130.54M  30.5MB/s    in 5.0s    
+    
+    2023-10-15 01:42:22 (26.0 MB/s) - ‘./datasets/WaterDrop/test.tfrecord’ saved [136885800/136885800]
+    
+
 
 To avoid conflicting library dependencies, we recommend installing a
 second virtual environment only for the preprocessing. It will have the
@@ -63,6 +111,25 @@ the dataset.
 .. code:: ipython3
 
     !venv_tf/bin/python ../gns_data/tfrecord_to_h5.py --dataset-path=./datasets/WaterDrop
+
+
+.. parsed-literal::
+
+    2023-10-15 01:44:07.609558: E tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc:9342] Unable to register cuDNN factory: Attempting to register factory for plugin cuDNN when one has already been registered
+    2023-10-15 01:44:07.609617: E tensorflow/compiler/xla/stream_executor/cuda/cuda_fft.cc:609] Unable to register cuFFT factory: Attempting to register factory for plugin cuFFT when one has already been registered
+    2023-10-15 01:44:07.609667: E tensorflow/compiler/xla/stream_executor/cuda/cuda_blas.cc:1518] Unable to register cuBLAS factory: Attempting to register factory for plugin cuBLAS when one has already been registered
+    2023-10-15 01:44:08.294080: W tensorflow/compiler/tf2tensorrt/utils/py_utils.cc:38] TF-TRT Warning: Could not find TensorRT
+    Start conversion of ./datasets/WaterDrop/train.tfrecord to .h5
+    2023-10-15 01:44:09.073610: E tensorflow/compiler/xla/stream_executor/cuda/cuda_driver.cc:268] failed call to cuInit: CUDA_ERROR_NO_DEVICE: no CUDA-capable device is detected
+    Finish conversion to ./datasets/WaterDrop/train.h5
+    Start conversion of ./datasets/WaterDrop/valid.tfrecord to .h5
+    Finish conversion to ./datasets/WaterDrop/valid.h5
+    Start conversion of ./datasets/WaterDrop/test.tfrecord to .h5
+    Finish conversion to ./datasets/WaterDrop/test.h5
+    Max number of particles in valid.h5: 1044
+    Max number of particles in train.h5: 1108
+    Max number of particles in test.h5: 1108
+
 
 If everything worked fine and you see the ``*.h5`` files, you can remove
 the ``*.tfrecord`` files and the virtual environment.
@@ -95,10 +162,15 @@ particles. To integrate this function into our jit-able codebase, we use
         split="valid", 
         dataset_path="./datasets/WaterDrop",
         name="waterdrop2d",
-        split_valid_traj_into_n=38, # from [1], Appendix B.1, trajectory length is 1000
-        is_rollout=True,
+        extra_seq_length=20,
         nl_backend="matscipy"
     )
+    # We can compute the `split_valid_traj_into_n=38` by:
+    # 1. from [1], Appendix B.1, each trajectory has a length of 1000 steps
+    # 2. Later, we set `extra_seq_length=20` for the validation loss
+    # 3. We use 5 historic velocities (or 6 historic positions) 
+    # => This leads to splitting each training trajectory into 
+    # 1000 // (20 + 6) = 38 validation instances
     
     print(
         f"This is a {data_train.metadata['dim']}D dataset from {data_train.dataset_path}.\n"
@@ -115,7 +187,7 @@ particles. To integrate this function into our jit-able codebase, we use
     Train frames have shape (1108, 7, 2) (n_nodes, seq_len, xy pos).
     Val frames have shape (1108, 26, 2) (n_nodes, rollout, xy pos).
     And particle types have shape (1108,) (n_nodes,).
-    Total of 994000 train frames and 1140 val frames.
+    Total of 995000 train frames and 1140 val frames.
     
 
 
@@ -186,12 +258,18 @@ This works as usual. See
 
 .. code:: ipython3
 
-    gns, _ = lagrangebench.get_model(
-        "gns", data_train.metadata, latent_dim=16, num_mp_steps=4, num_mlp_layers=2
-    )
+    def gns(x):
+        return lagrangebench.GNS(
+            particle_dimension=data_train.metadata["dim"],
+            latent_size=16,
+            blocks_per_step=2,
+            num_mp_steps=4,
+            particle_type_embedding_size=8,
+        )(x)
+    
     gns = hk.without_apply_rng(hk.transform_with_state(gns))
     
-    noise_std = 1e-5
+    noise_std = 3e-4
     bounds = np.array(data_train.metadata["bounds"])
     box = bounds[:, 1] - bounds[:, 0]
     
@@ -206,8 +284,8 @@ This works as usual. See
     trainer = lagrangebench.Trainer(
         model=gns,
         case=case,
-        dataset_train=data_train,
-        dataset_eval=data_valid,
+        data_train=data_train,
+        data_eval=data_valid,
         noise_std=noise_std,
         metrics=["mse"],
         n_rollout_steps=20,
@@ -219,28 +297,28 @@ This works as usual. See
 
 .. code:: ipython3
 
-    params, state, _ = trainer(step_max=101)
+    params, state, _ = trainer(step_max=100)
 
 
 .. parsed-literal::
 
     Reallocate neighbors list (2, 170875) at step 0
     To list (2, 442352)
-    000, train/loss: 5.78215.
+    000, train/loss: 4.31286.
     Reallocate neighbors list (2, 442352) at step 3
     To list (2, 684860)
     Reallocate neighbors list (2, 684860) at step 6
     To list (2, 915872)
-    010, train/loss: 0.13905.
-    020, train/loss: 0.38902.
-    030, train/loss: 0.06267.
-    040, train/loss: 0.05162.
-    050, train/loss: 12.60960.
-    {'val/loss': 7.373876087513054e-06, 'val/mse5': 5.798498570186439e-08, 'val/mse10': 6.175979763156647e-07, 'val/stdloss': 1.8027731130132452e-07, 'val/stdmse5': 2.589549907838773e-09, 'val/stdmse10': 3.496310796435864e-08}
-    060, train/loss: 0.13755.
-    070, train/loss: 0.72238.
-    080, train/loss: 0.10497.
-    090, train/loss: 0.18601.
-    100, train/loss: 0.56957.
-    {'val/loss': 6.617287453991594e-06, 'val/mse5': 5.17967393420804e-08, 'val/mse10': 5.519495687167364e-07, 'val/stdloss': 2.460046744090505e-07, 'val/stdmse5': 1.4909034007359878e-09, 'val/stdmse10': 2.3165881657405407e-08}
+    010, train/loss: 0.12886.
+    020, train/loss: 0.40341.
+    030, train/loss: 0.04893.
+    040, train/loss: 0.05427.
+    050, train/loss: 12.54240.
+    {'val/loss': 1.0891471447393997e-05, 'val/mse1': 1.145147032755034e-09, 'val/mse5': 8.628529357679326e-08, 'val/mse10': 9.226690735886223e-07, 'val/stdloss': 9.959435374184977e-07, 'val/stdmse1': 1.827232254392186e-10, 'val/stdmse5': 1.3568257628548963e-08, 'val/stdmse10': 1.5360808447439922e-07}
+    060, train/loss: 0.09790.
+    070, train/loss: 0.74478.
+    080, train/loss: 0.10917.
+    090, train/loss: 0.21384.
+    100, train/loss: 0.74520.
+    {'val/loss': 1.3067739018879365e-05, 'val/mse1': 1.373287872308282e-09, 'val/mse5': 1.0317071641452458e-07, 'val/mse10': 1.100612792015454e-06, 'val/stdloss': 6.564368959516287e-08, 'val/stdmse1': 8.536110707169087e-11, 'val/stdmse5': 5.950870018978094e-09, 'val/stdmse10': 7.309478178285644e-08}
 
