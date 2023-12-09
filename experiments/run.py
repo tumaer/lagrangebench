@@ -20,7 +20,7 @@ from lagrangebench.utils import PushforwardConfig
 #invoked directly from main
 def train_or_infer(args: Namespace):
     data_train, data_eval, args = setup_data(args)
-
+    
     # neighbors search
     bounds = np.array(data_train.metadata["bounds"])
     args.box = bounds[:, 1] - bounds[:, 0]
@@ -125,6 +125,9 @@ def train_or_infer(args: Namespace):
             log_steps=args.config.log_steps,
             eval_steps=args.config.eval_steps,
             metrics_stride=args.config.metrics_stride,
+            is_pde_refiner = args.config.is_pde_refiner,
+            num_refinement_steps = args.config.num_refinement_steps,
+            sigma_min = args.config.sigma_min,
         )
         _, _, _ = trainer(
             step_max=args.config.step_max,

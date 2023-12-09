@@ -97,6 +97,18 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
             )(x)
 
         MODEL = models.GNS
+    
+    elif model_name == "pde_refiner":
+        def model_fn(x):
+            return models.PDE_Refiner(
+                problem_dimension=metadata["dim"],
+                latent_size=args.config.latent_dim,
+                number_of_layers=args.config.num_mlp_layers,
+                num_mp_steps=args.config.num_mp_steps,
+            )(x)
+        
+        MODEL = models.PDE_Refiner
+    
     elif model_name == "segnn":
         # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
         node_feature_irreps = node_irreps(
