@@ -8,6 +8,8 @@ from jax import jit, lax, random, vmap
 from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
+from functools import partial
+import time
 
 from lagrangebench.data.utils import get_dataset_stats
 from lagrangebench.defaults import defaults
@@ -23,10 +25,14 @@ SampleIn = Tuple[jnp.ndarray, jnp.ndarray]
 AllocateFn = Callable[[random.KeyArray, SampleIn, float, int], TrainCaseOut]
 AllocateEvalFn = Callable[[SampleIn], EvalCaseOut]
 
-PreprocessFn = Callable[
-    [random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut
-]
+PreprocessFn = Callable[[random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut]
 PreprocessEvalFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
+
+#For PDE Refiner
+AllocatePdeRefinerFn = Callable[[random.KeyArray, SampleIn, float, int], TrainCaseOut]
+AllocateEvalPdeRefinerFn = Callable[[SampleIn], EvalCaseOut]
+PreprocessPdeRefinerFn = Callable[[random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut]
+PreprocessEvalPdeRefinerFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
 IntegrateFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
@@ -56,6 +62,10 @@ class CaseSetupFn:
     preprocess: PreprocessFn = static_field()
     allocate_eval: AllocateEvalFn = static_field()
     preprocess_eval: PreprocessEvalFn = static_field()
+    allocate_pde_refiner: AllocatePdeRefinerFn = static_field()
+    preprocess_pde_refiner: PreprocessPdeRefinerFn = static_field()
+    allocate_eval_pde_refiner: AllocateEvalPdeRefinerFn = static_field()
+    preprocess_eval_pde_refiner: PreprocessEvalPdeRefinerFn = static_field()
     integrate: IntegrateFn = static_field()
     displacement: space.DisplacementFn = static_field()
     normalization_stats: Dict = static_field()
@@ -183,15 +193,24 @@ def case_builder(
         # ['abs_pos', 'force', 'receivers', 'rel_disp', 'rel_dist', 'senders', 'vel_hist']
         features = feature_transform(pos_input[:, :input_seq_length], neighbors)
 
+
         if mode == "train":
             # compute target acceleration. Inverse of postprocessing step.
             # the "-2" is needed because we need the most recent position and one before
-            slice_begin = (0, input_seq_length - 2 + unroll_steps, 0)  #=(0,4,0) if unroll_steps = 0 and input_seq_length = 6
+            slice_begin = (0, input_seq_length - 2 + unroll_steps, 0)  #=(0,0,0) if unroll_steps = 0 and input_seq_length = 2
             slice_size = (pos_input.shape[0], 3, pos_input.shape[2])   #=(3200,3,2) 
-                                                                       #pos_input.shape = (3200,7,2)
+                                                                      
+            #target_dict has the target position, velocity and acceleration i.e. we can extract u(t) from this dictionary
             target_dict = _compute_target(lax.dynamic_slice(pos_input, slice_begin, slice_size))
             #output of lax.dynamic_slice(pos_input, slice_begin, slice_size) = (3200,3,2), the last three timestep data
+            
+            #REMOVE LATER
+            #seed = int(time.time()) 
+            #k  = random.randint(random.PRNGKey(seed), (), 0, 4)
+            #features['k'] = jnp.tile(k, (features['vel_hist'].shape[0],)) #shape = (3200,1)
+            
             return key, features, target_dict, neighbors #target_dict returned only for training and not for CV or testing
+        
         if mode == "eval":
             return features, neighbors
 
@@ -217,6 +236,79 @@ def case_builder(
     @jit
     def preprocess_eval_fn(sample, neighbors):# no new neighbourlist and no noise.
         return _preprocess(sample, neighbors, mode="eval")
+
+
+    #Additional functions for PDE Refiner
+    def _preprocess_pde_refiner(sample: Tuple[jnp.ndarray, jnp.ndarray],
+        neighbors: Optional[NeighborList] = None,
+        is_allocate: bool = False, #bool to allocate new Neighbour List
+        mode: str = "train", 
+        **kwargs, 
+    ) -> Union[TrainCaseOut, EvalCaseOut]:
+        pos_input = jnp.asarray(sample[0], dtype=dtype) #shape of sample[0] == pos_input = (3200,3,2). 
+        particle_type = jnp.asarray(sample[1])
+        
+        # allocate the neighbor list
+        most_recent_position = pos_input[:, input_seq_length - 1]  #input_seq_length = 6
+        num_particles = (particle_type != -1).sum()
+        if is_allocate:
+            neighbors = neighbor_fn.allocate(most_recent_position, num_particles=num_particles)
+        else:
+            neighbors = neighbors.update(most_recent_position, num_particles=num_particles)
+
+        features = feature_transform(pos_input[:, :input_seq_length], neighbors) #has only u(t-dt)
+        
+        if mode == "train": #Note: that there is no noise addition as in the above _preprocess_fn
+            unroll_steps = kwargs["unroll_steps"]
+            key = kwargs["key"]
+            k = kwargs["k"]
+            is_k_zero = kwargs["is_k_zero"]
+            
+            seed = int(time.time())
+            min_noise_std = kwargs['sigma_min'] 
+            max_refinement_steps=kwargs["num_refinement_steps"]
+            
+            features['k'] = jnp.tile(k, (features['vel_hist'].shape[0],)) #shape = (3200,1)
+            
+            slice_begin = (0, input_seq_length - 2 + unroll_steps, 0)  #=(0,0,0) if unroll_steps = 0 and input_seq_length = 2
+            slice_size = (pos_input.shape[0], 3, pos_input.shape[2])   #=(3200,3,2) 
+
+            #target_dict has the target position, velocity and acceleration i.e. we can extract u(t) from this dictionary
+            target_dict = _compute_target(lax.dynamic_slice(pos_input, slice_begin, slice_size))
+
+            if is_k_zero:
+                features['u_t_noised'] = jnp.zeros_like(features['vel_hist'])
+                target_dict['noise'] = target_dict['vel']
+
+            else:
+                noise_std = min_noise_std**(k/max_refinement_steps)
+                noise = random.normal(random.PRNGKey(seed), features['vel_hist'].shape)   #sampled from gaussian distribution
+                features['u_t_noised'] = target_dict['vel'] + noise_std*noise
+                target_dict['noise'] = noise #could also be noise*noise_std
+            
+            #output of lax.dynamic_slice(pos_input, slice_begin, slice_size) = (3200,3,2), the last three timestep data
+            return key, features, target_dict, neighbors #target_dict returned only for training and not for CV or testing
+        
+        if mode == "eval": ###TO BE CHANGED, for 'eval' we need only the initial condition i.e. u(0)
+            return features, neighbors
+
+    def allocate_pde_refiner_fn(key,sample,k,is_k_zero,sigma_min,num_refinement_steps,noise_std=0.0, unroll_steps=0): #while initializing the case, the noise_std is 0.0, but inside the training loop in trainer.py, it is set properly.
+        return _preprocess_pde_refiner(sample,key=key,k=k, is_k_zero=is_k_zero,sigma_min=sigma_min, num_refinement_steps=num_refinement_steps, noise_std=noise_std, unroll_steps=unroll_steps, is_allocate=True,
+        )
+
+    @partial(jit, static_argnames=['is_k_zero'])  #For jitted 'preprocess_fn' and 'preprocess_eval_fn', neighbour_list is not updated and passed as argument.
+    def preprocess_pde_refiner_fn(key, sample, noise_std, neighbors,k, is_k_zero,sigma_min, num_refinement_steps,unroll_steps=0):
+        return _preprocess_pde_refiner(
+            sample, neighbors, key=key,  k=k, is_k_zero=is_k_zero, sigma_min=sigma_min, num_refinement_steps=num_refinement_steps, noise_std=noise_std, unroll_steps=unroll_steps,
+        )#REMOVE noise_std for PDE refiner laters
+
+    def allocate_eval_pde_refiner_fn(sample): #new neighbour list is to be generated and there is no noise addition
+        return _preprocess_pde_refiner(sample, is_allocate=True, mode="eval")
+
+    @jit
+    def preprocess_eval_pde_refiner_fn(sample, neighbors):# no new neighbourlist and no noise.
+        return _preprocess_pde_refiner(sample, neighbors, mode="eval")
+    
 
     @jit
     def integrate_fn(normalized_in, position_sequence): #Semi Implicit Euler Integrator used in rollout.py as csae.integrate
@@ -254,6 +346,10 @@ def case_builder(
         preprocess_fn,
         allocate_eval_fn,
         preprocess_eval_fn,
+        allocate_pde_refiner_fn,
+        preprocess_pde_refiner_fn,
+        allocate_eval_pde_refiner_fn,
+        preprocess_eval_pde_refiner_fn,
         integrate_fn,
         displacement_fn,
         normalization_stats,

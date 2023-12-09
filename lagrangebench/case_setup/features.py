@@ -61,11 +61,14 @@ def physical_feature_builder(
                 - "rel_dist", relative distance vectors
         """
         features = {}
-
-        n_total_points = pos_input.shape[0]
-        most_recent_position = pos_input[:, -1]  # (n_nodes, dim)
+        #pos_input.shape = (3200,6,2)
+        n_total_points = pos_input.shape[0] #3200
+        most_recent_position = pos_input[:, -1]  # (n_nodes, dim) #(3200,2)
         # pos_input.shape = (n_nodes, n_timesteps, dim)
         velocity_sequence = displacement_fn_dvmap(pos_input[:, 1:], pos_input[:, :-1])
+        #pos_input.shape = (3200,6,2) for input sequence of 6 positions, we obtain 5 velocity sequences
+        #pos_input[:, 1:].shape = (3200,5,2) and pos_input[:, :-1].shape = (3200,5,2)
+        #velocity_sequence.shape = (3200,5,2) using 6 position data in total, we obtain 5 velocity sequences 
         # Normalized velocity sequence, merging spatial an time axis.
         #for 2D RPF with 3200 particles and 5 historic velocities: normalized_velocity_sequence = (3200,5,2)
                                                                  # flat_velocity_sequence = (3200,10) = features["vel_hist"]
@@ -77,7 +80,8 @@ def physical_feature_builder(
         )
 
         features["abs_pos"] = pos_input
-        features["vel_hist"] = flat_velocity_sequence
+        features["vel_hist"] = flat_velocity_sequence #for PDE_refiner, features["vel_hist"] = (3200,2) which is u(t-dt)
+        # only one previous velocity is passed as vel_hist feature for pde refiner
 
         if magnitude_features:
             # append the magnitude of the velocity of each particle to the node features
