@@ -1,0 +1,21 @@
+extends: rpf_2d/base.yaml
+
+model: pde_refiner
+num_mp_steps: 10
+latent_dim: 128
+lr_start: 5.e-4
+
+wandb: False
+wandb_project: test_dump
+# Change this with your own entity
+wandb_entity: lagrangebench
+
+noise_std: 0.0000
+input_seq_length: 2 #to obtain 1 velocity 
+loss_weight:
+  noise: 1.0
+log_step: 1
+
+is_pde_refiner: True
+num_refinement_steps: 4
+sigma_min: 1.e-3
