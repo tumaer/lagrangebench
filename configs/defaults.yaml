@@ -4,7 +4,7 @@ extends:
 # Model architecture name. gns, segnn, egnn
 model:
 # Length of the position input sequence
-input_seq_length: 6
+input_seq_length: 6  
 # Number of message passing steps
 num_mp_steps: 10
 # Number of MLP layers
@@ -36,14 +36,14 @@ lr_final: 1.e-6
 lr_decay_rate: 0.1
 # Number of steps for the learning rate to decay
 lr_decay_steps: 1.e+5
-# Standard deviation for the additive noise
+# Standard deviation for the additive noise 
 noise_std: 0.0003
 # Whether to use magnitudes or not
 magnitude_features: False
 # Whether to normalize inputs and outputs with the same value in x, y, ans z.
 isotropic_norm: False
-# Parameters related to the push-forward trick
-pushforward:
+# Parameters related to the push-forward trick (DISABLED)
+pushforward: 
   # At which training step to introduce next unroll stage
   steps: [-1]
   # For how many steps to unroll (deactivated)
@@ -90,7 +90,7 @@ wandb_project: False
 # Change this with your own entity
 wandb_entity: lagrangebench
 # Number of steps between training logging (for debugging)
-log_steps: 1
+log_steps: 1000
 # Number of steps between evaluation
 eval_steps: 10000
 # Checkpoint directory
@@ -112,3 +112,5 @@ metrics_infer:
 metrics_stride_infer: 1
 out_type_infer: pkl
 eval_n_trajs_infer: -1
+
+is_pde_refiner: False

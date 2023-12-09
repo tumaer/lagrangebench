@@ -62,6 +62,9 @@ class GNS(BaseModel):
             num_particle_types, particle_type_embedding_size
         )  # (9, 16)    #num_particle_types=9 (see largrangebench-->utils.py) and particle_type_embedding_size=16 (default)
 
+ 
+
+
     def _encoder(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
         """MLP graph encoder."""
         #node_latents and edge_latents are arrays of sizes [num_nodes, latent_size] and [num_edges, latent_size]
@@ -124,13 +127,17 @@ class GNS(BaseModel):
         
         #For RPF_2D_3200_20k_every_100:
         #node_features contain only velocity history (3200,10) [10 is because it is flattened (5,2)] and external force (3200,2).
+        
+        #embedded_k = self._embedding(features["k"])  #embedded_k: (3200,16), we pass sample[1], because it contains the number of particles in the batch, which is 3200 for RPF_2D_3200_20k_every_100
+        
+        #features['embedded_k'] = embedded_k #add embedded_k to features dictionary
+        
         node_features = [
             features[k]
             for k in ["vel_hist", "vel_mag", "bound", "force"]  #5 previous velocities + 1 vel magnitude + 1 distance_to_obstacle + 1 external external_force = 
             if k in features
         ]
         edge_features = [features[k] for k in ["rel_disp", "rel_dist"] if k in features] # 
-
         #create a graph using the node_features and edge_features and feed it to the encoder after adding additional node features
         graph = jraph.GraphsTuple(
             nodes=jnp.concatenate(node_features, axis=-1), # (3200,10) concatenated with (3200,2) --> (3200,12)

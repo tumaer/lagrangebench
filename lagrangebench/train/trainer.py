@@ -9,9 +9,10 @@ import jax
 import jax.numpy as jnp
 import jraph
 import optax
-from jax import vmap
+from jax import vmap , random
 from torch.utils.data import DataLoader
 from wandb.wandb_run import Run
+import time
 
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
@@ -35,17 +36,18 @@ from .strats import push_forward_build, push_forward_sample_steps
 @partial(jax.jit, static_argnames=["model_fn", "loss_weight"]) #
 def _mse(
     params: hk.Params,
-    state: hk.State,
+    state: hk.State,             #for GNS, state is an empty dictionary
     features: Dict[str, jnp.ndarray],
     particle_type: jnp.ndarray,
     target: jnp.ndarray,
     model_fn: Callable,          #jitted model function
     loss_weight: LossConfig,     #LossConfig(pos=0.0, vel=0.0, acc=1.0) by default
-):
+):  
+    
     pred, state = model_fn(params, state, (features, particle_type)) #returns the predicted state (could be position or velocity or acceleration(default))
                                                                      #for RPF_2D: (3200,2)
     # check active (non zero) output shapes
-    keys = list(set(loss_weight.nonzero) & set(pred.keys()))  #keys = ['acc'] 
+    keys = list(set(loss_weight.nonzero) & set(pred.keys()))  #keys = ['acc'] for GNS
     assert all(target[k].shape == pred[k].shape for k in keys)  #asserting if target['acc'] and pred['acc'] have same shape
     # particle mask
     non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type)) # kinematic massk is for obsatcles like moving wall or rigid wall, 
@@ -55,8 +57,7 @@ def _mse(
     losses = []
     for t in keys:
         losses.append((loss_weight[t] * (pred[t] - target[t]) ** 2).sum(axis=-1)) #pred['acc'].shape =(3200,2) and target['acc'].shape =(3200,2), sum(axis=-1) will result in shape (3200,) 
-                                                                                  #as the last axis (column) is summed, therefore the resulting shape is the rows.
-                                                                                  #but when appended to a list, the shape is (1,3200)
+                                                                                  #as the last axis (column) is summed, therefore the resulting shape is the rows.                                                             #but when appended to a list, the shape is (1,3200)
     total_loss = jnp.array(losses).sum(0)    #now after summing across the row, the shape is (3200,)
     total_loss = jnp.where(non_kinematic_mask, total_loss, 0) #loss is 0 for 'non-fluid' particles.
     total_loss = total_loss.sum() / num_non_kinematic #normalizing with the total number of particles
@@ -112,6 +113,9 @@ def Trainer(
     log_steps: int = defaults.log_steps,
     eval_steps: int = defaults.eval_steps,
     metrics_stride: int = defaults.metrics_stride,
+    is_pde_refiner: bool = defaults.is_pde_refiner,
+    num_refinement_steps: int = defaults.num_refinement_steps,
+    sigma_min: float = defaults.sigma_min,
     **kwargs,
 ) -> Callable:
     """
@@ -250,7 +254,17 @@ def Trainer(
         pos_input_and_target, particle_type = next(iter(loader_train))  #pos_input_and_target.shape =(1,3200,7,2) and particle_type.shape =(1,3200)
                                                                         #pos_input_and_target[0].shape =(3200,7,2) and particle_type[0].shape =(3200,)
         raw_sample = (pos_input_and_target[0], particle_type[0]) #creates an array by concatenating pos_input_and_target[0] and particle_type[0]
-        key, features, _, neighbors = case.allocate(base_key, raw_sample)
+        
+        if is_pde_refiner:
+            seed = int(time.time()) #to ensure the seed is different for every training step and we get a different k
+            k  = random.randint(random.PRNGKey(seed), (), 0, num_refinement_steps)
+            is_k_zero = jnp.where(k==0, True, False)
+            key, features, _, neighbors = case.allocate_pde_refiner(base_key, raw_sample, k,is_k_zero,sigma_min,num_refinement_steps)
+            preprocess_vmap = jax.vmap(case.preprocess_pde_refiner, in_axes=(0, 0, None, 0, None, None, None, None, None))
+            
+        else:
+            key, features, _, neighbors = case.allocate(base_key, raw_sample)
+            preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
 
         step = 0
         if params is not None:
@@ -277,8 +291,7 @@ def Trainer(
         if store_checkpoint is not None:
             os.makedirs(store_checkpoint, exist_ok=True)
             os.makedirs(os.path.join(store_checkpoint, "best"), exist_ok=True)
-
-        preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
+        
         push_forward = push_forward_build(model_apply, case)
         push_forward_vmap = jax.vmap(push_forward, in_axes=(0, 0, 0, 0, None, None))
 
@@ -289,7 +302,7 @@ def Trainer(
 
         #print(jax.tree_map(lambda x: x.shape, params)) # print this in the debug console
         
-        # start training
+        # start training and ocassionally evaluate
         while step < step_max + 1:
             for raw_batch in loader_train:   
                 # numpy to jax  (jax.tree_map converts every item in raw_batch to jnp.array)
@@ -297,13 +310,34 @@ def Trainer(
                                                                               #if batch_size is 1, raw_batch.shape =(1,3200,7,2)
                 key, unroll_steps = push_forward_sample_steps(key, step, pushforward)
                 # target computation incorporates the sampled number pushforward steps
-                keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-                    keys,
-                    raw_batch,
-                    noise_std,
-                    neighbors_batch,
-                    unroll_steps,
-                )
+                
+                #need to modify for BATCHED training
+                if is_pde_refiner:
+                    seed = int(time.time()) #to ensure the seed is different for every training step and we get a different k
+                    k  = random.randint(random.PRNGKey(seed), (), 0, num_refinement_steps)
+                    is_k_zero = True if k == 0 else False
+
+                    keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
+                        keys,
+                        raw_batch,
+                        noise_std,
+                        neighbors_batch,
+                        k,
+                        is_k_zero,
+                        sigma_min,
+                        num_refinement_steps,
+                        unroll_steps,
+                    )
+                
+                else:
+                    keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
+                        keys,
+                        raw_batch,
+                        noise_std,
+                        neighbors_batch,
+                        unroll_steps,
+                    )
+                
                 # unroll for push-forward steps 
                 _current_pos = raw_batch[0][:, :, :input_seq_length] 
                 #raw_batch[0].shape =(1,3200,7,2) and _current_pos.shape =(1,3200,6,2)

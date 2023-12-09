@@ -9,3 +9,9 @@ wandb: False
 wandb_project: test_dump
 # Change this with your own entity
 wandb_entity: lagrangebench
+
+noise_std: 0.0003
+input_seq_length: 6 #to obtain 1 velocity 
+loss_weight:
+  acc: 1.0
+log_step: 1

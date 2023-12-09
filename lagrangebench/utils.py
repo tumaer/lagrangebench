@@ -201,6 +201,7 @@ class LossConfig:
     pos: float = 0.0
     vel: float = 0.0
     acc: float = 1.0
+    noise: float = 0.0
 
     def __getitem__(self, item):
         return getattr(self, item)
