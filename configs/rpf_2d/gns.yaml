@@ -14,4 +14,5 @@ noise_std: 0.0003
 input_seq_length: 6 #to obtain 1 velocity 
 loss_weight:
   acc: 1.0
-log_step: 1
+log_steps: 1
+eval_steps: 4

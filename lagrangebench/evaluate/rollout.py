@@ -153,7 +153,7 @@ def eval_rollout(
     if rollout_dir is not None:
         os.makedirs(rollout_dir, exist_ok=True)
 
-    for i, traj_i in enumerate(loader_eval):
+    for i, traj_i in enumerate(loader_eval): #traj_i[0] has the shape (1,3200,26,2) it loaded 20+6 positions for 3200 particles, 20 being the number of rollout steps and 6 is the input sequence length 
         # remove batch dimension
         assert traj_i[0].shape[0] == 1, "Batch dimension should be 1"
         traj_i = broadcast_from_batch(traj_i, index=0)  # (nodes, t, dim)
