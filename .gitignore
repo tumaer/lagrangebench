@@ -10,7 +10,7 @@ partition_*
 *.pkl
 datasets/
 # dev
-.vscode
+#.vscode
 __pycache__
 *.pyc
 venv*/

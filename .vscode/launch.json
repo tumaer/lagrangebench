@@ -1,0 +1,48 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "args": [
+                "--config=configs/rpf_2d/gns.yaml",
+                "--data_dir=datasets/2D_RPF_3200_20kevery100",
+                "--ckp_dir=ckp/debug_dump",
+                "--gpu=1",  
+            ],
+            "name": "Debug GNS",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "args": [
+                "--model_dir=ckp/gns_rpf2d_20231103-113516",
+                "--mode=infer"
+            ],
+            "name": "Debug after loading a model from checkpoint",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "args": [
+                "--config=configs/rpf_2d/pde_refiner.yaml",
+                "--data_dir=datasets/2D_RPF_3200_20kevery100",
+                "--ckp_dir=ckp/debug_dump",
+                "--gpu=1",  
+            ],
+            "name": "Debug PDE_Refiner",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+    ]
+}
