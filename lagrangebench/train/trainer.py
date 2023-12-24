@@ -112,6 +112,7 @@ def Trainer(
     log_steps: int = defaults.log_steps,
     eval_steps: int = defaults.eval_steps,
     metrics_stride: int = defaults.metrics_stride,
+    num_workers: int = defaults.num_workers,
     **kwargs,
 ) -> Callable:
     """
@@ -161,7 +162,7 @@ def Trainer(
         dataset=data_train,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=num_workers,
         collate_fn=numpy_collate,
         drop_last=True,
         worker_init_fn=seed_worker,

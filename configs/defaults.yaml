@@ -82,6 +82,8 @@ f64: True
 neighbor_list_backend: jaxmd_vmap
 # Neighbour list capacity multiplier
 neighbor_list_multiplier: 1.25
+# number of workers for data loading
+num_workers: 4
 
 # Logging settings
 # Use wandb for logging
