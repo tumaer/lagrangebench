@@ -35,13 +35,13 @@ evaluation.
 .. code:: ipython3
 
     tgv2d_train = lagrangebench.data.TGV2D("train", extra_seq_length=5)  # extra_seq_length=5 will be clear later
-    tgv2d_eval = lagrangebench.data.TGV2D("valid", extra_seq_length=20)
+    tgv2d_valid = lagrangebench.data.TGV2D("valid", extra_seq_length=20)
     
     print(
         f"This is a {tgv2d_train.metadata['dim']}D dataset "
         f"called {tgv2d_train.metadata['case']}.\n"
         f"Train snapshot have shape {tgv2d_train[0][0].shape} (n_nodes, seq_len, xy pos).\n"
-        f"Val snapshot have shape {tgv2d_eval[0][0].shape} (n_nodes, rollout, xy pos).\n"
+        f"Val snapshot have shape {tgv2d_valid[0][0].shape} (n_nodes, rollout, xy pos).\n"
     )
 
 
@@ -179,7 +179,7 @@ Finally, to train GNS on Taylor Green (with noise and pushforward) the
         model=gns,
         case=tgv2d_case,
         data_train=tgv2d_train,
-        data_eval=tgv2d_eval,
+        data_valid=tgv2d_valid,
         pushforward=pf_config,
         noise_std=noise_std,
         metrics=["mse"],

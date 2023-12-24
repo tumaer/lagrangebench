@@ -32,19 +32,26 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         extra_seq_length=args.config.pushforward["unrolls"][-1],
         nl_backend=args.config.neighbor_list_backend,
     )
-    data_eval = H5Dataset(
-        "test" if args.config.test else "valid",
+    data_valid = H5Dataset(
+        "valid",
+        dataset_path=args.config.data_dir,
+        input_seq_length=args.config.input_seq_length,
+        extra_seq_length=args.config.n_rollout_steps,
+        nl_backend=args.config.neighbor_list_backend,
+    )
+    data_test = H5Dataset(
+        "test",
         dataset_path=args.config.data_dir,
         input_seq_length=args.config.input_seq_length,
         extra_seq_length=args.config.n_rollout_steps,
         nl_backend=args.config.neighbor_list_backend,
     )
     if args.config.eval_n_trajs == -1:
-        args.config.eval_n_trajs = data_eval.num_samples
+        args.config.eval_n_trajs = data_valid.num_samples
     if args.config.eval_n_trajs_infer == -1:
-        args.config.eval_n_trajs_infer = data_eval.num_samples
-    assert data_eval.num_samples >= args.config.eval_n_trajs, (
-        f"Number of available evaluation trajectories ({data_eval.num_samples}) "
+        args.config.eval_n_trajs_infer = data_valid.num_samples
+    assert data_valid.num_samples >= args.config.eval_n_trajs, (
+        f"Number of available evaluation trajectories ({data_valid.num_samples}) "
         f"exceeds eval_n_trajs ({args.config.eval_n_trajs})"
     )
 
@@ -74,9 +81,10 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         external_force_fn = None
 
     data_train.external_force_fn = external_force_fn
-    data_eval.external_force_fn = external_force_fn
+    data_valid.external_force_fn = external_force_fn
+    data_test.external_force_fn = external_force_fn
 
-    return data_train, data_eval, args
+    return data_train, data_valid, data_test, args
 
 
 def setup_model(args: Namespace) -> Tuple[Callable, Type]:

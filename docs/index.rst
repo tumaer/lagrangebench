@@ -52,7 +52,7 @@ preprocessing, and time integration.
 
    # Load data
    data_train = lagrangebench.data.RPF2D("train")
-   data_eval = lagrangebench.data.RPF2D("valid", is_rollout=True)
+   data_valid = lagrangebench.data.RPF2D("valid", is_rollout=True)
    data_test = lagrangebench.data.RPF2D("test", is_rollout=True)
 
    # Case setup (preprocessing and graph building)
@@ -97,7 +97,7 @@ The ``Trainer`` provides a convenient way to train a model.
       model=gns,
       case=case,
       data_train=data_train,
-      data_eval=data_eval,
+      data_valid=data_valid,
       metrics=["mse"],
       n_rollout_steps=20,
    )

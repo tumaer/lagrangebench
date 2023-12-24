@@ -285,7 +285,7 @@ This works as usual. See
         model=gns,
         case=case,
         data_train=data_train,
-        data_eval=data_valid,
+        data_valid=data_valid,
         noise_std=noise_std,
         metrics=["mse"],
         n_rollout_steps=20,
