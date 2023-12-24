@@ -28,6 +28,8 @@ class BaseModel(hk.Module, ABC):
                 - "force" (N, dim), external force field
                 - "rel_disp" (E, dim), relative displacement vectors
                 - "rel_dist" (E, 1), relative distances, i.e. magnitude of displacements
+                - "senders" (E), sender indices
+                - "receivers" (E), receiver indices
         Returns:
             Dict with model output.
             The keys must be at least one of the following:

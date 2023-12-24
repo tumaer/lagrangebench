@@ -197,6 +197,12 @@ def cli_arguments() -> Dict:
         type=int,
         help="Stride for Sinkhorn and e_kin during inference.",
     )
+    parser.add_argument(
+        "--n_rollout_steps",
+        required=False,
+        type=int,
+        help="Number of rollout steps during validation/testing.",
+    )
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 
