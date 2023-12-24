@@ -38,6 +38,13 @@ pip install --upgrade jax[cuda11_pip]==0.4.20 -f https://storage.googleapis.com/
 pip install --upgrade jax[cuda12_pip]==0.4.20 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
 
+### MacOS
+Currently, only the CPU installation works. You will need to change a few small things to get it going: 
+- Clone installation: in `pyproject.toml` change the torch version from `2.1.0+cpu` to `2.1.0`. Then, remove the `poetry.lock` file and run `poetry install --only main`.
+- Configs: You will need to set `f64: False` and `num_workers: 0` in the `config/` files.
+
+Although the current [`jax-metal==0.0.5` library](https://pypi.org/project/jax-metal/) supports jax in general, there seems to be a missing feature used by `jax-md` related to padding -> see [this issue](https://github.com/google/jax/issues/16366#issuecomment-1591085071).
+
 ## Usage
 ### Standalone benchmark library
 A general tutorial is provided in the example notebook "Training GNS on the 2D Taylor Green Vortex" under `./notebooks/tutorial.ipynb` on the [LagrangeBench repository](https://github.com/tumaer/lagrangebench). The notebook covers the basics of LagrangeBench, such as loading a dataset, setting up a case, training a model from scratch and evaluating it's performance.
