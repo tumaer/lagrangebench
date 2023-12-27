@@ -93,7 +93,7 @@ def Trainer(
     model: hk.TransformedWithState,
     case,
     data_train: H5Dataset,
-    data_eval: H5Dataset,
+    data_valid: H5Dataset,
     pushforward: Optional[PushforwardConfig] = None,
     metrics: List = ["mse"],
     seed: int = defaults.seed,
@@ -112,7 +112,6 @@ def Trainer(
     log_steps: int = defaults.log_steps,
     eval_steps: int = defaults.eval_steps,
     metrics_stride: int = defaults.metrics_stride,
-    **kwargs,
 ) -> Callable:
     """
     Builds a function that automates model training and evaluation.
@@ -122,13 +121,13 @@ def Trainer(
 
     1. Initializes (or resumes from a checkpoint) model, optimizer and loss function.
     2. Trains the model on data_train, using the given pushforward and noise tricks.
-    3. Evaluates the model on data_eval on the specified metrics.
+    3. Evaluates the model on data_valid on the specified metrics.
 
     Args:
         model: (Transformed) Haiku model.
         case: Case setup class.
         data_train: Training dataset.
-        data_eval: Validation dataset.
+        data_valid: Validation dataset.
         pushforward: Pushforward configuration. None for no pushforward.
         metrics: Metrics to evaluate the model on.
         seed: Random seed for model init, training tricks and dataloading.
@@ -167,8 +166,8 @@ def Trainer(
         worker_init_fn=seed_worker,
         generator=generator,
     )
-    loader_eval = DataLoader(
-        dataset=data_eval,
+    loader_valid = DataLoader(
+        dataset=data_valid,
         batch_size=1,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
@@ -230,12 +229,12 @@ def Trainer(
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
         """
-        assert n_rollout_steps <= data_eval.subseq_length - input_seq_length, (
+        assert n_rollout_steps <= data_valid.subseq_length - input_seq_length, (
             "You cannot evaluate the loss on longer than a ground truth trajectory "
-            f"({n_rollout_steps}, {data_eval.subseq_length}, {input_seq_length})"
+            f"({n_rollout_steps}, {data_valid.subseq_length}, {input_seq_length})"
         )
         assert eval_n_trajs <= len(
-            loader_eval
+            loader_valid
         ), "eval_n_trajs must be <= len(loader_valid)"
 
         # Precompile model for evaluation
@@ -356,7 +355,7 @@ def Trainer(
                         params=params,
                         state=state,
                         neighbors=nbrs,
-                        loader_eval=loader_eval,
+                        loader_eval=loader_valid,
                         n_rollout_steps=n_rollout_steps,
                         n_trajs=eval_n_trajs,
                         rollout_dir=rollout_dir,

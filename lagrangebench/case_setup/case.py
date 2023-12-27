@@ -85,7 +85,7 @@ def case_builder(
         box: Box xyz sizes of the system.
         metadata: Dataset metadata dictionary.
         input_seq_length: Length of the input sequence.
-        isotropic_norm: Whether to use isotropic normalization.
+        isotropic_norm: Whether to normalize dimensions equally.
         noise_std: Noise standard deviation.
         external_force_fn: External force function.
         magnitude_features: Whether to add velocity magnitudes in the features.

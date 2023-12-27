@@ -107,13 +107,13 @@ def physical_feature_builder(
             features["force"] = external_force_field
 
         # senders and receivers are integers of shape (E,)
-        senders, receivers = nbrs.idx
+        receivers, senders = nbrs.idx
         features["senders"] = senders
         features["receivers"] = receivers
 
         # Relative displacement and distances normalized to radius (E, dim)
         displacement = vmap(displacement_fn)(
-            most_recent_position[senders], most_recent_position[receivers]
+            most_recent_position[receivers], most_recent_position[senders]
         )
         normalized_relative_displacements = displacement / connectivity_radius
         features["rel_disp"] = normalized_relative_displacements

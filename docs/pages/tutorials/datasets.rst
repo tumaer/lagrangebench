@@ -14,7 +14,7 @@ validation set - ``test.h5`` - test set
 .. code:: ipython3
 
     import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
     
     import numpy as np
     from jax import vmap
@@ -24,8 +24,6 @@ validation set - ``test.h5`` - test set
     import lagrangebench
     
     plt.rcParams.update({'font.size': 10})
-
-
 
 Dataset animations
 ------------------
@@ -60,6 +58,69 @@ magnitude of their velocity.
 .. |ldc2d.gif| image:: https://s11.gifyu.com/images/Sce9S.gif
 .. |ldc3d.gif| image:: https://s11.gifyu.com/images/Sce3e.gif
 
+Dataset shapes
+--------------
+
+Short script to check the shapes of the raw validation datasets.
+
+If you haven’t downloaded the datasets yet, you can do so by running
+this script from the root of the repository:
+
+.. code:: bash
+
+   bash download_data.sh all notebooks/datasets/
+
+.. code:: ipython3
+
+    import os.path as osp
+    import h5py
+    
+    # the datasets are stored in the following directories, whose names follow the convention:
+    # {dim}_{case}_{num_particles_max}_{num_steps}every{sampling_rate}
+    # dim - dimension. One of {2D|3D}.
+    # case - simulation case. One of {TGV|RPF|LDC|DAM}.
+    # num_particles_max - maximum number of particles in the dataset.
+    # num_steps - number of position frames in the training split of the dataset.
+    # sampling_rate - sampling_rate=100 means that the position frames correspond to every
+    #     100th SPH simulation step.
+    path = [
+        "2D_TGV_2500_10kevery100",
+        "2D_RPF_3200_20kevery100",
+        "2D_LDC_2708_10kevery100",
+        "2D_DAM_5740_20kevery100",
+        "3D_TGV_8000_10kevery100",        
+        "3D_RPF_8000_10kevery100",
+        "3D_LDC_8160_10kevery100",
+    ]
+    
+    # 6 history positions (5 past velocities) + 20-step rollout
+    valid_seq_length = 6 + 20  # during validation and inference
+    dataset_root = "datasets/"
+    split = "valid.h5"
+    
+    for p in path:
+        p = osp.join(dataset_root, p, split)
+        with h5py.File(p, "r") as f:
+            pos_shape =  f["00000/position"].shape
+            split_into = pos_shape[0]//valid_seq_length
+            num_trajs = len(list(f.keys()))
+            print(f"{p[9:]}, traj_shape= {str(pos_shape):<20}, "
+                  f"split_valid_traj_into_n= {split_into:<5}, "
+                  f"num_trajs: {num_trajs:<5}, "
+                  f"eval_n_trajs_infer: {split_into * num_trajs}")
+
+
+.. parsed-literal::
+
+    2D_TGV_2500_10kevery100/valid.h5, traj_shape= (126, 2500, 2)      , split_valid_traj_into_n= 4    , num_trajs: 50   , eval_n_trajs_infer: 200
+    2D_RPF_3200_20kevery100/valid.h5, traj_shape= (10001, 3200, 2)    , split_valid_traj_into_n= 384  , num_trajs: 1    , eval_n_trajs_infer: 384
+    2D_LDC_2708_10kevery100/valid.h5, traj_shape= (5001, 2708, 2)     , split_valid_traj_into_n= 192  , num_trajs: 1    , eval_n_trajs_infer: 192
+    2D_DAM_5740_20kevery100/valid.h5, traj_shape= (401, 5740, 2)      , split_valid_traj_into_n= 15   , num_trajs: 25   , eval_n_trajs_infer: 375
+    3D_TGV_8000_10kevery100/valid.h5, traj_shape= (61, 8000, 3)       , split_valid_traj_into_n= 2    , num_trajs: 100  , eval_n_trajs_infer: 200
+    3D_RPF_8000_10kevery100/valid.h5, traj_shape= (5001, 8000, 3)     , split_valid_traj_into_n= 192  , num_trajs: 1    , eval_n_trajs_infer: 192
+    3D_LDC_8160_10kevery100/valid.h5, traj_shape= (5001, 8160, 3)     , split_valid_traj_into_n= 192  , num_trajs: 1    , eval_n_trajs_infer: 192
+
+
 Evaluation of physical properties
 ---------------------------------
 
@@ -92,14 +153,14 @@ We distinguish two cases:
         e_kin = 0.5 * square_absolute_velocity.mean(axis=(0,)) # shape: (num_steps,)
         return e_kin
     
-    def plt_e_kin(dataset_path, split_into_n, e_kin_ref=None):
+    def plt_e_kin(dataset_path, seq_len, e_kin_ref=None):
         dim, name, _, _ = dataset_path.split('/')[1].split('_')
         
         dataset = lagrangebench.data.H5Dataset(
             "valid", 
             dataset_path=dataset_path,
-            is_rollout=True,
-            split_valid_traj_into_n=split_into_n # inversely proportional to number of steps
+            input_seq_length=seq_len,
+            extra_seq_length=1,
         )
         traj, _ = dataset[0]
         e_kin = compute_kinetic_energy(dataset.metadata, traj)
@@ -121,25 +182,7 @@ RPF and LDC
 
 .. code:: ipython3
 
-    plt_e_kin("datasets/2D_RPF_3200_20kevery100", 20)
-
-
-
-.. image:: media/datasets_6_0.png
-
-
-.. code:: ipython3
-
-    plt_e_kin("datasets/3D_RPF_8000_10kevery100", 10)
-
-
-
-.. image:: media/datasets_7_0.png
-
-
-.. code:: ipython3
-
-    plt_e_kin("datasets/2D_LDC_2500_10kevery100", 10)
+    plt_e_kin("datasets/2D_RPF_3200_20kevery100", 500)
 
 
 
@@ -148,11 +191,29 @@ RPF and LDC
 
 .. code:: ipython3
 
-    plt_e_kin("datasets/3D_LDC_8160_10kevery100", 10)
+    plt_e_kin("datasets/3D_RPF_8000_10kevery100", 500)
 
 
 
 .. image:: media/datasets_9_0.png
+
+
+.. code:: ipython3
+
+    plt_e_kin("datasets/2D_LDC_2708_10kevery100", 500)
+
+
+
+.. image:: media/datasets_10_0.png
+
+
+.. code:: ipython3
+
+    plt_e_kin("datasets/3D_LDC_8160_10kevery100", 500)
+
+
+
+.. image:: media/datasets_11_0.png
 
 
 DAM
@@ -160,11 +221,11 @@ DAM
 
 .. code:: ipython3
 
-    plt_e_kin("datasets/2D_DAM_5740_20kevery100", 1)
+    plt_e_kin("datasets/2D_DAM_5740_20kevery100", 400)
 
 
 
-.. image:: media/datasets_11_0.png
+.. image:: media/datasets_13_0.png
 
 
 2D TGV
@@ -185,8 +246,7 @@ hydrodynamics <https://www.sciencedirect.com/science/article/abs/pii/S0021999113
     dataset = lagrangebench.data.H5Dataset(
         "valid", 
         dataset_path=dataset_path,
-        is_rollout=True,
-        split_valid_traj_into_n=1 
+        extra_seq_length=1,
     )
     
     dt_dataset = (dataset.metadata['dt'] * dataset.metadata['write_every'])
@@ -217,7 +277,6 @@ metadata file for 2D TGV looks like this:
 
     {'case': 'TGV',
      'solver': 'SPH',
-     'tvf': 0.0,
      'density_evolution': False,
      'dim': 2,
      'dx': 0.02,
@@ -225,13 +284,15 @@ metadata file for 2D TGV looks like this:
      't_end': 5.0,
      'viscosity': 0.01,
      'p_bg_factor': 0.0,
+     'g_ext_magnitude': 0.0,
      'artificial_alpha': 0.0,
      'free_slip': False,
-     'seed': 199,
      'write_every': 100,
-     'data_path': 'datasets/2D_TGV_2500_10kevery100/',
      'is_bc_trick': False,
-     'sequence_length': 125,
+     'sequence_length_train': 126,
+     'num_trajs_train': 100,
+     'sequence_length_test': 126,
+     'num_trajs_test': 50,
      'num_particles_max': 2500,
      'periodic_boundary_conditions': [True, True, True],
      'bounds': [[0.0, 1.0], [0.0, 1.0]],
@@ -245,11 +306,11 @@ metadata file for 2D TGV looks like this:
 
 .. code:: ipython3
 
-    plt_e_kin(dataset_path, 1, e_kin_theory)
+    plt_e_kin(dataset_path, 125, e_kin_theory)
 
 
 
-.. image:: media/datasets_16_0.png
+.. image:: media/datasets_18_0.png
 
 
 We don’t perfectly solve the 2D TGV, but this behaviour is a known
@@ -279,11 +340,12 @@ SPH <https://mediatum.ub.tum.de/doc/1360487/978874575863.pdf>`__, 2012
 .. code:: ipython3
 
     e_kin_ref = 0.001 * np.array([
-        125, 118, 111, 103, 95.7, 88.0, 80.1, 72.4, 65, 58, 51.5, 45.5, 40.2, 35.5, 31.3, 27.6, 24.3, 21.5, 19.1, 16.9, 15.1
+        125, 118, 111, 103, 95.7, 88.0, 80.1, 72.4, 65, 58, 51.5,
+        45.5, 40.2, 35.5, 31.3, 27.6, 24.3, 21.5, 19.1, 16.9, 15.1
     ])
-    plt_e_kin("datasets/3D_TGV_8000_10kevery100", 1, e_kin_ref)
+    plt_e_kin("datasets/3D_TGV_8000_10kevery100", 59, e_kin_ref)
 
 
 
-.. image:: media/datasets_19_0.png
+.. image:: media/datasets_21_0.png
 

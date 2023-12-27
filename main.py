@@ -25,7 +25,7 @@ if __name__ == "__main__":
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(args.config.xla_mem_fraction)
 
     if args.config.f64:
-        from jax.config import config
+        from jax import config
 
         config.update("jax_enable_x64", True)
 
