@@ -41,6 +41,7 @@ class defaults:
     dtype: jnp.dtype = jnp.float64  # data type for preprocessing
     magnitude_features: bool = False  # whether to include velocity magnitude features
     isotropic_norm: bool = False  #  whether to normalize dimensions equally
+    num_workers: int = 4  # number of workers for data loading
 
     # learning rate
     lr_start: float = 1e-4  # initial learning rate

@@ -122,6 +122,7 @@ def train_or_infer(args: Namespace):
             log_steps=args.config.log_steps,
             eval_steps=args.config.eval_steps,
             metrics_stride=args.config.metrics_stride,
+            num_workers=args.config.num_workers,
         )
         _, _, _ = trainer(
             step_max=args.config.step_max,

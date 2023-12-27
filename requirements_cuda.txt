@@ -6,7 +6,7 @@ cloudpickle
 dm_haiku>=0.0.10
 e3nn_jax>=0.20.0
 h5py
-jax[cuda12_pip]==0.4.18
+jax[cuda12_pip]==0.4.20
 jax_md>=0.2.8
 jmp>=0.0.4
 jraph>=0.0.6.dev0

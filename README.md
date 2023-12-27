@@ -33,10 +33,17 @@ For a CPU version of the requirements file, one could use `docs/requirements.txt
 ### GPU support
 To run JAX on GPU, follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
 ```bash
-pip install --upgrade jax[cuda11_pip]==0.4.18 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade jax[cuda11_pip]==0.4.20 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 # or, for cuda 12
-pip install --upgrade jax[cuda12_pip]==0.4.18 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install --upgrade jax[cuda12_pip]==0.4.20 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 ```
+
+### MacOS
+Currently, only the CPU installation works. You will need to change a few small things to get it going: 
+- Clone installation: in `pyproject.toml` change the torch version from `2.1.0+cpu` to `2.1.0`. Then, remove the `poetry.lock` file and run `poetry install --only main`.
+- Configs: You will need to set `f64: False` and `num_workers: 0` in the `configs/` files.
+
+Although the current [`jax-metal==0.0.5` library](https://pypi.org/project/jax-metal/) supports jax in general, there seems to be a missing feature used by `jax-md` related to padding -> see [this issue](https://github.com/google/jax/issues/16366#issuecomment-1591085071).
 
 ## Usage
 ### Standalone benchmark library
