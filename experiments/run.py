@@ -19,14 +19,14 @@ from lagrangebench.utils import PushforwardConfig
 
 
 def train_or_infer(args: Namespace):
-    data_train, data_eval, args = setup_data(args)
+    data_train, data_valid, data_test, args = setup_data(args)
 
     # neighbors search
     bounds = np.array(data_train.metadata["bounds"])
     args.box = bounds[:, 1] - bounds[:, 0]
 
     args.info.len_train = len(data_train)
-    args.info.len_eval = len(data_eval)
+    args.info.len_eval = len(data_valid)
 
     # setup core functions
     case = case_builder(
@@ -103,7 +103,7 @@ def train_or_infer(args: Namespace):
             model,
             case,
             data_train,
-            data_eval,
+            data_valid,
             pushforward=pf_config,
             metrics=args.config.metrics,
             seed=args.config.seed,
@@ -137,9 +137,6 @@ def train_or_infer(args: Namespace):
     if args.config.mode == "infer" or args.config.mode == "all":
         print("Start inference...")
         if args.config.mode == "all":
-            args.config.test = True
-            data_train, data_eval, args = setup_data(args)
-
             args.config.model_dir = os.path.join(args.config.new_checkpoint, "best")
             assert osp.isfile(os.path.join(args.config.model_dir, "params_tree.pkl"))
 
@@ -153,7 +150,7 @@ def train_or_infer(args: Namespace):
         metrics = infer(
             model,
             case,
-            data_eval,
+            data_test,
             load_checkpoint=args.config.model_dir,
             metrics=args.config.metrics_infer,
             rollout_dir=args.config.rollout_dir,

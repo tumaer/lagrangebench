@@ -43,7 +43,7 @@ class H5Dataset(Dataset):
         dataset_path: str,
         name: Optional[str] = None,
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
         external_force_fn: Optional[Callable] = None,
     ):
@@ -57,7 +57,7 @@ class H5Dataset(Dataset):
                 velocities is input_seq_length - 1. And during training, the returned
                 number of past positions is input_seq_length + 1, to compute target
                 acceleration.
-            n_rollout_steps: During training, this is the maximum number of pushforward
+            extra_seq_length: During training, this is the maximum number of pushforward
                 unroll steps. During validation/testing, this specifies the largest
                 N-step MSE loss we are interested in, e.g. for best model checkpointing.
             nl_backend: Which backend to use for the neighbor list
@@ -100,10 +100,10 @@ class H5Dataset(Dataset):
         if split == "train":
             # During training, the first input_seq_length steps can only be used as
             # input, and the last one to compute the target acceleration. If we use
-            # pushforward, then we need to provide n_rollout_steps more steps
+            # pushforward, then we need to provide extra_seq_length more steps
             # from the end of a trajectory. Thus, the number of training samples per
             # trajectory becomes:
-            self.subseq_length = input_seq_length + 1 + n_rollout_steps
+            self.subseq_length = input_seq_length + 1 + extra_seq_length
             samples_per_traj = self.sequence_length - self.subseq_length + 1
 
             keylens = jnp.array([samples_per_traj for _ in range(len(self.traj_keys))])
@@ -114,13 +114,13 @@ class H5Dataset(Dataset):
 
         else:
             assert (
-                n_rollout_steps > 0
-            ), "n_rollout_steps must be > 0 for validation and testing."
+                extra_seq_length > 0
+            ), "extra_seq_length must be > 0 for validation and testing."
             # Compute the number of splits per validation trajectory. If the length of
             # each trajectory is 1000, we want to compute a 20-step MSE, and
             # intput_seq_length=6, then we should split the trajectory into
             # _split_valid_traj_into_n = 1000 // (20 + 6) chunks.
-            self.subseq_length = input_seq_length + n_rollout_steps
+            self.subseq_length = input_seq_length + extra_seq_length
             self._split_valid_traj_into_n = self.sequence_length // self.subseq_length
 
             self.num_samples = self._split_valid_traj_into_n * len(self.traj_keys)
@@ -129,7 +129,7 @@ class H5Dataset(Dataset):
         assert self.sequence_length >= self.subseq_length, (
             f"# steps in dataset trajectory ({self.sequence_length}) must be >= "
             f"subsequence length ({self.subseq_length}). Reduce either "
-            f"input_seq_length or n_rollout_steps/max pushforward steps."
+            f"input_seq_length or extra_seq_length/max pushforward steps."
         )
 
     def download(self, name: str, path: str) -> str:
@@ -151,7 +151,7 @@ class H5Dataset(Dataset):
         # download the dataset as a zip file, e.g. "./data/2D_TGV_2500_10kevery100.zip"
         os.makedirs(path_root, exist_ok=True)
         filename = wget.download(url, out=path_root)
-        print(f"Dataset {name} downloaded to {filename}")
+        print(f"\nDataset {name} downloaded to {filename}")
 
         # unzip the dataset and then remove the zip file
         zipfile.ZipFile(filename, "r").extractall(path_root)
@@ -240,6 +240,14 @@ class H5Dataset(Dataset):
         return pos_input_and_target, particle_type
 
     def __getitem__(self, idx: int):
+        """
+        Get a sequence of positions (of size windows) from the dataset at index idx.
+        
+        Returns:
+            Array of shape (num_particles_max, input_seq_length + 1, dim). Along axis=1
+                the position sequence (length input_seq_length) and the last position to
+                compute the target acceleration.
+        """
         return self.getter(idx)
 
     def __len__(self):
@@ -275,7 +283,7 @@ class TGV2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_TGV_2500_10kevery100",
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -283,7 +291,7 @@ class TGV2D(H5Dataset):
             dataset_path,
             name="tgv2d",
             input_seq_length=input_seq_length,
-            n_rollout_steps=n_rollout_steps,
+            extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
         )
 
@@ -296,7 +304,7 @@ class TGV3D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/3D_TGV_8000_10kevery100",
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -304,7 +312,7 @@ class TGV3D(H5Dataset):
             dataset_path,
             name="tgv3d",
             input_seq_length=input_seq_length,
-            n_rollout_steps=n_rollout_steps,
+            extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
         )
 
@@ -317,7 +325,7 @@ class RPF2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_RPF_3200_20kevery100",
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         def external_force_fn(position):
@@ -332,7 +340,7 @@ class RPF2D(H5Dataset):
             dataset_path,
             name="rpf2d",
             input_seq_length=input_seq_length,
-            n_rollout_steps=n_rollout_steps,
+            extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
             external_force_fn=external_force_fn,
         )
@@ -346,7 +354,7 @@ class RPF3D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/3D_RPF_8000_10kevery100",
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         def external_force_fn(position):
@@ -361,7 +369,7 @@ class RPF3D(H5Dataset):
             dataset_path,
             name="rpf3d",
             input_seq_length=input_seq_length,
-            n_rollout_steps=n_rollout_steps,
+            extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
             external_force_fn=external_force_fn,
         )
@@ -375,7 +383,7 @@ class LDC2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_LDC_2500_10kevery100",
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -383,7 +391,7 @@ class LDC2D(H5Dataset):
             dataset_path,
             name="ldc2d",
             input_seq_length=input_seq_length,
-            n_rollout_steps=n_rollout_steps,
+            extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
         )
 
@@ -396,7 +404,7 @@ class LDC3D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/3D_LDC_8160_10kevery100",
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -404,7 +412,7 @@ class LDC3D(H5Dataset):
             dataset_path,
             name="ldc3d",
             input_seq_length=input_seq_length,
-            n_rollout_steps=n_rollout_steps,
+            extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
         )
 
@@ -417,7 +425,7 @@ class DAM2D(H5Dataset):
         split: str,
         dataset_path: str = "datasets/2D_DB_5740_20kevery100",
         input_seq_length: int = 6,
-        n_rollout_steps: int = 0,
+        extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
         super().__init__(
@@ -425,6 +433,6 @@ class DAM2D(H5Dataset):
             dataset_path,
             name="dam2d",
             input_seq_length=input_seq_length,
-            n_rollout_steps=n_rollout_steps,
+            extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
         )

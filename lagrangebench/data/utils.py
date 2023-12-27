@@ -14,9 +14,10 @@ def get_dataset_stats(
     """Return the dataset statistics based on the metadata dictionary.
 
     Args:
-        metadata: Metadata dictionary.
-        is_isotropic_norm: Whether to use isotropic normalization.
-        noise_std: Standard deviation of the noise.
+        metadata: Dataset metadata dictionary.
+        is_isotropic_norm:
+            Whether to shift/scale dimensions equally instead of dimension-wise.
+        noise_std: Standard deviation of the GNS-style noise.
 
     Returns:
         Dictionary with the dataset statistics.

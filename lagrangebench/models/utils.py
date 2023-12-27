@@ -97,11 +97,13 @@ def node_irreps(
     return e3nn.Irreps("+".join(irreps))
 
 
-def build_mlp(latent_size, output_size, num_mp_steps, is_layer_norm=True, **kwds: Dict):
-    """MLP generation helper using Haiku"""
-    assert num_mp_steps >= 1
+def build_mlp(
+    latent_size, output_size, num_hidden_layers, is_layer_norm=True, **kwds: Dict
+):
+    """MLP generation helper using Haiku."""
+    assert num_hidden_layers >= 1
     network = hk.nets.MLP(
-        [latent_size] * (num_mp_steps - 1) + [output_size],
+        [latent_size] * (num_hidden_layers - 1) + [output_size],
         **kwds,
         activate_final=False,
         name="MLP",

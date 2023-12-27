@@ -16,14 +16,14 @@ class defaults:
         step_max: max number of training steps. Default ``1e7``.
         dtype: data type. Default ``jnp.float32``.
         magnitude_features: whether to include velocity magnitudes. Default False.
-        isotropic_norm: whether to use isotropic normalization. Default False.
+        isotropic_norm: whether to normalize dimensions equally. Default False.
         lr_start: initial learning rate. Default 1e-4.
         lr_final: final learning rate (after exponential decay). Default 1e-6.
         lr_decay_steps: number of steps to decay learning rate
         lr_decay_rate: learning rate decay rate. Default 0.1.
         noise_std: standard deviation of the GNS-style noise. Default 1e-4.
         input_seq_length: number of input steps. Default 6.
-        n_rollout_steps: number of rollout steps. -1 means full rollout. Default -1.
+        n_rollout_steps: number of eval rollout steps. -1 is full rollout. Default -1.
         eval_n_trajs: number of trajectories to evaluate. Default 1 trajectory.
         rollout_dir: directory to save rollouts. Default None.
         out_type: type of output. None means no rollout is stored. Default None.
@@ -40,7 +40,7 @@ class defaults:
     step_max: int = 5e5  # max number of training steps
     dtype: jnp.dtype = jnp.float64  # data type for preprocessing
     magnitude_features: bool = False  # whether to include velocity magnitude features
-    isotropic_norm: bool = False  # whether to use isotropic normalization
+    isotropic_norm: bool = False  #  whether to normalize dimensions equally
     num_workers: int = 4  # number of workers for data loading
 
     # learning rate
@@ -53,7 +53,7 @@ class defaults:
 
     # evaluation
     input_seq_length: int = 6  # number of input steps
-    n_rollout_steps: int = -1  # number of rollout steps. -1 means full rollout
+    n_rollout_steps: int = -1  # number of eval rollout steps. -1 is full rollout
     eval_n_trajs: int = 1  # number of trajectories to evaluate
     rollout_dir: str = None  # directory to save rollouts
     out_type: str = "none"  # type of output. None means no rollout is stored
