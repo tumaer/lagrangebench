@@ -123,6 +123,7 @@ def train_or_infer(args: Namespace):
             eval_steps=args.config.eval_steps,
             metrics_stride=args.config.metrics_stride,
             num_workers=args.config.num_workers,
+            batch_size_infer=args.config.batch_size_infer,
         )
         _, _, _ = trainer(
             step_max=args.config.step_max,
@@ -160,6 +161,7 @@ def train_or_infer(args: Namespace):
             n_extrap_steps=args.config.n_extrap_steps,
             seed=args.config.seed,
             metrics_stride=args.config.metrics_stride_infer,
+            batch_size=args.config.batch_size_infer,
         )
 
         split = "test" if args.config.test else "valid"
