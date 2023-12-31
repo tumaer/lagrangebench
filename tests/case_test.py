@@ -28,7 +28,7 @@ class TestCaseBuilder(unittest.TestCase):
         self.case = case_builder(
             box,
             self.metadata,
-            input_seq_length=3,  # one past velocity
+            input_seq_length=3,  # two past velocities
             isotropic_norm=False,
             noise_std=0.0,
             external_force_fn=None,
@@ -103,7 +103,7 @@ class TestCaseBuilder(unittest.TestCase):
                 features["vel_hist"],
                 jnp.array(
                     [
-                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],  # particle 1, two past vels.
                         [0.2, 0.0, 0.0, 0.2, 0.0, 0.0],
                         [0.0, 0.0, 0.0, 0.1, 0.0, 0.0],
                     ]
@@ -155,13 +155,7 @@ class TestCaseBuilder(unittest.TestCase):
         self.assertTrue(
             jnp.isclose(
                 target_dict["acc"],
-                jnp.array(
-                    [
-                        [0.0, 0.0, 0.0],
-                        [0.0, 0.0, 0.0],
-                        [0.1, 0.0, 0.0],
-                    ]
-                ),
+                jnp.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.1, 0.0, 0.0]]),
                 atol=1e-07,
             ).all(),
             "Wrong target acceleration at preprocess",

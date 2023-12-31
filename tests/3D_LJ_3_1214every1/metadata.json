@@ -1,0 +1,53 @@
+{
+    "solver": "JAXMD",
+    "dim": 3,
+    "dx": 1.4,
+    "dt": 0.005,
+    "t_end": 10.0,
+    "sequence_length_train": 1214,
+    "num_trajs_train": 1,
+    "sequence_length_test": 405,
+    "num_trajs_test": 1,
+    "num_particles_max": 3,
+    "periodic_boundary_conditions": [
+        true,
+        true,
+        true
+    ],
+    "bounds": [
+        [
+            0.0,
+            5.0
+        ],
+        [
+            0.0,
+            5.0
+        ],
+        [
+            0.0,
+            5.0
+        ]
+    ],
+    "default_connectivity_radius": 3.0,
+    "vel_mean": [
+        -5.573862482677328e-10,
+        4.917874996124283e-10,
+        -1.3441651125489784e-09
+    ],
+    "vel_std": [
+        0.006350979674607515,
+        0.005811989773064852,
+        0.003586509730666876
+    ],
+    "acc_mean": [
+        -3.2785833076198756e-11,
+        -6.557166615239751e-11,
+        0.0
+    ],
+    "acc_std": [
+        0.0011505373986437917,
+        0.0005201193853281438,
+        0.00039340186049230397
+    ],
+    "description": "System of 3 Lennard-Jones particles in a periodic 3D box simulated with JAX-MD. Can be used to test the preprocessing and rollout utilities."
+}
