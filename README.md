@@ -39,7 +39,7 @@ pip install --upgrade jax[cuda12_pip]==0.4.20 -f https://storage.googleapis.com/
 ```
 
 ### MacOS
-Currently, only the CPU installation works. You will need to change a few small things to get it going: 
+Currently, only the CPU installation works. You will need to change a few small things to get it going:
 - Clone installation: in `pyproject.toml` change the torch version from `2.1.0+cpu` to `2.1.0`. Then, remove the `poetry.lock` file and run `poetry install --only main`.
 - Configs: You will need to set `f64: False` and `num_workers: 0` in the `configs/` files.
 
@@ -47,10 +47,10 @@ Although the current [`jax-metal==0.0.5` library](https://pypi.org/project/jax-m
 
 ## Usage
 ### Standalone benchmark library
-A general tutorial is provided in the example notebook "Training GNS on the 2D Taylor Green Vortex" under `./notebooks/tutorial.ipynb` on the [LagrangeBench repository](https://github.com/tumaer/lagrangebench). The notebook covers the basics of LagrangeBench, such as loading a dataset, setting up a case, training a model from scratch and evaluating it's performance.
+A general tutorial is provided in the example notebook "Training GNS on the 2D Taylor Green Vortex" under `./notebooks/tutorial.ipynb` on the [LagrangeBench repository](https://github.com/tumaer/lagrangebench). The notebook covers the basics of LagrangeBench, such as loading a dataset, setting up a case, training a model from scratch and evaluating its performance.
 
 ### Running in a local clone (`main.py`)
-Alternatively, experiments can also be set up with `main.py`, based around extensive YAML config files and cli arguments (check [`configs/`](configs/)). By default, the arguments have priority as: 1) passed cli arguments, 2) YAML config and 3) [`defaults.py`](lagrangebench/defaults.py) (`lagrangebench` defaults).
+Alternatively, experiments can also be set up with `main.py`, based on extensive YAML config files and cli arguments (check [`configs/`](configs/)). By default, the arguments have priority as: 1) passed cli arguments, 2) YAML config and 3) [`defaults.py`](lagrangebench/defaults.py) (`lagrangebench` defaults).
 
 When loading a saved model with `--model_dir` the config from the checkpoint is automatically loaded and training is restarted. For more details check the [`experiments/`](experiments/) directory and the [`run.py`](experiments/run.py) file.
 
@@ -94,8 +94,8 @@ The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https
 
 
 ### Notebooks
-Whe provide three notebooks that show LagrangeBench functionalities, namely:
-- [`tutorial.ipynb`](notebooks/tutorial.ipynb) with a general overview of LagrangeBench library, with trainin and evaluation of a simple GNS model,
+We provide three notebooks that show LagrangeBench functionalities, namely:
+- [`tutorial.ipynb`](notebooks/tutorial.ipynb) with a general overview of LagrangeBench library, with training and evaluation of a simple GNS model,
 - [`datasets.ipynb`](notebooks/datasets.ipynb) with more details and visualizations on the datasets, and
 - [`gns_data.ipynb`](notebooks/gns_data.ipynb) showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
 

@@ -45,7 +45,7 @@ class MetricsComputer:
             metadata: Metadata of the dataset.
             loss_ranges: List of horizon lengths to compute the loss for.
             input_seq_length: Length of the input sequence.
-            stride: Rollout subsample frequency for Sinkhorn.
+            stride: Rollout subsample frequency for e_kin and sinkhorn.
             ot_backend: Backend for sinkhorn computation. "ott" or "pot".
         """
         if active_metrics is None:

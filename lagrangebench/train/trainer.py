@@ -113,6 +113,7 @@ def Trainer(
     eval_steps: int = defaults.eval_steps,
     metrics_stride: int = defaults.metrics_stride,
     num_workers: int = defaults.num_workers,
+    batch_size_infer: int = defaults.batch_size_infer,
 ) -> Callable:
     """
     Builds a function that automates model training and evaluation.
@@ -146,6 +147,9 @@ def Trainer(
         out_type: Output type.
         log_steps: Wandb/screen logging frequency.
         eval_steps: Evaluation and checkpointing frequency.
+        metrics_stride: stride for e_kin and sinkhorn.
+        num_workers: number of workers for data loading.
+        batch_size_infer: batch size for validation/testing.
 
     Returns:
         Configured training function.
@@ -169,7 +173,7 @@ def Trainer(
     )
     loader_valid = DataLoader(
         dataset=data_valid,
-        batch_size=1,
+        batch_size=batch_size_infer,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
         generator=generator,

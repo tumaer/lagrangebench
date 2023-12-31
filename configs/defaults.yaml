@@ -114,3 +114,5 @@ metrics_infer:
 metrics_stride_infer: 1
 out_type_infer: pkl
 eval_n_trajs_infer: -1
+# batch size for validation/testing
+batch_size_infer: 2
