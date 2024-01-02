@@ -31,8 +31,10 @@ torch = {version = "2.1.0+cpu", source = "torchcpu"}
 wget = "^3.2"
 
 [tool.poetry.group.dev.dependencies]
+# mypy = ">=1.8.0" - consider in the future
 pre-commit = ">=3.3.1"
 pytest = ">=7.3.1"
+pytest-cov = ">=4.1.0"
 ruff = "0.1.8"
 ipykernel = ">=6.25.1"
 
@@ -62,6 +64,13 @@ select = [
     "SIM", # flake8-simplify
     "I", # isort
     # "D", # pydocstyle - consider in the future
+]
+
+[tool.pytest.ini_options]
+testpaths = ["./tests"]
+addopts = "--cov=lagrangebench"
+filterwarnings = [
+    "ignore::DeprecationWarning:^(?!.*lagrangebench).*"
 ]
 
 [build-system]

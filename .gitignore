@@ -19,6 +19,7 @@ venv*/
 rollouts
 profile
 dist
+.coverage
 
 # Sphinx documentation
 docs/_build/
