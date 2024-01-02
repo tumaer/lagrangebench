@@ -3,7 +3,7 @@
 from typing import Callable, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
-from jax import jit, lax, random, vmap
+from jax import Array, jit, lax, vmap
 from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
@@ -15,16 +15,14 @@ from lagrangebench.train.strats import add_gns_noise
 from .features import FeatureDict, TargetDict, physical_feature_builder
 from .partition import neighbor_list
 
-TrainCaseOut = Tuple[random.KeyArray, FeatureDict, TargetDict, NeighborList]
+TrainCaseOut = Tuple[Array, FeatureDict, TargetDict, NeighborList]
 EvalCaseOut = Tuple[FeatureDict, NeighborList]
 SampleIn = Tuple[jnp.ndarray, jnp.ndarray]
 
-AllocateFn = Callable[[random.KeyArray, SampleIn, float, int], TrainCaseOut]
+AllocateFn = Callable[[Array, SampleIn, float, int], TrainCaseOut]
 AllocateEvalFn = Callable[[SampleIn], EvalCaseOut]
 
-PreprocessFn = Callable[
-    [random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut
-]
+PreprocessFn = Callable[[Array, SampleIn, float, NeighborList, int], TrainCaseOut]
 PreprocessEvalFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
 IntegrateFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
