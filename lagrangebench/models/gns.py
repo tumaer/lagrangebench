@@ -84,7 +84,10 @@ class GNS(BaseModel):
         """Sequence of Graph Network blocks."""
 
         def update_edge_features(
-            edge_features, sender_node_features, receiver_node_features, _  # globals_
+            edge_features,
+            sender_node_features,
+            receiver_node_features,
+            _,  # globals_
         ):
             update_fn = build_mlp(
                 self._latent_size, self._latent_size, self._blocks_per_step

@@ -11,7 +11,6 @@ import jraph
 import optax
 from jax import vmap
 from torch.utils.data import DataLoader
-from wandb.wandb_run import Run
 
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
@@ -28,6 +27,7 @@ from lagrangebench.utils import (
     save_haiku,
     set_seed,
 )
+from wandb.wandb_run import Run
 
 from .strats import push_forward_build, push_forward_sample_steps
 
@@ -190,10 +190,7 @@ def Trainer(
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
 
     # loss config
-    if loss_weight is None:
-        loss_weight = LossConfig()
-    else:
-        loss_weight = LossConfig(**loss_weight)
+    loss_weight = LossConfig() if loss_weight is None else LossConfig(**loss_weight)
     # pushforward config
     if pushforward is None:
         pushforward = PushforwardConfig()
