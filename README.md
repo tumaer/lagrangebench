@@ -1,7 +1,30 @@
-# LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite
+<div align="center">
 
-[![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs&link=https%3A%2F%2Flagrangebench.readthedocs.io%2Fen%2Flatest%2Findex.html)](https://lagrangebench.readthedocs.io/en/latest/index.html)
-[![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv&link=https%3A%2F%2Farxiv.org%2Fabs%2F2309.16342)](https://arxiv.org/abs/2309.16342)
+# LagrangeBench
+### A Lagrangian Fluid Mechanics Benchmarking Suite
+
+<!-- [![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs)](https://lagrangebench.readthedocs.io/en/latest/index.html)
+[![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv)](https://arxiv.org/abs/2309.16342)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Downloads](https://static.pepy.tech/badge/lagrangebench)](https://pypi.org/project/lagrangebench/) -->
+
+[![Paper](http://img.shields.io/badge/paper-arxiv.2309.16342-B31B1B.svg)](https://arxiv.org/abs/2309.16342)
+[![Docs](https://img.shields.io/readthedocs/lagrangebench/latest)](https://lagrangebench.readthedocs.io/en/latest/index.html)
+[![Unit Tests](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml)
+[![Ruff Linting](https://github.com/tumaer/lagrangebench/actions/workflows/ruff.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/ruff.yml)
+[![PyPI - Version](https://img.shields.io/pypi/v/lagrangebench)](https://pypi.org/project/lagrangebench/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/lagrangebench)](https://pypi.org/project/lagrangebench/)
+[![License](https://img.shields.io/pypi/l/lagrangebench)](https://github.com/tumaer/lagrangebench/blob/main/LICENSE)
+
+</div>
+
+## Table of Contents
+
+1. [**Installation**](#installation)
+1. [**Usage**](#usage)
+1. [**Datasets**](#datasets)
+1. [**Directory Structure**](#directory-structure)
+1. [**Citation**](#citation)
 
 ## Installation
 ### Standalone library
