@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="LagrangeBench Logo" src="https://see.fontimg.com/api/renderfont4/J24x/eyJyIjoiZnMiLCJoIjoxOTYsInciOjIwMDAsImZzIjo5OCwiZmdjIjoiIzI0N0VDOSIsImJnYyI6IiNGRkZGRkYiLCJ0IjoxfQ/TGFncmFuZ2VCZW5jaA/jd-led7-regular.png" width=250pt>
+<img alt="LagrangeBench Logo" src="https://see.fontimg.com/api/renderfont4/J24x/eyJyIjoiZnMiLCJoIjoxOTYsInciOjIwMDAsImZzIjo5OCwiZmdjIjoiIzI0N0VDOSIsImJnYyI6IiNGRkZGRkYiLCJ0IjoxfQ/TGFncmFuZ2VCZW5jaA/jd-led7-regular.png" width=350pt>
 
 ### A Lagrangian Fluid Mechanics Benchmarking Suite
 
