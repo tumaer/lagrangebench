@@ -1,6 +1,7 @@
 <div align="center">
 
-# LagrangeBench
+<img alt="LagrangeBench Logo" src="https://see.fontimg.com/api/renderfont4/J24x/eyJyIjoiZnMiLCJoIjoxOTYsInciOjIwMDAsImZzIjo5OCwiZmdjIjoiIzI0N0VDOSIsImJnYyI6IiNGRkZGRkYiLCJ0IjoxfQ/TGFncmFuZ2VCZW5jaA/jd-led7-regular.png" width=250pt>
+
 ### A Lagrangian Fluid Mechanics Benchmarking Suite
 
 <!-- [![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs)](https://lagrangebench.readthedocs.io/en/latest/index.html)
