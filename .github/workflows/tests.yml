@@ -31,12 +31,13 @@ jobs:
     - name: Install dependencies
       run: |
         poetry install
-    - name: Run pytest
+    - name: Run pytest and generate coverage report
       run: |
-        .venv/bin/pytest
-    - name: Upload coverage reports to Codecov
+        .venv/bin/pytest --cov-report=xml
+    - name: Upload coverage report to Codecov
       uses: codecov/codecov-action@v3
-      env:
-        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.xml
+        flags: unittests
         verbose: true
