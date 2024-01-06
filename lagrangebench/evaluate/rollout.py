@@ -221,6 +221,11 @@ def eval_rollout(
     metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
 
     for i, traj_batch_i in enumerate(loader_eval):
+        # if n_trajs is not a multiple of batch_size, we slice from the last batch
+        n_traj_left = n_trajs - i * batch_size
+        if n_traj_left < batch_size:
+            traj_batch_i = jax.tree_map(lambda x: x[:n_traj_left], traj_batch_i)
+
         # numpy to jax
         traj_batch_i = jax.tree_map(lambda x: jnp.array(x), traj_batch_i)
         # (pos_input_batch, particle_type_batch) = traj_batch_i
