@@ -11,7 +11,7 @@
 [![Ruff Linting](https://github.com/tumaer/lagrangebench/actions/workflows/ruff.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/ruff.yml)
 [![Python Versions](https://img.shields.io/pypi/pyversions/lagrangebench)](https://pypi.org/project/lagrangebench/) -->
 
-[![Paper](http://img.shields.io/badge/paper-arxiv.2309.16342-B31B1B.svg)](https://arxiv.org/abs/2309.16342) 
+[![Paper](http://img.shields.io/badge/paper-arxiv.2309.16342-B31B1B.svg)](https://arxiv.org/abs/2309.16342)
 [![Docs](https://img.shields.io/readthedocs/lagrangebench/latest)](https://lagrangebench.readthedocs.io/en/latest/index.html)
 [![PyPI - Version](https://img.shields.io/pypi/v/lagrangebench)](https://pypi.org/project/lagrangebench/)
 [![License](https://img.shields.io/pypi/l/lagrangebench)](https://github.com/tumaer/lagrangebench/blob/main/LICENSE)
