@@ -14,7 +14,10 @@ noise_std: 0.0000
 input_seq_length: 2 #to obtain 1 velocity 
 loss_weight:
   noise: 1.0
-log_step: 1
+log_steps: 1
+eval_steps: 4
+step_max: 9 #for debugging only
+eval_n_trajs_infer: 50
 
 is_pde_refiner: True
 num_refinement_steps: 4
