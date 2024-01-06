@@ -245,7 +245,8 @@ def eval_rollout(
             n_extrap_steps=n_extrap_steps,
         )
 
-        for j in range(batch_size):
+        current_batch_size = traj_batch_i[0].shape[0]
+        for j in range(current_batch_size):
             # write metrics to output dictionary
             ind = i * batch_size + j
             eval_metrics[f"rollout_{ind}"] = broadcast_from_batch(metrics_batch, j)
@@ -254,7 +255,7 @@ def eval_rollout(
             # (batch, nodes, t, dim) -> (batch, t, nodes, dim)
             pos_input_batch = traj_batch_i[0].transpose(0, 2, 1, 3)
 
-            for j in range(batch_size):  # write every trajectory to file
+            for j in range(current_batch_size):  # write every trajectory to file
                 pos_input = pos_input_batch[j]
                 example_rollout = example_rollout_batch[j]
 
