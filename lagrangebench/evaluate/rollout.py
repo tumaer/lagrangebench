@@ -74,13 +74,14 @@ def _forward_eval(
 
 
 def eval_batched_rollout(
-    model_apply: Callable,
+    forward_eval_vmap: Callable,
+    preprocess_eval_vmap: Callable,
     case,
     params: hk.Params,
     state: hk.State,
     traj_batch_i: Tuple[jnp.ndarray, jnp.ndarray],
     neighbors: partition.NeighborList,
-    metrics_computer: MetricsComputer,
+    metrics_computer_vmap: Callable,
     n_rollout_steps: int,
     t_window: int,
     n_extrap_steps: int = 0,
@@ -88,13 +89,13 @@ def eval_batched_rollout(
     """Compute the rollout on a single trajectory.
 
     Args:
-        model_apply: Model function.
+        forward_eval_vmap: Model function.
         case: CaseSetupFn class.
         params: Haiku params.
         state: Haiku state.
         traj_batch_i: Trajectory to evaluate.
         neighbors: Neighbor list.
-        metrics_computer: MetricsComputer with the desired metrics.
+        metrics_computer: Vectorized MetricsComputer with the desired metrics.
         n_rollout_steps: Number of rollout steps.
         t_window: Length of the input sequence.
         n_extrap_steps: Number of extrapolation steps (beyond the ground truth rollout).
@@ -104,7 +105,8 @@ def eval_batched_rollout(
     """
     # particle type is treated as a static property defined by state at t=0
     pos_input_batch, particle_type_batch = traj_batch_i
-    batch_size, n_nodes_max, _, dim = pos_input_batch.shape
+    # current_batch_size might be < eval_batch_size if the last batch is not full
+    current_batch_size, n_nodes_max, _, dim = pos_input_batch.shape
 
     # if n_rollout_steps set to -1, use the whole trajectory
     if n_rollout_steps == -1:
@@ -115,16 +117,8 @@ def eval_batched_rollout(
     traj_len = n_rollout_steps + n_extrap_steps
     target_positions_batch = pos_input_batch[:, :, t_window : t_window + traj_len]
 
-    predictions_batch = jnp.zeros((batch_size, traj_len, n_nodes_max, dim))
-    neighbors_batch = broadcast_to_batch(neighbors, batch_size)
-    preprocess_eval_vmap = vmap(case.preprocess_eval, in_axes=(0, 0))
-
-    forward_eval = partial(
-        _forward_eval,
-        model_apply=model_apply,
-        case_integrate=case.integrate,
-    )
-    forward_eval_vmap = vmap(forward_eval, in_axes=(None, None, 0, 0, 0))
+    predictions_batch = jnp.zeros((current_batch_size, traj_len, n_nodes_max, dim))
+    neighbors_batch = broadcast_to_batch(neighbors, current_batch_size)
 
     step = 0
     while step < n_rollout_steps + n_extrap_steps:
@@ -148,11 +142,10 @@ def eval_batched_rollout(
             print(
                 f"(eval) From {neighbors_batch.idx[ind].shape} to {nbrs_temp.idx.shape}"
             )
-            neighbors_batch = broadcast_to_batch(nbrs_temp, batch_size)
+            neighbors_batch = broadcast_to_batch(nbrs_temp, current_batch_size)
 
             # To run the loop N times even if sometimes
             # did_buffer_overflow > 0 we directly return to the beginning
-
             continue
 
         # 3. run forward model
@@ -173,7 +166,7 @@ def eval_batched_rollout(
 
     # (batch, n_nodes, time, dim) -> (batch, time, n_nodes, dim)
     target_positions_batch = target_positions_batch.transpose(0, 2, 1, 3)
-    metrics_batch = vmap(metrics_computer)(predictions_batch, target_positions_batch)
+    metrics_batch = metrics_computer_vmap(predictions_batch, target_positions_batch)
 
     return (predictions_batch, metrics_batch, broadcast_from_batch(neighbors_batch, 0))
 
@@ -218,6 +211,15 @@ def eval_rollout(
     if rollout_dir is not None:
         os.makedirs(rollout_dir, exist_ok=True)
 
+    forward_eval = partial(
+        _forward_eval,
+        model_apply=model_apply,
+        case_integrate=case.integrate,
+    )
+    forward_eval_vmap = vmap(forward_eval, in_axes=(None, None, 0, 0, 0))
+    preprocess_eval_vmap = vmap(case.preprocess_eval, in_axes=(0, 0))
+    metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
+
     for i, traj_batch_i in enumerate(loader_eval):
         # numpy to jax
         traj_batch_i = jax.tree_map(lambda x: jnp.array(x), traj_batch_i)
@@ -225,13 +227,14 @@ def eval_rollout(
         # pos_input_batch.shape = (batch, num_particles, seq_length, dim)
 
         example_rollout_batch, metrics_batch, neighbors = eval_batched_rollout(
-            model_apply=model_apply,
+            forward_eval_vmap=forward_eval_vmap,
+            preprocess_eval_vmap=preprocess_eval_vmap,
             case=case,
             params=params,
             state=state,
             traj_batch_i=traj_batch_i,  # (batch, nodes, t, dim)
             neighbors=neighbors,
-            metrics_computer=metrics_computer,
+            metrics_computer_vmap=metrics_computer_vmap,
             n_rollout_steps=n_rollout_steps,
             t_window=t_window,
             n_extrap_steps=n_extrap_steps,
