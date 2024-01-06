@@ -1,7 +1,8 @@
 <div align="center">
 
+<picture>
 <img alt="LagrangeBench Logo: Lagrangian Fluid Mechanics Benchmarking Suite" src="https://svgshare.com/i/11hG.svg" width=550pt>
-
+</picture>
 <!-- [![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs)](https://lagrangebench.readthedocs.io/en/latest/index.html)
 [![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv)](https://arxiv.org/abs/2309.16342)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
