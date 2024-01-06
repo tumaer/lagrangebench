@@ -12,7 +12,7 @@ import yaml
 
 import wandb
 from experiments.utils import setup_data, setup_model
-from lagrangebench import Trainer, infer
+from lagrangebench import Trainer, infer, infer_pde_refiner
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
 from lagrangebench.utils import PushforwardConfig
@@ -156,20 +156,45 @@ def train_or_infer(args: Namespace):
                 args.config.eval_n_trajs_infer = args.config.eval_n_trajs
 
         assert args.config.model_dir, "model_dir must be specified for inference."
-        metrics = infer(  #inside lagrangebench/evaluate/rollout.py
-            model,
-            case,
-            data_eval, #data_eval extracted from setup_data() in experiments/utils.py
-            load_checkpoint=args.config.model_dir, #check point directory
-            metrics=args.config.metrics_infer,  #mse, sink_horn and e_kin
-            rollout_dir=args.config.rollout_dir,
-            eval_n_trajs=args.config.eval_n_trajs_infer, #=-1
-            n_rollout_steps=args.config.n_rollout_steps, #20
-            out_type=args.config.out_type_infer, # out_type = 'pkl'
-            n_extrap_steps=args.config.n_extrap_steps, #=0
-            seed=args.config.seed,
-            metrics_stride=args.config.metrics_stride_infer, #=1
-        )
+        
+        if args.config.is_pde_refiner:
+            
+            metrics = infer_pde_refiner(
+                model,
+                case,
+                data_eval, #data_eval extracted from setup_data() in experiments/utils.py
+                load_checkpoint=args.config.model_dir, #check point directory
+                metrics=args.config.metrics_infer,  #mse, sink_horn and e_kin
+                rollout_dir=args.config.rollout_dir,
+                eval_n_trajs=args.config.eval_n_trajs_infer, #=454
+                n_rollout_steps=args.config.n_rollout_steps, #20
+                out_type=args.config.out_type_infer, # out_type = 'pkl'
+                n_extrap_steps=args.config.n_extrap_steps, #=0
+                seed=args.config.seed,
+                metrics_stride=args.config.metrics_stride_infer, #=1
+                num_refinement_steps = args.config.num_refinement_steps,
+                sigma_min = args.config.sigma_min,
+            )
+        
+        
+        
+        
+        
+        else:
+            metrics = infer(  #inside lagrangebench/evaluate/rollout.py
+                model,
+                case,
+                data_eval, #data_eval extracted from setup_data() in experiments/utils.py
+                load_checkpoint=args.config.model_dir, #check point directory
+                metrics=args.config.metrics_infer,  #mse, sink_horn and e_kin
+                rollout_dir=args.config.rollout_dir,
+                eval_n_trajs=args.config.eval_n_trajs_infer, #=-1
+                n_rollout_steps=args.config.n_rollout_steps, #20
+                out_type=args.config.out_type_infer, # out_type = 'pkl'
+                n_extrap_steps=args.config.n_extrap_steps, #=0
+                seed=args.config.seed,
+                metrics_stride=args.config.metrics_stride_infer, #=1
+            )
 
         split = "test" if args.config.test else "valid"
         print(f"Metrics of {args.config.model_dir} on {split} split:")

@@ -90,7 +90,7 @@ class H5Dataset(Dataset):
 
         if name is None:
             self.name = get_dataset_name_from_path(dataset_path)
-        if not osp.exists(dataset_path):
+        if not osp.exists(dataset_path): #download the dataset if it is not present
             dataset_path = self.download(self.name, dataset_path)
 
         assert split in ["train", "valid", "test"]
@@ -114,7 +114,7 @@ class H5Dataset(Dataset):
             self.traj_keys = list(f.keys())
 
             # (num_steps, num_particles, dim) = f["00000/position"].shape
-            self.sequence_length = f["00000/position"].shape[0]
+            self.sequence_length = f["00000/position"].shape[0]   #20001 for RPF2D
 
         if split == "train":
             # During training, the first input_seq_length steps can only be used as
@@ -122,13 +122,13 @@ class H5Dataset(Dataset):
             # pushforward, then we need to provide n_rollout_steps more steps
             # from the end of a trajectory. Thus, the number of training samples per
             # trajectory becomes:
-            self.subseq_length = input_seq_length + 1 + n_rollout_steps
-            samples_per_traj = self.sequence_length - self.subseq_length + 1
+            self.subseq_length = input_seq_length + 1 + n_rollout_steps #7 (6+1+0) if there is no pushforward i.e. n_rollout_steps=0
+            samples_per_traj = self.sequence_length - self.subseq_length + 1 #(20001-7+1=19995)
 
-            keylens = jnp.array([samples_per_traj for _ in range(len(self.traj_keys))])
-            self._keylen_cumulative = jnp.cumsum(keylens).tolist()
+            keylens = jnp.array([samples_per_traj for _ in range(len(self.traj_keys))]) #Array([19995])
+            self._keylen_cumulative = jnp.cumsum(keylens).tolist() #[19995]
 
-            self.num_samples = sum(keylens)
+            self.num_samples = sum(keylens) #Array(19995, dtype=int64)
             self.getter = self.get_window
 
         else:

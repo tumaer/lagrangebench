@@ -17,7 +17,7 @@ import time
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.defaults import defaults
-from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout
+from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout, eval_rollout_pde_refiner
 from lagrangebench.utils import (
     LossConfig,
     PushforwardConfig,
@@ -256,10 +256,10 @@ def Trainer(
         raw_sample = (pos_input_and_target[0], particle_type[0]) #creates an array by concatenating pos_input_and_target[0] and particle_type[0]
         
         if is_pde_refiner:
-            seed = int(time.time()) #to ensure the seed is different for every training step and we get a different k
-            k  = random.randint(random.PRNGKey(seed), (), 0, num_refinement_steps)
+            key, subkey = jax.random.split(base_key, 2)
+            k  = random.randint(subkey, (), 0, num_refinement_steps)
             is_k_zero = jnp.where(k==0, True, False)
-            key, features, _, neighbors = case.allocate_pde_refiner(base_key, raw_sample, k,is_k_zero,sigma_min,num_refinement_steps)
+            key, features, _, neighbors = case.allocate_pde_refiner(key, raw_sample, k,is_k_zero,sigma_min,num_refinement_steps)
             preprocess_vmap = jax.vmap(case.preprocess_pde_refiner, in_axes=(0, 0, None, 0, None, None, None, None, None))
             
         else:
@@ -313,10 +313,10 @@ def Trainer(
                 
                 #need to modify for BATCHED training
                 if is_pde_refiner:
-                    seed = int(time.time()) #to ensure the seed is different for every training step and we get a different k
-                    k  = random.randint(random.PRNGKey(seed), (), 0, num_refinement_steps)
-                    is_k_zero = True if k == 0 else False
-
+                    key , subkey = jax.random.split(key, 2) #upon splitting, both key and subkey are different from the original key which is passed in the argument
+                    k  = random.randint(subkey, (), 0, num_refinement_steps)
+                    is_k_zero = True if k == 0 else False 
+                    #in this case, preprocess_vmap() is case.preprocess_pde_refiner
                     keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
                         keys,
                         raw_batch,
@@ -387,19 +387,41 @@ def Trainer(
 
                 if step % eval_steps == 0 and step > 0: #evaluation(cross validation every 10,000 steps)
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
-                    eval_metrics = eval_rollout(
-                        case=case,
-                        metrics_computer=metrics_computer,
-                        model_apply=model_apply,
-                        params=params,
-                        state=state,
-                        neighbors=nbrs,
-                        loader_eval=loader_eval,
-                        n_rollout_steps=n_rollout_steps,
-                        n_trajs=eval_n_trajs,
-                        rollout_dir=rollout_dir,
-                        out_type=out_type,
-                    )
+                    
+
+                    #key needs to be changed for BATCHED training
+                    if is_pde_refiner:
+                        eval_metrics = eval_rollout_pde_refiner(
+                            case=case,
+                            metrics_computer=metrics_computer,
+                            model_apply=model_apply,
+                            params=params,
+                            state=state,
+                            neighbors=nbrs,
+                            loader_eval=loader_eval,
+                            n_rollout_steps=n_rollout_steps,
+                            n_trajs=eval_n_trajs,
+                            rollout_dir=rollout_dir,
+                            key=key,        
+                            num_refinement_steps=num_refinement_steps,
+                            sigma_min=sigma_min,
+                            out_type=out_type,
+                        )
+
+                    else:
+                        eval_metrics = eval_rollout(
+                            case=case,
+                            metrics_computer=metrics_computer,
+                            model_apply=model_apply,
+                            params=params,
+                            state=state,
+                            neighbors=nbrs,
+                            loader_eval=loader_eval,
+                            n_rollout_steps=n_rollout_steps,
+                            n_trajs=eval_n_trajs,
+                            rollout_dir=rollout_dir,
+                            out_type=out_type,
+                        )
 
                     metrics = averaged_metrics(eval_metrics)
                     metadata_ckp = {

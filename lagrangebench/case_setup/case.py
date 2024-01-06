@@ -173,7 +173,7 @@ def case_builder(
             key, noise_std = kwargs["key"], kwargs["noise_std"]
             unroll_steps = kwargs["unroll_steps"]
             if pos_input.shape[1] > 1:  #pos_input.shape[1] = 7
-                random_seed = np.random.randint(0, 2**32 - 1)  # Use a 32-bit integer as the seed
+                #random_seed = np.random.randint(0, 2**32 - 1)  # Use a 32-bit integer as the seed
                 # Initialize a PRNG key using the random seed
                 #key2 = random.PRNGKey(random_seed)
                 #noise_std = random.choice(key2,jnp.array([0.001,0.0003,0.0001]))
@@ -182,7 +182,7 @@ def case_builder(
                 )
 
         # allocate the neighbor list
-        most_recent_position = pos_input[:, input_seq_length - 1]  #input_seq_length = 6
+        most_recent_position = pos_input[:, input_seq_length - 1]  #input_seq_length = 6. '-1' is because the index starts from 0
         num_particles = (particle_type != -1).sum()
         if is_allocate:
             neighbors = neighbor_fn.allocate(most_recent_position, num_particles=num_particles)
@@ -203,11 +203,6 @@ def case_builder(
             #target_dict has the target position, velocity and acceleration i.e. we can extract u(t) from this dictionary
             target_dict = _compute_target(lax.dynamic_slice(pos_input, slice_begin, slice_size))
             #output of lax.dynamic_slice(pos_input, slice_begin, slice_size) = (3200,3,2), the last three timestep data
-            
-            #REMOVE LATER
-            #seed = int(time.time()) 
-            #k  = random.randint(random.PRNGKey(seed), (), 0, 4)
-            #features['k'] = jnp.tile(k, (features['vel_hist'].shape[0],)) #shape = (3200,1)
             
             return key, features, target_dict, neighbors #target_dict returned only for training and not for CV or testing
         
@@ -264,7 +259,8 @@ def case_builder(
             k = kwargs["k"]
             is_k_zero = kwargs["is_k_zero"]
             
-            seed = int(time.time())
+            key, subkey = random.split(key, 2)
+            
             min_noise_std = kwargs['sigma_min'] 
             max_refinement_steps=kwargs["num_refinement_steps"]
             
@@ -282,7 +278,7 @@ def case_builder(
 
             else:
                 noise_std = min_noise_std**(k/max_refinement_steps)
-                noise = random.normal(random.PRNGKey(seed), features['vel_hist'].shape)   #sampled from gaussian distribution
+                noise = random.normal(subkey, features['vel_hist'].shape)   #sampled from gaussian distribution
                 features['u_t_noised'] = target_dict['vel'] + noise_std*noise
                 target_dict['noise'] = noise #could also be noise*noise_std
             
@@ -311,7 +307,7 @@ def case_builder(
     
 
     @jit
-    def integrate_fn(normalized_in, position_sequence): #Semi Implicit Euler Integrator used in rollout.py as csae.integrate
+    def integrate_fn(normalized_in, position_sequence): #Semi Implicit Euler Integrator used in rollout.py as case.integrate
         """Euler integrator to get position shift."""
         assert any([key in normalized_in for key in ["pos", "vel", "acc"]])
 

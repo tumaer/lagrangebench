@@ -28,8 +28,8 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     data_train = H5Dataset(
         "train",
         dataset_path=args.config.data_dir,
-        input_seq_length=args.config.input_seq_length,
-        n_rollout_steps=args.config.pushforward["unrolls"][-1],
+        input_seq_length=args.config.input_seq_length,#6 
+        n_rollout_steps=args.config.pushforward["unrolls"][-1],#0
         nl_backend=args.config.neighbor_list_backend,
     )
     data_eval = H5Dataset(
