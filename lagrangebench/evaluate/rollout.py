@@ -263,7 +263,8 @@ def eval_rollout(
                 example_full = jnp.concatenate([initial_positions, example_rollout])
                 example_rollout = {
                     "predicted_rollout": example_full,  # (t, nodes, dim)
-                    "ground_truth_rollout": pos_input,  # (t, nodes, dim)
+                    "ground_truth_rollout": pos_input,  # (t, nodes, dim),
+                    "particle_type": traj_batch_i[1][j],  # (nodes,)
                 }
 
                 file_prefix = f"{rollout_dir}/rollout_{i*batch_size+j}"
@@ -272,13 +273,13 @@ def eval_rollout(
                         # predictions
                         state_vtk = {
                             "r": example_rollout["predicted_rollout"][k],
-                            "tag": traj_batch_i[1][j],
+                            "tag": example_rollout["particle_type"],
                         }
                         write_vtk(state_vtk, f"{file_prefix}_{k}.vtk")
                         # ground truth reference
                         state_vtk = {
                             "r": example_rollout["ground_truth_rollout"][k],
-                            "tag": traj_batch_i[1][j],
+                            "tag": example_rollout["particle_type"],
                         }
                         write_vtk(state_vtk, f"{file_prefix}_ref_{k}.vtk")
                 if out_type == "pkl":
