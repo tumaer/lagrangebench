@@ -5,20 +5,22 @@ num_mp_steps: 10
 latent_dim: 128
 lr_start: 5.e-4
 
-wandb: False
-wandb_project: test_dump
+wandb: True
+wandb_project: pde_refiner_algo1
 # Change this with your own entity
 wandb_entity: lagrangebench
 
 noise_std: 0.0000
 input_seq_length: 2 #to obtain 1 velocity 
+n_rollout_steps: 20 #needs to be increased 
 loss_weight:
   noise: 1.0
-log_steps: 1
-eval_steps: 4
-step_max: 9 #for debugging only
-eval_n_trajs_infer: 50
+log_steps: 1000
+eval_steps: 10000
+step_max: 500000 
+eval_n_trajs: 50
+eval_n_trajs_infer: -1
 
 is_pde_refiner: True
-num_refinement_steps: 4
-sigma_min: 1.e-3
+num_refinement_steps: 3
+sigma_min: 1.e-5

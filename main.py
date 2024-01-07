@@ -33,4 +33,8 @@ if __name__ == "__main__":
 
     from experiments.run import train_or_infer
 
+    print('Sigma_Min: ', args.config.sigma_min)
+    print('Max_refinement_steps: ', args.config.num_refinement_steps)
+    print('Number of Rollout Steps: ', args.config.n_rollout_steps)
+    
     train_or_infer(args)

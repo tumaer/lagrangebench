@@ -36,6 +36,7 @@
                 "--data_dir=datasets/2D_RPF_3200_20kevery100",
                 "--ckp_dir=ckp/debug_dump",
                 "--gpu=0",  
+                "--sigma_min=2e-7",
             ],
             "name": "Debug PDE_Refiner",
             "type": "python",

@@ -197,6 +197,16 @@ def cli_arguments() -> Dict:
         type=int,
         help="Stride for Sinkhorn and e_kin during inference.",
     )
+    parser.add_argument("--sigma_min", 
+        required=False, 
+        type=float, 
+        help="Minimum noise std for PDE Refiner.")
+    
+    parser.add_argument("--num_refinement_steps", 
+        required=False, 
+        type=int, 
+        help="Number of refinement steps for PDE Refiner.")
+
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 
