@@ -1,5 +1,6 @@
 import unittest
 from argparse import Namespace
+from functools import partial
 
 import haiku as hk
 import jax
@@ -16,7 +17,7 @@ from lagrangebench.case_setup import case_builder
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import get_dataset_stats, numpy_collate
 from lagrangebench.evaluate import MetricsComputer
-from lagrangebench.evaluate.rollout import eval_batched_rollout
+from lagrangebench.evaluate.rollout import _forward_eval, eval_batched_rollout
 from lagrangebench.utils import broadcast_from_batch
 
 
@@ -127,14 +128,24 @@ class TestInferBuilder(unittest.TestCase):
             isl,
         )
 
-        example_rollout_batch, metrics_batch, neighbors = eval_batched_rollout(
+        forward_eval = partial(
+            _forward_eval,
             model_apply=model_apply,
+            case_integrate=self.case.integrate,
+        )
+        forward_eval_vmap = vmap(forward_eval, in_axes=(None, None, 0, 0, 0))
+        preprocess_eval_vmap = vmap(self.case.preprocess_eval, in_axes=(0, 0))
+        metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
+
+        example_rollout_batch, metrics_batch, neighbors = eval_batched_rollout(
+            forward_eval_vmap=forward_eval_vmap,
+            preprocess_eval_vmap=preprocess_eval_vmap,
             case=self.case,
             params=params,
             state=state,
             traj_batch_i=traj_batch_i,
             neighbors=neighbors,
-            metrics_computer=metrics_computer,
+            metrics_computer_vmap=metrics_computer_vmap,
             n_rollout_steps=self.config.n_rollout_steps,
             t_window=isl,
         )
