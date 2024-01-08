@@ -174,7 +174,7 @@ def write_vtk(data_dict, path):
     data_pv.save(path)
 
 
-def set_seed(seed: int) -> Tuple[jax.random.KeyArray, Callable, torch.Generator]:
+def set_seed(seed: int) -> Tuple[jax.Array, Callable, torch.Generator]:
     """Set seeds for jax, random and torch."""
     # first PRNG key
     key = jax.random.PRNGKey(seed)

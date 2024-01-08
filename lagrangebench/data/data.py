@@ -242,7 +242,7 @@ class H5Dataset(Dataset):
     def __getitem__(self, idx: int):
         """
         Get a sequence of positions (of size windows) from the dataset at index idx.
-        
+
         Returns:
             Array of shape (num_particles_max, input_seq_length + 1, dim). Along axis=1
                 the position sequence (length input_seq_length) and the last position to

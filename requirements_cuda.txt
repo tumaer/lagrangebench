@@ -4,7 +4,7 @@
 
 cloudpickle
 dm_haiku>=0.0.10
-e3nn_jax>=0.20.0
+e3nn_jax==0.20.3
 h5py
 jax[cuda12_pip]==0.4.20
 jax_md>=0.2.8
@@ -15,6 +15,6 @@ optax>=0.1.7
 ott-jax>=0.4.2
 pyvista
 PyYAML
-torch>=2.1.0+cpu
+torch==2.1.0+cpu
 wandb
 wget

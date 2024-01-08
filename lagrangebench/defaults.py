@@ -59,6 +59,7 @@ class defaults:
     out_type: str = "none"  # type of output. None means no rollout is stored
     n_extrap_steps: int = 0  # number of extrapolation steps
     metrics_stride: int = 10  # stride for e_kin and sinkhorn
+    batch_size_infer: int = 2  # batch size for validation/testing
 
     # logging
     log_steps: int = 1000  # number of steps between logs

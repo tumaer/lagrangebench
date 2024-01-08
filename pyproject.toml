@@ -3,11 +3,40 @@ name = "lagrangebench"
 version = "0.0.2"
 description = "LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite"
 authors = [
+    "Artur Toshev, Gianluca Galletti <artur.toshev@tum.de>"
+]
+maintainers = [
     "Artur Toshev <artur.toshev@tum.de>",
     "Gianluca Galletti <g.galletti@tum.de>",
 ]
 license = "MIT"
 readme = "README.md"
+homepage = "https://lagrangebench.readthedocs.io/"
+documentation = "https://lagrangebench.readthedocs.io/"
+repository = "https://github.com/tumaer/lagrangebench"
+keywords = [
+    "smoothed-particle-hydrodynamics",
+    "benchmark-suite",
+    "lagrangian-dynamics",
+    "graph-neural-networks",
+    "lagrangian-particles",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Hydrology",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
+]
 
 [tool.poetry.dependencies]
 python = ">=3.9,<=3.11"
@@ -31,10 +60,11 @@ torch = {version = "2.1.0+cpu", source = "torchcpu"}
 wget = "^3.2"
 
 [tool.poetry.group.dev.dependencies]
+# mypy = ">=1.8.0" - consider in the future
 pre-commit = ">=3.3.1"
 pytest = ">=7.3.1"
-black = ">=23.3.0"
-ruff = "0.0.265"
+pytest-cov = ">=4.1.0"
+ruff = "0.1.8"
 ipykernel = ">=6.25.1"
 
 [tool.poetry.group.docs.dependencies]
@@ -52,8 +82,28 @@ exclude = [
     ".git",
     ".venv",
     "venv",
+    "docs/_build",
+    "dist"
 ]
+show-fixes = true
 line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E", # pycodestyle
+    "F", # Pyflakes
+    "SIM", # flake8-simplify
+    "I", # isort
+    # "D", # pydocstyle - consider in the future
+]
+
+[tool.pytest.ini_options]
+testpaths = "tests/"
+addopts = "--cov=lagrangebench"
+filterwarnings = [
+    # ignore all deprecation warnings except from lagrangebench
+    "ignore::DeprecationWarning:^(?!.*lagrangebench).*"
+]
 
 [build-system]
 requires = ["poetry-core"]

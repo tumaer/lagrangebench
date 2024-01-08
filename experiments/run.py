@@ -8,9 +8,9 @@ import haiku as hk
 import jax.numpy as jnp
 import jmp
 import numpy as np
+import wandb
 import yaml
 
-import wandb
 from experiments.utils import setup_data, setup_model
 from lagrangebench import Trainer, infer
 from lagrangebench.case_setup import case_builder
@@ -123,6 +123,7 @@ def train_or_infer(args: Namespace):
             eval_steps=args.config.eval_steps,
             metrics_stride=args.config.metrics_stride,
             num_workers=args.config.num_workers,
+            batch_size_infer=args.config.batch_size_infer,
         )
         _, _, _ = trainer(
             step_max=args.config.step_max,
@@ -150,7 +151,7 @@ def train_or_infer(args: Namespace):
         metrics = infer(
             model,
             case,
-            data_test,
+            data_test if args.config.test else data_valid,
             load_checkpoint=args.config.model_dir,
             metrics=args.config.metrics_infer,
             rollout_dir=args.config.rollout_dir,
@@ -160,6 +161,7 @@ def train_or_infer(args: Namespace):
             n_extrap_steps=args.config.n_extrap_steps,
             seed=args.config.seed,
             metrics_stride=args.config.metrics_stride_infer,
+            batch_size=args.config.batch_size_infer,
         )
 
         split = "test" if args.config.test else "valid"
