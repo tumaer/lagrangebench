@@ -17,13 +17,13 @@ from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.defaults import defaults
 from lagrangebench.evaluate.metrics import MetricsComputer, MetricsDict
+from lagrangebench.evaluate.utils import write_vtk
 from lagrangebench.utils import (
     broadcast_from_batch,
     broadcast_to_batch,
     get_kinematic_mask,
     load_haiku,
     set_seed,
-    write_vtk,
 )
 
 
@@ -267,7 +267,7 @@ def eval_rollout(
                     "particle_type": traj_batch_i[1][j],  # (nodes,)
                 }
 
-                file_prefix = f"{rollout_dir}/rollout_{i*batch_size+j}"
+                file_prefix = os.path.join(rollout_dir, f"rollout_{i*batch_size+j}")
                 if out_type == "vtk":  # write vtk files for each time step
                     for k in range(pos_input.shape[0]):
                         # predictions
