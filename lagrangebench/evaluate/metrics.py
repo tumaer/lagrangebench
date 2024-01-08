@@ -59,7 +59,7 @@ class MetricsComputer:
         self._dist_dvmap = jax.vmap(self._dist_vmap, in_axes=(0, 0))
 
         if loss_ranges is None:
-            loss_ranges = [1, 5, 10, 20, 50, 100]
+            loss_ranges = [1, 5, 10, 20, 50, 70, 100]
         self._loss_ranges = loss_ranges
         self._input_seq_length = input_seq_length
         self._stride = stride
@@ -234,6 +234,7 @@ def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
     """Averages the metrics over the rollouts."""
     # create a dictionary with the same keys as the metrics, but empty list as values
     trajectory_averages = defaultdict(list)
+    #for every trajectory (n_traj=50 for validation), we calculate the mse1, mse5 ... 
     for rollout in eval_metrics.values():
         for k, v in rollout.items():
             if k == "e_kin":

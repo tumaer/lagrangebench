@@ -472,6 +472,9 @@ def infer_pde_refiner(
         worker_init_fn=seed_worker,
         generator=generator,
     )
+    #Different 'metrics' for validation and inference. 
+    #For validation, the metrics are passed in trainer.py
+    #Default validation metrics : 'mse', Default inference metrics: 'mse', 'sinkhorn', 'e_kin'
     metrics_computer = MetricsComputer(
         metrics,
         dist_fn=case.displacement,
