@@ -190,10 +190,7 @@ def Trainer(
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
 
     # loss config
-    if loss_weight is None:
-        loss_weight = LossConfig()
-    else:
-        loss_weight = LossConfig(**loss_weight)
+    loss_weight = LossConfig() if loss_weight is None else LossConfig(**loss_weight)
     # pushforward config
     if pushforward is None:
         pushforward = PushforwardConfig()

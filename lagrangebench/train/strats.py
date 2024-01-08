@@ -10,7 +10,7 @@ from lagrangebench.utils import get_kinematic_mask
 
 
 def add_gns_noise(
-    key: jax.random.KeyArray,
+    key: jax.Array,
     pos_input: jnp.ndarray,
     particle_type: jnp.ndarray,
     input_seq_length: int,

@@ -55,7 +55,8 @@ def _forward_eval(
     _, particle_type = sample
 
     # predict acceleration and integrate
-    pred, _ = model_apply(params, state, sample)
+    pred, state = model_apply(params, state, sample)
+
     next_position = case_integrate(pred, current_positions)
 
     # update only the positions of non-boundary particles
@@ -70,7 +71,7 @@ def _forward_eval(
         [current_positions[:, 1:], next_position[:, None, :]], axis=1
     )  # as next model input
 
-    return current_positions
+    return current_positions, state
 
 
 def eval_batched_rollout(
@@ -149,13 +150,15 @@ def eval_batched_rollout(
             continue
 
         # 3. run forward model
-        current_positions_batch = forward_eval_vmap(
+        current_positions_batch, state_batch = forward_eval_vmap(
             params,
             state,
             (features_batch, particle_type_batch),
             current_positions_batch,
             target_positions_batch[:, :, step],
         )
+        # the state is not passed out of this loop, so no not really relevant
+        state = broadcast_from_batch(state_batch, 0)
 
         # 4. write predicted next position to output array
         predictions_batch = predictions_batch.at[:, step].set(

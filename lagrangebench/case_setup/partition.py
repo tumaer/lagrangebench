@@ -300,7 +300,7 @@ def _scan_neighbor_list(
                 if not is_sparse(format):
                     capacity_limit = N - 1 if mask_self else N
                 elif format is NeighborListFormat.Sparse:
-                    capacity_limit = N * (N - 1) if mask_self else N ** 2
+                    capacity_limit = N * (N - 1) if mask_self else N**2
                 else:
                     capacity_limit = N * (N - 1) // 2
                 if max_occupancy > capacity_limit:
