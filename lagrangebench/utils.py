@@ -143,37 +143,6 @@ def print_params_shapes(params, prefix=""):
             print_params_shapes(v, prefix=prefix + k)
 
 
-def write_vtk(data_dict, path):
-    """Store a .vtk file for ParaView."""
-
-    try:
-        import pyvista
-    except ImportError:
-        raise ImportError("Please install pyvista to write VTK files.")
-
-    r = np.asarray(data_dict["r"])
-    N, dim = r.shape
-
-    # PyVista treats the position information differently than the rest
-    if dim == 2:
-        r = np.hstack([r, np.zeros((N, 1))])
-    data_pv = pyvista.PolyData(r)
-
-    # copy all the other information also to pyvista, using plain numpy arrays
-    for k, v in data_dict.items():
-        # skip r because we already considered it above
-        if k == "r":
-            continue
-
-        # working in 3D or scalar features do not require special care
-        if dim == 2 and v.ndim == 2:
-            v = np.hstack([v, np.zeros((N, 1))])
-
-        data_pv[k] = np.asarray(v)
-
-    data_pv.save(path)
-
-
 def set_seed(seed: int) -> Tuple[jax.Array, Callable, torch.Generator]:
     """Set seeds for jax, random and torch."""
     # first PRNG key
