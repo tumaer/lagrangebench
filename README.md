@@ -124,9 +124,9 @@ The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https
 
 ### Notebooks
 We provide three notebooks that show LagrangeBench functionalities, namely:
-- [`tutorial.ipynb`](notebooks/tutorial.ipynb) with a general overview of LagrangeBench library, with training and evaluation of a simple GNS model,
-- [`datasets.ipynb`](notebooks/datasets.ipynb) with more details and visualizations on the datasets, and
-- [`gns_data.ipynb`](notebooks/gns_data.ipynb) showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
+- [`tutorial.ipynb`](notebooks/tutorial.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb), with a general overview of LagrangeBench library, with training and evaluation of a simple GNS model,
+- [`datasets.ipynb`](notebooks/datasets.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/datasets.ipynb), with more details and visualizations on the datasets, and
+- [`gns_data.ipynb`](notebooks/gns_data.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/gns_data.ipynb), showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
 
 ## Directory structure
 ```
