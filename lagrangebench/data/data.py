@@ -1,12 +1,13 @@
 """Dataset modules for loading HDF5 simulation trajectories."""
 
 import bisect
+import importlib
 import json
 import os
 import os.path as osp
 import re
 import zipfile
-from typing import Callable, Optional
+from typing import Optional
 
 import h5py
 import jax.numpy as jnp
@@ -45,7 +46,6 @@ class H5Dataset(Dataset):
         input_seq_length: int = 6,
         extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
-        external_force_fn: Optional[Callable] = None,
     ):
         """Initialize the dataset. If the dataset is not present, it is downloaded.
 
@@ -61,7 +61,6 @@ class H5Dataset(Dataset):
                 unroll steps. During validation/testing, this specifies the largest
                 N-step MSE loss we are interested in, e.g. for best model checkpointing.
             nl_backend: Which backend to use for the neighbor list
-            external_force_fn: Function that returns the position-wise external force
         """
 
         if dataset_path.endswith("/"):  # remove trailing slash in dataset path
@@ -83,7 +82,16 @@ class H5Dataset(Dataset):
         self.input_seq_length = input_seq_length
         self.nl_backend = nl_backend
 
-        self.external_force_fn = external_force_fn
+        force_fn_path = osp.join(dataset_path, "force.py")
+        if osp.exists(force_fn_path):
+            # load force_fn if `force.py` exists in dataset_path
+            spec = importlib.util.spec_from_file_location("force_module", force_fn_path)
+            force_module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(force_module)
+
+            self.external_force_fn = force_module.force_fn
+        else:
+            self.external_force_fn = None
 
         # load dataset metadata
         with open(osp.join(dataset_path, "metadata.json"), "r") as f:
@@ -328,13 +336,6 @@ class RPF2D(H5Dataset):
         extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
-        def external_force_fn(position):
-            return jnp.where(
-                position[1] > 1.0,
-                jnp.array([-1.0, 0.0]),
-                jnp.array([1.0, 0.0]),
-            )
-
         super().__init__(
             split,
             dataset_path,
@@ -342,7 +343,6 @@ class RPF2D(H5Dataset):
             input_seq_length=input_seq_length,
             extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
-            external_force_fn=external_force_fn,
         )
 
 
@@ -357,13 +357,6 @@ class RPF3D(H5Dataset):
         extra_seq_length: int = 0,
         nl_backend: str = "jaxmd_vmap",
     ):
-        def external_force_fn(position):
-            return jnp.where(
-                position[1] > 1.0,
-                jnp.array([-1.0, 0.0, 0.0]),
-                jnp.array([1.0, 0.0, 0.0]),
-            )
-
         super().__init__(
             split,
             dataset_path,
@@ -371,7 +364,6 @@ class RPF3D(H5Dataset):
             input_seq_length=input_seq_length,
             extra_seq_length=extra_seq_length,
             nl_backend=nl_backend,
-            external_force_fn=external_force_fn,
         )
 
 
