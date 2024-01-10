@@ -336,7 +336,7 @@ def eval_single_rollout_pde_refiner(
     step = 0
     while step < n_rollout_steps + n_extrap_steps:  #runs 20 times
         sample = (current_positions, particle_type)
-        features, neighbors = case.preprocess_eval(sample, neighbors) #neighbour list is updated 
+        features, neighbors = case.preprocess_eval_pde_refiner(sample, neighbors) #neighbour list is updated 
         
         features['u_t_noised'] = jnp.zeros_like(features['vel_hist']) #0's
         features['k']= jnp.tile(0, (features['vel_hist'].shape[0],)) #set to 0
