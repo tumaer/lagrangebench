@@ -1,5 +1,6 @@
 """Case setup functions."""
 
+import warnings
 from typing import Callable, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
@@ -100,6 +101,14 @@ def case_builder(
         displacement_fn, shift_fn = space.free()
 
     displacement_fn_set = vmap(displacement_fn, in_axes=(0, 0))
+
+    if neighbor_list_multiplier < 1.25:
+        warnings.warn(
+            f"neighbor_list_multiplier={neighbor_list_multiplier} < 1.25 is very low. "
+            "Be especially cautious if you batch training and/or inference as "
+            "reallocation might be necessary based on different overflow conditions. "
+            "See https://github.com/tumaer/lagrangebench/pull/20#discussion_r1443811262"
+        )
 
     neighbor_fn = neighbor_list(
         displacement_fn,
