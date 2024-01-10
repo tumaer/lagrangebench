@@ -212,6 +212,11 @@ def cli_arguments() -> Dict:
         required=False, 
         type=int, 
         help="Number of rollout steps.")
+    
+    parser.add_argument("--wandb", 
+        required=False, 
+        action=argparse.BooleanOptionalAction,
+        help="To store data on weights and biases")
 
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
