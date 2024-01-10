@@ -217,6 +217,21 @@ def cli_arguments() -> Dict:
         required=False, 
         action=argparse.BooleanOptionalAction,
         help="To store data on weights and biases")
+    
+    parser.add_argument("--log_steps", 
+        required=False, 
+        type=int,
+        help="To store data on weights and biases")
+    
+    parser.add_argument("--eval_steps", 
+        required=False, 
+        type=int,
+        help="To store data on weights and biases")
+    
+    parser.add_argument("--step_max", 
+        required=False, 
+        type=int,
+        help="To store data on weights and biases")
 
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}

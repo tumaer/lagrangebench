@@ -175,11 +175,7 @@ def train_or_infer(args: Namespace):
                 num_refinement_steps = args.config.num_refinement_steps,
                 sigma_min = args.config.sigma_min,
             )
-        
-        
-        
-        
-        
+
         else:
             metrics = infer(  #inside lagrangebench/evaluate/rollout.py
                 model,
