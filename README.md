@@ -1,7 +1,36 @@
-# LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite
+<div align="center">
 
-[![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs&link=https%3A%2F%2Flagrangebench.readthedocs.io%2Fen%2Flatest%2Findex.html)](https://lagrangebench.readthedocs.io/en/latest/index.html)
-[![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv&link=https%3A%2F%2Farxiv.org%2Fabs%2F2309.16342)](https://arxiv.org/abs/2309.16342)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://svgshare.com/i/11hG.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://svgshare.com/i/11hG.svg">
+<img alt="LagrangeBench Logo: Lagrangian Fluid Mechanics Benchmarking Suite" src="https://svgshare.com/i/11hG.svg" width=550pt>
+</picture>
+<!-- [![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs)](https://lagrangebench.readthedocs.io/en/latest/index.html)
+[![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv)](https://arxiv.org/abs/2309.16342)
+[![Ruff Linting](https://github.com/tumaer/lagrangebench/actions/workflows/ruff.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/ruff.yml)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Downloads](https://static.pepy.tech/badge/lagrangebench)](https://pypi.org/project/lagrangebench/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/lagrangebench)](https://pypi.org/project/lagrangebench/) -->
+
+[![Paper](http://img.shields.io/badge/paper-arxiv.2309.16342-B31B1B.svg)](https://arxiv.org/abs/2309.16342)
+[![Docs](https://img.shields.io/readthedocs/lagrangebench/latest)](https://lagrangebench.readthedocs.io/en/latest/index.html)
+[![PyPI - Version](https://img.shields.io/pypi/v/lagrangebench)](https://pypi.org/project/lagrangebench/)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb)
+
+[![Unit Tests](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/tumaer/lagrangebench/graph/badge.svg?token=ULMGSY71R1)](https://codecov.io/gh/tumaer/lagrangebench)
+[![License](https://img.shields.io/pypi/l/lagrangebench)](https://github.com/tumaer/lagrangebench/blob/main/LICENSE)
+
+</div>
+
+## Table of Contents
+
+1. [**Installation**](#installation)
+1. [**Usage**](#usage)
+1. [**Datasets**](#datasets)
+1. [**Directory Structure**](#directory-structure)
+1. [**Contributing**](#contributing)
+1. [**Citation**](#citation)
 
 ## Installation
 ### Standalone library
@@ -95,9 +124,9 @@ The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https
 
 ### Notebooks
 We provide three notebooks that show LagrangeBench functionalities, namely:
-- [`tutorial.ipynb`](notebooks/tutorial.ipynb) with a general overview of LagrangeBench library, with training and evaluation of a simple GNS model,
-- [`datasets.ipynb`](notebooks/datasets.ipynb) with more details and visualizations on the datasets, and
-- [`gns_data.ipynb`](notebooks/gns_data.ipynb) showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
+- [`tutorial.ipynb`](notebooks/tutorial.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb), with a general overview of LagrangeBench library, with training and evaluation of a simple GNS model,
+- [`datasets.ipynb`](notebooks/datasets.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/datasets.ipynb), with more details and visualizations on the datasets, and
+- [`gns_data.ipynb`](notebooks/gns_data.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/gns_data.ipynb), showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
 
 ## Directory structure
 ```
@@ -125,6 +154,39 @@ We provide three notebooks that show LagrangeBench functionalities, namely:
  ┃ ┗ 📜trainer.py   # Trainer method
  ┣ 📜defaults.py    # Default values
  ┗ 📜utils.py
+```
+
+
+## Contributing
+Welcome! We highly appreciate [Github issues](https://github.com/tumaer/lagrangebench/issues) and [PRs](https://github.com/tumaer/lagrangebench/pulls).
+
+You can also chat with us on [**Discord**](https://discord.gg/Ds8jRZ78hU).
+
+### Contributing Guideline
+If you want to contribute to this repository, you will need the dev depencencies, i.e.
+install the environment with `poetry install` without the ` --only main` flag.
+Then, we also recommend you to install the pre-commit hooks
+if you don't want to manually run `pre-commit run` before each commit. To sum up:
+
+```bash
+git clone https://github.com/tumaer/lagrangebench.git
+cd lagrangebench
+poetry install
+source $PATH_TO_LAGRANGEBENCH_VENV/bin/activate
+
+# install pre-commit hooks defined in .pre-commit-config.yaml
+# ruff is configured in pyproject.toml
+pre-commit install
+```
+
+After you have run `git add <FILE>` and try to `git commit`, the pre-commit hook will
+fix the linting and formatting of `<FILE>` before you are allowed to commit.
+
+You should also run the unit tests locally before creating a PR. Do this simply by:
+
+```bash
+# pytest is configured in pyproject.toml
+pytest
 ```
 
 
