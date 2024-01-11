@@ -1,4 +1,5 @@
 import os
+import pprint
 from argparse import Namespace
 
 import yaml
@@ -18,6 +19,9 @@ if __name__ == "__main__":
     # priority to command line arguments
     args.update(cli_args)
     args = Namespace(config=Namespace(**args), info=Namespace())
+    print("#" * 79, "\nStarting a LagrangeBench run with the following configs:")
+    pprint.pprint(vars(args.config))
+    print("#" * 79)
 
     # specify cuda device
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152 from TensorFlow
