@@ -99,7 +99,7 @@ select = [
 
 [tool.pytest.ini_options]
 testpaths = "tests/"
-addopts = "--cov=lagrangebench"
+addopts = "--cov=lagrangebench --cov-fail-under=50"
 filterwarnings = [
     # ignore all deprecation warnings except from lagrangebench
     "ignore::DeprecationWarning:^(?!.*lagrangebench).*"

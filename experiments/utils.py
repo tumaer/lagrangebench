@@ -55,34 +55,7 @@ def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         f"exceeds eval_n_trajs ({args.config.eval_n_trajs})"
     )
 
-    # TODO: move this to a more suitable place
-    if "RPF" in args.info.dataset_name.upper():
-        args.info.has_external_force = True
-        if data_train.metadata["dim"] == 2:
-
-            def external_force_fn(position):
-                return jnp.where(
-                    position[1] > 1.0,
-                    jnp.array([-1.0, 0.0]),
-                    jnp.array([1.0, 0.0]),
-                )
-
-        elif data_train.metadata["dim"] == 3:
-
-            def external_force_fn(position):
-                return jnp.where(
-                    position[1] > 1.0,
-                    jnp.array([-1.0, 0.0, 0.0]),
-                    jnp.array([1.0, 0.0, 0.0]),
-                )
-
-    else:
-        args.info.has_external_force = False
-        external_force_fn = None
-
-    data_train.external_force_fn = external_force_fn
-    data_valid.external_force_fn = external_force_fn
-    data_test.external_force_fn = external_force_fn
+    args.info.has_external_force = bool(data_train.external_force_fn is not None)
 
     return data_train, data_valid, data_test, args
 
