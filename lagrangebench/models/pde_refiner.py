@@ -35,6 +35,7 @@ class PDE_Refiner(BaseModel):
         self._latent_size = latent_size
         self._number_of_layers = number_of_layers
         self._mp_steps = num_mp_steps
+        self._num_particle_types = num_particle_types
         
         self._embedding = hk.Embed(num_particle_types, particle_type_embedding_size)
         
@@ -42,7 +43,9 @@ class PDE_Refiner(BaseModel):
         
         
     #Preprocessing step for encoder. Creates a graph from the input data
-    def _transform(self, features: Dict[str, jnp.ndarray]) -> jraph.GraphsTuple:
+    def _transform( 
+        self, features: Dict[str, jnp.ndarray], particle_type: jnp.ndarray
+    ) -> jraph.GraphsTuple:
         
         n_total_points = features["vel_hist"].shape[0] #3200 for RPF_2d
         
@@ -66,7 +69,7 @@ class PDE_Refiner(BaseModel):
         globals=None,
         )
         
-        return graph
+        return graph , particle_type
     
     def _encoder(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
         #node_latents is array of sizes [num_nodes, latent_size] for RPF 2D (3200,128), i.e. each particle has an associated 128 dimensional latent vector
