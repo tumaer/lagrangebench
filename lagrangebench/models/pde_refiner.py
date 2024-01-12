@@ -9,6 +9,7 @@ from lagrangebench.utils import NodeType
 from .base import BaseModel
 from .utils import build_mlp
 
+from embedding_k import fourier_embedding
 
 class PDE_Refiner(BaseModel):
     
@@ -39,7 +40,7 @@ class PDE_Refiner(BaseModel):
         
         self._embedding = hk.Embed(num_particle_types, particle_type_embedding_size)
         
-        self._embedding_k = hk.Embed(1, 16) 
+        
         
         
     #Preprocessing step for encoder. Creates a graph from the input data
@@ -49,7 +50,11 @@ class PDE_Refiner(BaseModel):
         
         n_total_points = features["vel_hist"].shape[0] #3200 for RPF_2d
         
-        features["embedded_k"]  = self._embedding_k(features["k"])  #embedded_k: (3200,16), we pass sample[1], because it contains the number of particles in the batch, which is 3200 for RPF_2D_3200_20k_every_100
+        features["k"] = features["k"]*1000/3 #hardcoded for now, will change later
+        
+        #features["embedded_k"]  = self._embedding_k(features["k"])  #embedded_k: (3200,16), we pass sample[1], because it contains the number of particles in the batch, which is 3200 for RPF_2D_3200_20k_every_100
+        
+        features["embedded_k"] = fourier_embedding(features["k"], 64) 
         
         node_features = [
             features[k]
