@@ -274,18 +274,18 @@ def case_builder(
 
             if is_k_zero:
                 features['u_t_noised'] = jnp.zeros_like(features['vel_hist'])
-                target_dict['noise'] = target_dict['vel']
+                target_dict['noise'] = target_dict['acc']
 
             else:
                 noise_std = min_noise_std**(k/max_refinement_steps)
                 noise = random.normal(subkey, features['vel_hist'].shape)   #sampled from gaussian distribution
-                features['u_t_noised'] = target_dict['vel'] + noise_std*noise
-                target_dict['noise'] = noise #could also be noise*noise_std
+                features['u_t_noised'] = target_dict['acc'] + noise_std*noise
+                target_dict['noise'] = noise 
             
             #output of lax.dynamic_slice(pos_input, slice_begin, slice_size) = (3200,3,2), the last three timestep data
             return key, features, target_dict, neighbors #target_dict returned only for training and not for CV or testing
         
-        if mode == "eval": ###TO BE CHANGED, for 'eval' we need only the initial condition i.e. u(0)
+        if mode == "eval": 
             return features, neighbors
 
     def allocate_pde_refiner_fn(key,sample,k,is_k_zero,sigma_min,num_refinement_steps,noise_std=0.0, unroll_steps=0): #while initializing the case, the noise_std is 0.0, but inside the training loop in trainer.py, it is set properly.
@@ -296,7 +296,7 @@ def case_builder(
     def preprocess_pde_refiner_fn(key, sample, noise_std, neighbors,k, is_k_zero,sigma_min, num_refinement_steps,unroll_steps=0):
         return _preprocess_pde_refiner(
             sample, neighbors, key=key,  k=k, is_k_zero=is_k_zero, sigma_min=sigma_min, num_refinement_steps=num_refinement_steps, noise_std=noise_std, unroll_steps=unroll_steps,
-        )#REMOVE noise_std for PDE refiner laters
+        )
 
     def allocate_eval_pde_refiner_fn(sample): #new neighbour list is to be generated and there is no noise addition
         return _preprocess_pde_refiner(sample, is_allocate=True, mode="eval")

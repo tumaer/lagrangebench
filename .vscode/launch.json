@@ -46,6 +46,7 @@
                 "--log_steps=1",
                 "--eval_steps=4",
                 "--step_max=10",
+                "--eval_n_trajs_infer=10"
             ],
             "name": "Debug PDE_Refiner",
             "type": "python",

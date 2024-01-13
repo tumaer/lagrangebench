@@ -349,11 +349,11 @@ def eval_single_rollout_pde_refiner(
 
         for k in range(1, max_refinement_steps+1): #Refinement loop
             
-            key, _ = random.split(key, 2)
+            key, subkey = random.split(key, 2)
 
             noise_std =  min_noise_std**(k/max_refinement_steps)
 
-            noise = random.normal(key, features['vel_hist'].shape)
+            noise = random.normal(subkey, features['vel_hist'].shape)
 
             features['u_t_noised'] = u_hat_t['noise'] + noise_std*noise
 
@@ -361,9 +361,9 @@ def eval_single_rollout_pde_refiner(
             #pred is a dictionary with key 'noise' 
             u_hat_t['noise'] = features['u_t_noised'] - pred['noise']*noise_std
 
-        refined_vel = {"vel": u_hat_t['noise']}
+        refined_acc = {"acc": u_hat_t['noise']}
 
-        next_position = case.integrate(refined_vel, current_positions)
+        next_position = case.integrate(refined_acc, current_positions)
 
         #Assuming n_extrap_steps = 0
         kinematic_mask = get_kinematic_mask(particle_type)
