@@ -17,7 +17,7 @@ loss_weight:
   noise: 1.0
 log_steps: 1000
 eval_steps: 10000
-step_max: 500000 
+step_max: 300000 
 eval_n_trajs: 50
 eval_n_trajs_infer: -1
 
