@@ -52,8 +52,8 @@ class PDE_Refiner(BaseModel):
         
         features["k"] = features["k"]*1000/3 #hardcoded for now, will change later
 
-        #features["embedded_k"] = fourier_embedding(features["k"], 64) 
-        features["embedded_k"] = build_mlp(256, 256, 2)(fourier_embedding(features["k"], 64) ) 
+        features["embedded_k"] = fourier_embedding(features["k"], 64) 
+        #features["embedded_k"] = build_mlp(256, 256, 2)(fourier_embedding(features["k"], 64) ) 
         node_features = [
             features[k]
             for k in ["u_t_noised","vel_hist", "embedded_k", "vel_mag", "bound", "force"]  #1 previous velocity 
