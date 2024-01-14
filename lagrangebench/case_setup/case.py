@@ -266,6 +266,10 @@ def case_builder(
             
             features['k'] = jnp.tile(k, (features['vel_hist'].shape[0],)) #shape = (3200,1)
             
+            if(max_refinement_steps!=0):
+                features['k'] = features['k']*(1000/max_refinement_steps)
+            
+            
             slice_begin = (0, input_seq_length - 2 + unroll_steps, 0)  #=(0,0,0) if unroll_steps = 0 and input_seq_length = 2
             slice_size = (pos_input.shape[0], 3, pos_input.shape[2])   #=(3200,3,2) 
 
@@ -292,7 +296,7 @@ def case_builder(
         return _preprocess_pde_refiner(sample,key=key,k=k, is_k_zero=is_k_zero,sigma_min=sigma_min, num_refinement_steps=num_refinement_steps, noise_std=noise_std, unroll_steps=unroll_steps, is_allocate=True,
         )
 
-    @partial(jit, static_argnames=['is_k_zero'])  #For jitted 'preprocess_fn' and 'preprocess_eval_fn', neighbour_list is not updated and passed as argument.
+    @partial(jit, static_argnames=['is_k_zero', 'num_refinement_steps'])  #For jitted 'preprocess_fn' and 'preprocess_eval_fn', neighbour_list is not updated and passed as argument.
     def preprocess_pde_refiner_fn(key, sample, noise_std, neighbors,k, is_k_zero,sigma_min, num_refinement_steps,unroll_steps=0):
         return _preprocess_pde_refiner(
             sample, neighbors, key=key,  k=k, is_k_zero=is_k_zero, sigma_min=sigma_min, num_refinement_steps=num_refinement_steps, noise_std=noise_std, unroll_steps=unroll_steps,
