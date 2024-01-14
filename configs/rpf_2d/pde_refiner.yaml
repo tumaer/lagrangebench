@@ -6,7 +6,7 @@ latent_dim: 128
 lr_start: 5.e-4
 
 wandb: True
-wandb_project: pde_refiner_algo1
+wandb_project: pde_refiner_algo1_mod
 # Change this with your own entity
 wandb_entity: lagrangebench
 
