@@ -12,7 +12,7 @@ wandb_entity: lagrangebench
 
 noise_std: 0.0000
 input_seq_length: 2 #to obtain 1 velocity 
-n_rollout_steps: 20 #needs to be increased 
+n_rollout_steps: 20 
 loss_weight:
   noise: 1.0
 log_steps: 1000

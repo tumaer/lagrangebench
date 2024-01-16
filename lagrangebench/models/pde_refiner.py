@@ -40,9 +40,6 @@ class PDE_Refiner(BaseModel):
         
         self._embedding = hk.Embed(num_particle_types, particle_type_embedding_size)
         
-        
-        
-        
     #Preprocessing step for encoder. Creates a graph from the input data
     def _transform( 
         self, features: Dict[str, jnp.ndarray], particle_type: jnp.ndarray
@@ -50,8 +47,6 @@ class PDE_Refiner(BaseModel):
         
         n_total_points = features["vel_hist"].shape[0] #3200 for RPF_2d
         
-        features["k"] = features["k"]*1000/3 #hardcoded for now, will change later
-
         features["embedded_k"] = fourier_embedding(features["k"], 64) 
         #features["embedded_k"] = build_mlp(256, 256, 2)(fourier_embedding(features["k"], 64) ) 
         node_features = [
