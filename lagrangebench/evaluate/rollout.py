@@ -338,6 +338,14 @@ def eval_single_rollout_pde_refiner(
         sample = (current_positions, particle_type)
         features, neighbors = case.preprocess_eval_pde_refiner(sample, neighbors) #neighbour list is updated 
         
+        if neighbors.did_buffer_overflow is True:
+            edges_ = neighbors.idx.shape
+            print(f"(eval) Reallocate neighbors list {edges_} at step {step}")
+            _, neighbors = case.allocate_eval_pde_refiner(sample)  #if there is any overflow,then neighbour list is allocated
+            print(f"(eval) To list {neighbors.idx.shape}")
+
+            continue
+        
         features['u_t_noised'] = jnp.zeros_like(features['vel_hist']) #0's
         features['k']= jnp.tile(0, (features['vel_hist'].shape[0],)) #set to 0
 
@@ -426,9 +434,47 @@ def eval_rollout_pde_refiner(
 
         eval_metrics[f"rollout_{i}"] = metrics 
 
+        if rollout_dir is not None: #by default rollout_dir = None
+            pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
+            initial_positions = pos_input[:t_window]
+            example_full = jnp.concatenate([initial_positions, example_rollout], axis=0)
+            example_rollout = {
+                "predicted_rollout": example_full,  # (t, nodes, dim)
+                "ground_truth_rollout": pos_input,  # (t, nodes, dim)
+            }
+
+            file_prefix = f"{rollout_dir}/rollout_{i}"
+            if out_type == "vtk":
+                for j in range(pos_input.shape[0]):
+                    filename_vtk = file_prefix + f"_{j}.vtk"
+                    state_vtk = {
+                        "r": example_rollout["predicted_rollout"][j],
+                        "tag": traj_i[1],
+                    }
+                    write_vtk(state_vtk, filename_vtk)
+
+                for j in range(pos_input.shape[0]):
+                    filename_vtk = file_prefix + f"_ref_{j}.vtk"
+                    state_vtk = {
+                        "r": example_rollout["ground_truth_rollout"][j],
+                        "tag": traj_i[1],
+                    }
+                    write_vtk(state_vtk, filename_vtk)
+            if out_type == "pkl":
+                filename = f"{file_prefix}.pkl"
+
+                with open(filename, "wb") as f:
+                    pickle.dump(example_rollout, f)
+
         if (i + 1) == n_trajs: #n_trajs = 50 (loader_eval has 384 trajectories but we are only evaluating the first 50 of them always)
             break
 
+    if rollout_dir is not None:
+        # save metrics
+        t = time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime())
+        with open(f"{rollout_dir}/metrics{t}.pkl", "wb") as f:
+            pickle.dump(eval_metrics, f)
+            
     return eval_metrics #Dictionary containing the metrics for all the 50 rollouts
 
 
@@ -488,10 +534,15 @@ def infer_pde_refiner(
     # init values
     pos_input_and_target, particle_type = next(iter(loader_test))
     sample = (pos_input_and_target[0], particle_type[0])
-    key, _, _, neighbors = case.allocate(key, sample)
-
+    
+    key, subkey = jax.random.split(key, 2)
     num_refinement_steps = kwargs["num_refinement_steps"]
     sigma_min = kwargs["sigma_min"]
+    k  = random.randint(subkey, (), 0, num_refinement_steps)
+    is_k_zero = jnp.where(k==0, True, False)
+    key, _, _, neighbors = case.allocate_pde_refiner(key, sample, k,is_k_zero,sigma_min,num_refinement_steps)
+
+    
 
     eval_metrics = eval_rollout_pde_refiner(
         case=case,
