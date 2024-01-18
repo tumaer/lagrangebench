@@ -243,6 +243,12 @@ def case_builder(
         pos_input = jnp.asarray(sample[0], dtype=dtype) #shape of sample[0] == pos_input = (3200,3,2). 
         particle_type = jnp.asarray(sample[1])
         
+        if mode == "train":
+            key, noise_std = kwargs["key"], kwargs["noise_std"]
+            unroll_steps = kwargs["unroll_steps"]
+            if pos_input.shape[1] > 1:  #pos_input.shape[1] = 7    
+                key, pos_input = add_gns_noise(key, pos_input, particle_type, input_seq_length, noise_std, shift_fn)
+        
         # allocate the neighbor list
         most_recent_position = pos_input[:, input_seq_length - 1]  #input_seq_length = 6
         num_particles = (particle_type != -1).sum()
@@ -253,8 +259,7 @@ def case_builder(
 
         features = feature_transform(pos_input[:, :input_seq_length], neighbors) #has only u(t-dt)
         
-        if mode == "train": #Note: that there is no noise addition as in the above _preprocess_fn
-            unroll_steps = kwargs["unroll_steps"]
+        if mode == "train": 
             key = kwargs["key"]
             k = kwargs["k"]
             is_k_zero = kwargs["is_k_zero"]
