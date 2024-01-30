@@ -14,6 +14,7 @@
                 "--log_steps=1",
                 "--eval_steps=4",
                 "--step_max=10",
+                
             ],
             "name": "Debug GNS",
             "type": "python",
@@ -46,7 +47,8 @@
                 "--log_steps=1",
                 "--eval_steps=4",
                 "--step_max=10",
-                "--eval_n_trajs_infer=10"
+                "--eval_n_trajs_infer=10",
+                "--input_seq_length=6",
             ],
             "name": "Debug PDE_Refiner",
             "type": "python",

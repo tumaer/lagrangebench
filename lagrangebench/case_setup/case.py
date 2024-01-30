@@ -282,12 +282,12 @@ def case_builder(
             target_dict = _compute_target(lax.dynamic_slice(pos_input, slice_begin, slice_size))
 
             if is_k_zero:
-                features['u_t_noised'] = jnp.zeros_like(features['vel_hist'])
+                features['u_t_noised'] = jnp.zeros((features['vel_hist'].shape[0],2))
                 target_dict['noise'] = target_dict['acc']
 
             else:
                 noise_std = min_noise_std**(k/max_refinement_steps)
-                noise = random.normal(subkey, features['vel_hist'].shape)   #sampled from gaussian distribution
+                noise = random.normal(subkey, jnp.zeros((features['vel_hist'].shape[0],2)).shape)   #sampled from gaussian distribution
                 features['u_t_noised'] = target_dict['acc'] + noise_std*noise
                 target_dict['noise'] = noise 
             

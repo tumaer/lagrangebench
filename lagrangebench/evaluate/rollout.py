@@ -346,9 +346,9 @@ def eval_single_rollout_pde_refiner(
 
             continue
         
-        features['u_t_noised'] = jnp.zeros_like(features['vel_hist']) #0's
+        features['u_t_noised'] = jnp.zeros((features['vel_hist'].shape[0],2)) #0's
         features['k']= jnp.tile(0, (features['vel_hist'].shape[0],)) #set to 0
-
+        #STARAT HERE
         u_hat_t , _ = model_apply(params, state, (features, particle_type)) #predicts the 'acc' for gns and 'noise' for pde refiner
 
         max_refinement_steps=kwargs["num_refinement_steps"]
@@ -361,7 +361,7 @@ def eval_single_rollout_pde_refiner(
 
             noise_std =  min_noise_std**(k/max_refinement_steps)
 
-            noise = random.normal(subkey, features['vel_hist'].shape)
+            noise = random.normal(subkey, jnp.zeros((features['vel_hist'].shape[0],2)).shape)
 
             features['u_t_noised'] = u_hat_t['noise'] + noise_std*noise
 
@@ -541,8 +541,6 @@ def infer_pde_refiner(
     k  = random.randint(subkey, (), 0, num_refinement_steps)
     is_k_zero = jnp.where(k==0, True, False)
     key, _, _, neighbors = case.allocate_pde_refiner(key, sample, k,is_k_zero,sigma_min,num_refinement_steps)
-
-    
 
     eval_metrics = eval_rollout_pde_refiner(
         case=case,
