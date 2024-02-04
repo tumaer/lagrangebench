@@ -57,5 +57,27 @@
             "console": "integratedTerminal",
             "justMyCode": true
         },
+        {
+            "args": [
+                "--config=configs/dam_2d/pde_refiner.yaml",
+                "--data_dir=datasets/2D_DAM_5740_20kevery100",
+                "--ckp_dir=ckp/debug_dump",
+                "--gpu=0",  
+                "--sigma_min=1e-5",
+                "--n_rollout_steps=50",
+                "--no-wandb", 
+                "--log_steps=1",
+                "--eval_steps=4",
+                "--step_max=10",
+                "--eval_n_trajs_infer=10",
+                "--input_seq_length=6",
+            ],
+            "name": "Debug_DAM_ PDE_Refiner",
+            "type": "python",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
     ]
 }

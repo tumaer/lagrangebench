@@ -113,6 +113,6 @@ metrics_stride_infer: 1
 out_type_infer: pkl
 eval_n_trajs_infer: -1
 
-is_pde_refiner: False
-num_refinement_steps: 4
-sigma_min: 1.e-3
+#is_pde_refiner: False
+#num_refinement_steps: 4
+#sigma_min: 1.e-3
