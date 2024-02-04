@@ -32,7 +32,7 @@ if __name__ == "__main__":
         config.update("jax_enable_x64", True)
 
     from experiments.run import train_or_infer
-
+    
     print('Sigma_Min: ', args.config.sigma_min)
     print('Max_refinement_steps: ', args.config.num_refinement_steps)
     print('Number of Rollout Steps: ', args.config.n_rollout_steps)
