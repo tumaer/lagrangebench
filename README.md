@@ -23,6 +23,8 @@
 
 </div>
 
+NeurIPS page with video and slides [here](https://neurips.cc/virtual/2023/poster/73681).
+
 ## Table of Contents
 
 1. [**Installation**](#installation)
