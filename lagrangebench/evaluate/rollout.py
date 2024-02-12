@@ -169,7 +169,10 @@ def eval_batched_rollout(
 
     # (batch, n_nodes, time, dim) -> (batch, time, n_nodes, dim)
     target_positions_batch = target_positions_batch.transpose(0, 2, 1, 3)
-    metrics_batch = metrics_computer_vmap(predictions_batch, target_positions_batch)
+    # slice out extrapolation steps
+    metrics_batch = metrics_computer_vmap(
+        predictions_batch[:, :n_rollout_steps, :, :], target_positions_batch
+    )
 
     return (predictions_batch, metrics_batch, broadcast_from_batch(neighbors_batch, 0))
 
@@ -265,26 +268,27 @@ def eval_rollout(
                 initial_positions = pos_input[:t_window]
                 example_full = jnp.concatenate([initial_positions, example_rollout])
                 example_rollout = {
-                    "predicted_rollout": example_full,  # (t, nodes, dim)
+                    "predicted_rollout": example_full,  # (t + extrap, nodes, dim)
                     "ground_truth_rollout": pos_input,  # (t, nodes, dim),
                     "particle_type": traj_batch_i[1][j],  # (nodes,)
                 }
 
                 file_prefix = os.path.join(rollout_dir, f"rollout_{i*batch_size+j}")
                 if out_type == "vtk":  # write vtk files for each time step
-                    for k in range(pos_input.shape[0]):
+                    for k in range(example_full.shape[0]):
                         # predictions
                         state_vtk = {
                             "r": example_rollout["predicted_rollout"][k],
                             "tag": example_rollout["particle_type"],
                         }
                         write_vtk(state_vtk, f"{file_prefix}_{k}.vtk")
+                    for k in range(pos_input.shape[0]):
                         # ground truth reference
-                        state_vtk = {
+                        ref_state_vtk = {
                             "r": example_rollout["ground_truth_rollout"][k],
                             "tag": example_rollout["particle_type"],
                         }
-                        write_vtk(state_vtk, f"{file_prefix}_ref_{k}.vtk")
+                        write_vtk(ref_state_vtk, f"{file_prefix}_ref_{k}.vtk")
                 if out_type == "pkl":
                     filename = f"{file_prefix}.pkl"
 
