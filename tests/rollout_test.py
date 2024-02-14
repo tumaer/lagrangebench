@@ -137,46 +137,54 @@ class TestInferBuilder(unittest.TestCase):
         preprocess_eval_vmap = vmap(self.case.preprocess_eval, in_axes=(0, 0))
         metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
 
-        example_rollout_batch, metrics_batch, neighbors = eval_batched_rollout(
-            forward_eval_vmap=forward_eval_vmap,
-            preprocess_eval_vmap=preprocess_eval_vmap,
-            case=self.case,
-            params=params,
-            state=state,
-            traj_batch_i=traj_batch_i,
-            neighbors=neighbors,
-            metrics_computer_vmap=metrics_computer_vmap,
-            n_rollout_steps=self.config.n_rollout_steps,
-            t_window=isl,
-        )
-        example_rollout = broadcast_from_batch(example_rollout_batch, index=0)
-        metrics = broadcast_from_batch(metrics_batch, index=0)
+        for n_extrap_steps in [0, 5, 10]:
+            with self.subTest(n_extrap_steps):
+                example_rollout_batch, metrics_batch, neighbors = eval_batched_rollout(
+                    forward_eval_vmap=forward_eval_vmap,
+                    preprocess_eval_vmap=preprocess_eval_vmap,
+                    case=self.case,
+                    params=params,
+                    state=state,
+                    traj_batch_i=traj_batch_i,
+                    neighbors=neighbors,
+                    metrics_computer_vmap=metrics_computer_vmap,
+                    n_rollout_steps=self.config.n_rollout_steps,
+                    n_extrap_steps=n_extrap_steps,
+                    t_window=isl,
+                )
+                example_rollout = broadcast_from_batch(example_rollout_batch, index=0)
+                metrics = broadcast_from_batch(metrics_batch, index=0)
 
-        self.assertTrue(
-            jnp.isclose(
-                metrics["mse"].mean(),
-                jnp.array(0.0),
-                atol=1e-6,
-            ).all(),
-            "Wrong rollout mse",
-        )
+                self.assertTrue(
+                    jnp.isclose(
+                        metrics["mse"].mean(),
+                        jnp.array(0.0),
+                        atol=1e-6,
+                    ).all(),
+                    "Wrong rollout mse",
+                )
 
-        pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
-        initial_positions = pos_input[:isl]
-        example_full = np.concatenate([initial_positions, example_rollout], axis=0)
-        rollout_dict = {
-            "predicted_rollout": example_full,  # (t, nodes, dim)
-            "ground_truth_rollout": pos_input,  # (t, nodes, dim)
-        }
+                pos_input = traj_i[0].transpose(1, 0, 2)  # (t, nodes, dim)
+                initial_positions = pos_input[:isl]
+                example_full = np.concatenate(
+                    [initial_positions, example_rollout], axis=0
+                )
+                rollout_dict = {
+                    "predicted_rollout": example_full,  # (t, nodes, dim)
+                    "ground_truth_rollout": pos_input,  # (t, nodes, dim)
+                }
 
-        self.assertTrue(
-            jnp.isclose(
-                rollout_dict["predicted_rollout"][100, 0],
-                rollout_dict["ground_truth_rollout"][100, 0],
-                atol=1e-6,
-            ).all(),
-            "Wrong rollout prediction",
-        )
+                self.assertTrue(
+                    jnp.isclose(
+                        rollout_dict["predicted_rollout"][100, 0],
+                        rollout_dict["ground_truth_rollout"][100, 0],
+                        atol=1e-6,
+                    ).all(),
+                    "Wrong rollout prediction",
+                )
+
+                total_steps = self.config.n_rollout_steps + n_extrap_steps
+                assert example_rollout_batch.shape[1] == total_steps
 
 
 if __name__ == "__main__":
