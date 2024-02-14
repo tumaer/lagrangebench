@@ -38,6 +38,8 @@ NeurIPS page with video and slides [here](https://neurips.cc/virtual/2023/poster
 ### Standalone library
 Install the core `lagrangebench` library from PyPi as
 ```bash
+python3.10 -m venv venv
+source venv/bin/activate
 pip install lagrangebench --extra-index-url=https://download.pytorch.org/whl/cpu
 ```
 
@@ -196,6 +198,7 @@ LagrangeBench can be installed by cloning the repository or as a standalone libr
 - General setup in `experiments/` and `notebooks/tutorial.ipynb`
 - Configs in `configs/` and `lagrangebench/defaults.py`
 - Zenodo URLs in `download_data.sh` and `lagrangebench/data/data.py`
+- Dependencies in `pyproject.toml`, `requirements_cuda.txt`, and `docs/requirements.txt`
 
 
 ## Citation
