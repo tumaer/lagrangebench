@@ -38,6 +38,8 @@ NeurIPS page with video and slides [here](https://neurips.cc/virtual/2023/poster
 ### Standalone library
 Install the core `lagrangebench` library from PyPi as
 ```bash
+python3.10 -m venv venv
+source venv/bin/activate
 pip install lagrangebench --extra-index-url=https://download.pytorch.org/whl/cpu
 ```
 
@@ -190,6 +192,13 @@ You should also run the unit tests locally before creating a PR. Do this simply 
 # pytest is configured in pyproject.toml
 pytest
 ```
+
+### Clone vs Library
+LagrangeBench can be installed by cloning the repository or as a standalone library. This offers more flexibility, but it also comes with its disadvantages: the necessity to implement some things twice. If you change any of the following things, make sure to update its counterpart as well:
+- General setup in `experiments/` and `notebooks/tutorial.ipynb`
+- Configs in `configs/` and `lagrangebench/defaults.py`
+- Zenodo URLs in `download_data.sh` and `lagrangebench/data/data.py`
+- Dependencies in `pyproject.toml`, `requirements_cuda.txt`, and `docs/requirements.txt`
 
 
 ## Citation

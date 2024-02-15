@@ -235,9 +235,10 @@ def Trainer(
             "You cannot evaluate the loss on longer than a ground truth trajectory "
             f"({n_rollout_steps}, {data_valid.subseq_length}, {input_seq_length})"
         )
-        assert eval_n_trajs <= len(
-            loader_valid
-        ), "eval_n_trajs must be <= len(loader_valid)"
+        assert eval_n_trajs <= loader_valid.dataset.num_samples, (
+            f"eval_n_trajs must be <= loader_valid.dataset.num_samples, but it is "
+            f"{eval_n_trajs} > {loader_valid.dataset.num_samples}"
+        )
 
         # Precompile model for evaluation
         model_apply = jax.jit(model.apply)

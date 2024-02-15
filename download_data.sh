@@ -21,7 +21,7 @@ fi
 
 DATASET_NAME="$1"
 OUTPUT_DIR="$2"
-ZENODO_PREFIX="https://zenodo.org/records/10021926/files/"
+ZENODO_PREFIX="https://zenodo.org/records/10491868/files/"
 
 # Check if there is a trailing slash in $OUTPUT_DIR and remove it
 if [[ $OUTPUT_DIR == */ ]]; then
