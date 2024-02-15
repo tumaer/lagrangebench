@@ -1,7 +1,7 @@
 import os
 import os.path as osp
 from argparse import Namespace
-from typing import Callable, Tuple, Type
+from typing import Callable, Dict, Optional, Tuple, Type
 
 import jax
 import jax.numpy as jnp
@@ -14,78 +14,97 @@ from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
 
 
-def setup_data(args: Namespace) -> Tuple[H5Dataset, H5Dataset, Namespace]:
-    if not osp.isabs(args.config.data_dir):
-        args.config.data_dir = osp.join(os.getcwd(), args.config.data_dir)
+def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
+    data_dir = cfg.data_dir
+    ckp_dir = cfg.logging.ckp_dir
+    rollout_dir = cfg.eval.rollout_dir
+    input_seq_length = cfg.model.input_seq_length
+    n_rollout_steps = cfg.eval.n_rollout_steps
+    neighbor_list_backend = cfg.neighbors.backend
+    if not osp.isabs(data_dir):
+        data_dir = osp.join(os.getcwd(), data_dir)
 
-    args.info.dataset_name = osp.basename(args.config.data_dir.split("/")[-1])
-    if args.config.ckp_dir is not None:
-        os.makedirs(args.config.ckp_dir, exist_ok=True)
-    if args.config.rollout_dir is not None:
-        os.makedirs(args.config.rollout_dir, exist_ok=True)
+    dataset_name = osp.basename(data_dir.split("/")[-1])
+    if ckp_dir is not None:
+        os.makedirs(ckp_dir, exist_ok=True)
+    if rollout_dir is not None:
+        os.makedirs(rollout_dir, exist_ok=True)
 
     # dataloader
     data_train = H5Dataset(
         "train",
-        dataset_path=args.config.data_dir,
-        input_seq_length=args.config.input_seq_length,
-        extra_seq_length=args.config.pushforward["unrolls"][-1],
-        nl_backend=args.config.neighbor_list_backend,
+        dataset_path=data_dir,
+        input_seq_length=input_seq_length,
+        extra_seq_length=cfg.optimizer.pushforward.unrolls[-1],
+        nl_backend=neighbor_list_backend,
     )
     data_valid = H5Dataset(
         "valid",
-        dataset_path=args.config.data_dir,
-        input_seq_length=args.config.input_seq_length,
-        extra_seq_length=args.config.n_rollout_steps,
-        nl_backend=args.config.neighbor_list_backend,
+        dataset_path=data_dir,
+        input_seq_length=input_seq_length,
+        extra_seq_length=n_rollout_steps,
+        nl_backend=neighbor_list_backend,
     )
     data_test = H5Dataset(
         "test",
-        dataset_path=args.config.data_dir,
-        input_seq_length=args.config.input_seq_length,
-        extra_seq_length=args.config.n_rollout_steps,
-        nl_backend=args.config.neighbor_list_backend,
+        dataset_path=data_dir,
+        input_seq_length=input_seq_length,
+        extra_seq_length=n_rollout_steps,
+        nl_backend=neighbor_list_backend,
     )
-    if args.config.eval_n_trajs == -1:
-        args.config.eval_n_trajs = data_valid.num_samples
-    if args.config.eval_n_trajs_infer == -1:
-        args.config.eval_n_trajs_infer = data_valid.num_samples
-    assert data_valid.num_samples >= args.config.eval_n_trajs, (
+
+    # TODO find another way to set these
+    if cfg.eval.n_trajs_train == -1:
+        cfg.eval.n_trajs_train = data_valid.num_samples
+    if cfg.eval.n_trajs_infer == -1:
+        cfg.eval.n_trajs_infer = data_valid.num_samples
+
+    assert data_valid.num_samples >= cfg.eval.n_trajs_train, (
         f"Number of available evaluation trajectories ({data_valid.num_samples}) "
-        f"exceeds eval_n_trajs ({args.config.eval_n_trajs})"
+        f"exceeds eval_n_trajs ({cfg.eval.n_trajs_train})"
     )
 
-    args.info.has_external_force = bool(data_train.external_force_fn is not None)
-
-    return data_train, data_valid, data_test, args
+    return data_train, data_valid, data_test, dataset_name
 
 
-def setup_model(args: Namespace) -> Tuple[Callable, Type]:
-    """Setup model based on args."""
-    model_name = args.config.model.lower()
-    metadata = args.metadata
+def setup_model(
+    cfg,
+    metadata: Dict,
+    homogeneous_particles: bool = False,
+    has_external_force: bool = False,
+    normalization_stats: Optional[Dict] = None,
+) -> Tuple[Callable, Type]:
+    """Setup model based on cfg."""
+    model_name = cfg.model.name.lower()
+
+    latent_dim = cfg.model.latent_dim
+    num_mlp_layers = cfg.model.num_mlp_layers
+    num_mp_steps = cfg.model.num_mp_steps
+
+    input_seq_length = cfg.model.input_seq_length
+    magnitude_features = cfg.train.magnitude_features
 
     if model_name == "gns":
 
         def model_fn(x):
             return models.GNS(
                 particle_dimension=metadata["dim"],
-                latent_size=args.config.latent_dim,
-                blocks_per_step=args.config.num_mlp_layers,
-                num_mp_steps=args.config.num_mp_steps,
+                latent_size=latent_dim,
+                blocks_per_step=num_mlp_layers,
+                num_mp_steps=num_mp_steps,
                 num_particle_types=NodeType.SIZE,
                 particle_type_embedding_size=16,
             )(x)
 
         MODEL = models.GNS
     elif model_name == "segnn":
+        segnn_cfg = cfg.model.segnn
         # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
         node_feature_irreps = node_irreps(
             metadata,
-            args.config.input_seq_length,
-            args.config.has_external_force,
-            args.config.magnitude_features,
-            args.info.homogeneous_particles,
+            input_seq_length,
+            has_external_force,
+            homogeneous_particles,
         )
         # 1o displacement, 0e distance
         edge_feature_irreps = Irreps("1x1o + 1x0e")
@@ -94,21 +113,21 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
             return models.SEGNN(
                 node_features_irreps=node_feature_irreps,
                 edge_features_irreps=edge_feature_irreps,
-                scalar_units=args.config.latent_dim,
-                lmax_hidden=args.config.lmax_hidden,
-                lmax_attributes=args.config.lmax_attributes,
+                scalar_units=latent_dim,
+                lmax_hidden=segnn_cfg.lmax_hidden,
+                lmax_attributes=segnn_cfg.lmax_attributes,
                 output_irreps=Irreps("1x1o"),
-                num_mp_steps=args.config.num_mp_steps,
-                n_vels=args.config.input_seq_length - 1,
-                velocity_aggregate=args.config.velocity_aggregate,
-                homogeneous_particles=args.info.homogeneous_particles,
-                blocks_per_step=args.config.num_mlp_layers,
-                norm=args.config.segnn_norm,
+                num_mp_steps=num_mp_steps,
+                n_vels=input_seq_length - 1,
+                velocity_aggregate=segnn_cfg.velocity_aggregate,
+                homogeneous_particles=cfg.train.homogeneous_particles,
+                blocks_per_step=num_mlp_layers,
+                norm=segnn_cfg.segnn_norm,
             )(x)
 
         MODEL = models.SEGNN
     elif model_name == "egnn":
-        box = args.box
+        box = cfg.box
         if jnp.array(metadata["periodic_boundary_conditions"]).any():
             displacement_fn, shift_fn = space.periodic(jnp.array(box))
         else:
@@ -119,30 +138,30 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
 
         def model_fn(x):
             return models.EGNN(
-                hidden_size=args.config.latent_dim,
+                hidden_size=cfg.latent_dim,
                 output_size=1,
                 dt=metadata["dt"] * metadata["write_every"],
                 displacement_fn=displacement_fn,
                 shift_fn=shift_fn,
-                normalization_stats=args.normalization_stats,
-                num_mp_steps=args.config.num_mp_steps,
-                n_vels=args.config.input_seq_length - 1,
+                normalization_stats=normalization_stats,
+                num_mp_steps=num_mp_steps,
+                n_vels=input_seq_length - 1,
                 residual=True,
             )(x)
 
         MODEL = models.EGNN
     elif model_name == "painn":
-        assert args.config.magnitude_features, "PaiNN requires magnitudes"
+        assert magnitude_features, "PaiNN requires magnitudes"
         radius = metadata["default_connectivity_radius"] * 1.5
 
         def model_fn(x):
             return models.PaiNN(
-                hidden_size=args.config.latent_dim,
+                hidden_size=latent_dim,
                 output_size=1,
-                n_vels=args.config.input_seq_length - 1,
+                n_vels=input_seq_length - 1,
                 radial_basis_fn=models.painn.gaussian_rbf(20, radius, trainable=True),
                 cutoff_fn=models.painn.cosine_cutoff(radius),
-                num_mp_steps=args.config.num_mp_steps,
+                num_mp_steps=num_mp_steps,
             )(x)
 
         MODEL = models.PaiNN

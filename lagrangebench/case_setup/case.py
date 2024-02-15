@@ -9,8 +9,8 @@ from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
 
+from lagrangebench.config import cfg
 from lagrangebench.data.utils import get_dataset_stats
-from lagrangebench.defaults import defaults
 from lagrangebench.train.strats import add_gns_noise
 
 from .features import FeatureDict, TargetDict, physical_feature_builder
@@ -62,14 +62,7 @@ class CaseSetupFn:
 def case_builder(
     box: Tuple[float, float, float],
     metadata: Dict,
-    input_seq_length: int,
-    isotropic_norm: bool = defaults.isotropic_norm,
-    noise_std: float = defaults.noise_std,
     external_force_fn: Optional[Callable] = None,
-    magnitude_features: bool = defaults.magnitude_features,
-    neighbor_list_backend: str = defaults.neighbor_list_backend,
-    neighbor_list_multiplier: float = defaults.neighbor_list_multiplier,
-    dtype: jnp.dtype = defaults.dtype,
 ):
     """Set up a CaseSetupFn that contains every required function besides the model.
 
@@ -83,15 +76,17 @@ def case_builder(
     Args:
         box: Box xyz sizes of the system.
         metadata: Dataset metadata dictionary.
-        input_seq_length: Length of the input sequence.
-        isotropic_norm: Whether to normalize dimensions equally.
-        noise_std: Noise standard deviation.
         external_force_fn: External force function.
-        magnitude_features: Whether to add velocity magnitudes in the features.
-        neighbor_list_backend: Backend of the neighbor list.
-        neighbor_list_multiplier: Capacity multiplier of the neighbor list.
-        dtype: Data type.
     """
+
+    input_seq_length = cfg.model.input_seq_length
+    isotropic_norm = cfg.train.isotropic_norm
+    noise_std = cfg.optimizer.noise_std
+    magnitude_features = cfg.train.magnitude_features
+    neighbor_list_backend = cfg.neighbors.backend
+    neighbor_list_multiplier = cfg.neighbors.multiplier
+    dtype = cfg.dtype
+
     normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
 
     # apply PBC in all directions or not at all

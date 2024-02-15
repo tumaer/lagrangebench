@@ -4,7 +4,7 @@ import os
 import pickle
 import time
 from functools import partial
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -13,9 +13,9 @@ import jax_md.partition as partition
 from jax import jit, vmap
 from torch.utils.data import DataLoader
 
+from lagrangebench.config import cfg
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
-from lagrangebench.defaults import defaults
 from lagrangebench.evaluate.metrics import MetricsComputer, MetricsDict
 from lagrangebench.evaluate.utils import write_vtk
 from lagrangebench.utils import (
@@ -74,7 +74,7 @@ def _forward_eval(
     return current_positions, state
 
 
-def eval_batched_rollout(
+def _eval_batched_rollout(
     forward_eval_vmap: Callable,
     preprocess_eval_vmap: Callable,
     case,
@@ -237,7 +237,7 @@ def eval_rollout(
         # (pos_input_batch, particle_type_batch) = traj_batch_i
         # pos_input_batch.shape = (batch, num_particles, seq_length, dim)
 
-        example_rollout_batch, metrics_batch, neighbors = eval_batched_rollout(
+        example_rollout_batch, metrics_batch, neighbors = _eval_batched_rollout(
             forward_eval_vmap=forward_eval_vmap,
             preprocess_eval_vmap=preprocess_eval_vmap,
             case=case,
@@ -314,15 +314,6 @@ def infer(
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,
     load_checkpoint: Optional[str] = None,
-    metrics: List = ["mse"],
-    rollout_dir: Optional[str] = None,
-    eval_n_trajs: int = defaults.eval_n_trajs,
-    n_rollout_steps: int = defaults.n_rollout_steps,
-    out_type: str = defaults.out_type,
-    n_extrap_steps: int = defaults.n_extrap_steps,
-    seed: int = defaults.seed,
-    metrics_stride: int = defaults.metrics_stride,
-    batch_size: int = defaults.batch_size_infer,
 ):
     """
     Infer on a dataset, compute metrics and optionally save rollout in out_type format.
@@ -357,21 +348,21 @@ def infer(
     else:
         params, state, _, _ = load_haiku(load_checkpoint)
 
-    key, seed_worker, generator = set_seed(seed)
+    key, seed_worker, generator = set_seed(cfg.seed)
 
     loader_test = DataLoader(
         dataset=data_test,
-        batch_size=batch_size,
+        batch_size=cfg.eval.batch_size_infer,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
         generator=generator,
     )
     metrics_computer = MetricsComputer(
-        metrics,
+        cfg.eval.metrics_infer,
         dist_fn=case.displacement,
         metadata=data_test.metadata,
         input_seq_length=data_test.input_seq_length,
-        stride=metrics_stride,
+        stride=cfg.eval.metrics_stride_infer,
     )
     # Precompile model
     model_apply = jit(model.apply)
@@ -389,10 +380,10 @@ def infer(
         state=state,
         neighbors=neighbors,
         loader_eval=loader_test,
-        n_rollout_steps=n_rollout_steps,
-        n_trajs=eval_n_trajs,
-        rollout_dir=rollout_dir,
-        out_type=out_type,
-        n_extrap_steps=n_extrap_steps,
+        n_rollout_steps=cfg.eval.n_rollout_steps,
+        n_trajs=cfg.eval.n_trajs_infer,
+        rollout_dir=cfg.eval.rollout_dir,
+        out_type=cfg.eval.out_type,
+        n_extrap_steps=cfg.eval.n_extrap_steps,
     )
     return eval_metrics

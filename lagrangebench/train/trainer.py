@@ -2,7 +2,7 @@
 
 import os
 from functools import partial
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 
 import haiku as hk
 import jax
@@ -13,13 +13,12 @@ from jax import vmap
 from torch.utils.data import DataLoader
 from wandb.wandb_run import Run
 
+from lagrangebench.config import cfg
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
-from lagrangebench.defaults import defaults
 from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from lagrangebench.utils import (
     LossConfig,
-    PushforwardConfig,
     broadcast_from_batch,
     broadcast_to_batch,
     get_kinematic_mask,
@@ -40,18 +39,17 @@ def _mse(
     particle_type: jnp.ndarray,
     target: jnp.ndarray,
     model_fn: Callable,
-    loss_weight: LossConfig,
+    loss_weight: Dict[str, float],
 ):
     pred, state = model_fn(params, state, (features, particle_type))
     # check active (non zero) output shapes
-    keys = list(set(loss_weight.nonzero) & set(pred.keys()))
-    assert all(target[k].shape == pred[k].shape for k in keys)
+    assert all(target[k].shape == pred[k].shape for k in pred)
     # particle mask
     non_kinematic_mask = jnp.logical_not(get_kinematic_mask(particle_type))
     num_non_kinematic = non_kinematic_mask.sum()
     # loss components
     losses = []
-    for t in keys:
+    for t in pred:
         losses.append((loss_weight[t] * (pred[t] - target[t]) ** 2).sum(axis=-1))
     total_loss = jnp.array(losses).sum(0)
     total_loss = jnp.where(non_kinematic_mask, total_loss, 0)
@@ -94,26 +92,6 @@ def Trainer(
     case,
     data_train: H5Dataset,
     data_valid: H5Dataset,
-    pushforward: Optional[PushforwardConfig] = None,
-    metrics: List = ["mse"],
-    seed: int = defaults.seed,
-    batch_size: int = defaults.batch_size,
-    input_seq_length: int = defaults.input_seq_length,
-    noise_std: float = defaults.noise_std,
-    lr_start: float = defaults.lr_start,
-    lr_final: float = defaults.lr_final,
-    lr_decay_steps: int = defaults.lr_decay_steps,
-    lr_decay_rate: float = defaults.lr_decay_rate,
-    loss_weight: Optional[LossConfig] = None,
-    n_rollout_steps: int = defaults.n_rollout_steps,
-    eval_n_trajs: int = defaults.eval_n_trajs,
-    rollout_dir: str = defaults.rollout_dir,
-    out_type: str = defaults.out_type,
-    log_steps: int = defaults.log_steps,
-    eval_steps: int = defaults.eval_steps,
-    metrics_stride: int = defaults.metrics_stride,
-    num_workers: int = defaults.num_workers,
-    batch_size_infer: int = defaults.batch_size_infer,
 ) -> Callable:
     """
     Builds a function that automates model training and evaluation.
@@ -130,26 +108,6 @@ def Trainer(
         case: Case setup class.
         data_train: Training dataset.
         data_valid: Validation dataset.
-        pushforward: Pushforward configuration. None for no pushforward.
-        metrics: Metrics to evaluate the model on.
-        seed: Random seed for model init, training tricks and dataloading.
-        batch_size: Training batch size.
-        input_seq_length: Input sequence length. Default is 6.
-        noise_std: Noise standard deviation for the GNS-style noise.
-        lr_start: Initial learning rate.
-        lr_final: Final learning rate.
-        lr_decay_steps: Number of steps to reach the final learning rate.
-        lr_decay_rate: Learning rate decay rate.
-        loss_weight: Loss weight object.
-        n_rollout_steps: Number of autoregressive rollout steps.
-        eval_n_trajs: Number of trajectories to evaluate.
-        rollout_dir: Rollout directory.
-        out_type: Output type.
-        log_steps: Wandb/screen logging frequency.
-        eval_steps: Evaluation and checkpointing frequency.
-        metrics_stride: stride for e_kin and sinkhorn.
-        num_workers: number of workers for data loading.
-        batch_size_infer: batch size for validation/testing.
 
     Returns:
         Configured training function.
@@ -158,14 +116,23 @@ def Trainer(
         model, hk.TransformedWithState
     ), "Model must be passed as an Haiku transformed function."
 
-    base_key, seed_worker, generator = set_seed(seed)
+    input_seq_length = cfg.model.input_seq_length
+    noise_std = cfg.optimizer.noise_std
+    n_rollout_steps = cfg.eval.n_rollout_steps
+    eval_n_trajs = cfg.eval.n_trajs_train
+    # make immutable for jitting
+    # TODO look for simpler alternatives to LossConfig
+    loss_weight = LossConfig(**dict(cfg.optimizer.loss_weight))
+    pushforward = cfg.optimizer.pushforward
+
+    base_key, seed_worker, generator = set_seed(cfg.seed)
 
     # dataloaders
     loader_train = DataLoader(
         dataset=data_train,
-        batch_size=batch_size,
+        batch_size=cfg.train.batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=cfg.train.num_workers,
         collate_fn=numpy_collate,
         drop_last=True,
         worker_init_fn=seed_worker,
@@ -173,7 +140,7 @@ def Trainer(
     )
     loader_valid = DataLoader(
         dataset=data_valid,
-        batch_size=batch_size_infer,
+        batch_size=cfg.eval.batch_size_infer,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
         generator=generator,
@@ -181,31 +148,25 @@ def Trainer(
 
     # learning rate decays from lr_start to lr_final over lr_decay_steps exponentially
     lr_scheduler = optax.exponential_decay(
-        init_value=lr_start,
-        transition_steps=lr_decay_steps,
-        decay_rate=lr_decay_rate,
-        end_value=lr_final,
+        init_value=cfg.optimizer.lr_start,
+        transition_steps=cfg.optimizer.lr_decay_steps,
+        decay_rate=cfg.optimizer.lr_decay_rate,
+        end_value=cfg.optimizer.lr_final,
     )
     # optimizer
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
 
-    # loss config
-    loss_weight = LossConfig() if loss_weight is None else LossConfig(**loss_weight)
-    # pushforward config
-    if pushforward is None:
-        pushforward = PushforwardConfig()
-
     # metrics computer config
     metrics_computer = MetricsComputer(
-        metrics,
+        cfg.eval.metrics_train,
         dist_fn=case.displacement,
         metadata=data_train.metadata,
-        input_seq_length=data_train.input_seq_length,
-        stride=metrics_stride,
+        input_seq_length=input_seq_length,
+        stride=cfg.eval.metrics_stride_train,
     )
 
     def _train(
-        step_max: int = defaults.step_max,
+        step_max: Optional[int] = None,
         params: Optional[hk.Params] = None,
         state: Optional[hk.State] = None,
         opt_state: Optional[optax.OptState] = None,
@@ -238,6 +199,9 @@ def Trainer(
         assert eval_n_trajs <= len(
             loader_valid
         ), "eval_n_trajs must be <= len(loader_valid)"
+
+        if step_max is None:
+            step_max = cfg.train.step_max
 
         # Precompile model for evaluation
         model_apply = jax.jit(model.apply)
@@ -340,7 +304,7 @@ def Trainer(
                     opt_state=opt_state,
                 )
 
-                if step % log_steps == 0:
+                if step % cfg.logging.log_steps == 0:
                     loss.block_until_ready()
                     if wandb_run:
                         wandb_run.log({"train/loss": loss.item()}, step)
@@ -348,7 +312,7 @@ def Trainer(
                         step_str = str(step).zfill(len(str(int(step_max))))
                         print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
-                if step % eval_steps == 0 and step > 0:
+                if step % cfg.logging.eval_steps == 0 and step > 0:
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
                     eval_metrics = eval_rollout(
                         case=case,
@@ -360,8 +324,8 @@ def Trainer(
                         loader_eval=loader_valid,
                         n_rollout_steps=n_rollout_steps,
                         n_trajs=eval_n_trajs,
-                        rollout_dir=rollout_dir,
-                        out_type=out_type,
+                        rollout_dir=cfg.eval.rollout_dir,
+                        out_type=cfg.eval.out_type_train,
                     )
 
                     metrics = averaged_metrics(eval_metrics)

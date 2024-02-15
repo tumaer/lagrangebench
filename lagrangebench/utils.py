@@ -5,8 +5,8 @@ import json
 import os
 import pickle
 import random
-from dataclasses import dataclass, field
-from typing import Callable, List, Tuple
+from dataclasses import dataclass
+from typing import Callable, Tuple
 
 import cloudpickle
 import jax
@@ -171,27 +171,5 @@ class LossConfig:
     vel: float = 0.0
     acc: float = 1.0
 
-    def __getitem__(self, item):
-        return getattr(self, item)
-
-    @property
-    def nonzero(self):
-        return [field for field in self.__annotations__ if self[field] != 0]
-
-
-@dataclass(frozen=False)
-class PushforwardConfig:
-    """Pushforward trick configuration.
-
-    Attributes:
-        steps: When to introduce each unroll stage, e.g. [-1, 20000, 50000]
-        unrolls: For how many timesteps to unroll, e.g. [0, 1, 20]
-        probs: Probability (ratio) between the relative unrolls, e.g. [5, 4, 1]
-    """
-
-    steps: List[int] = field(default_factory=lambda: [-1])
-    unrolls: List[int] = field(default_factory=lambda: [0])
-    probs: List[float] = field(default_factory=lambda: [1.0])
-
-    def __getitem__(self, item):
-        return getattr(self, item)
+    def __getitem__(self, key):
+        return getattr(self, key)

@@ -8,7 +8,6 @@ Original implementation: https://github.com/RobDHess/Steerable-E3-GNN
 Standalone implementation + validation: https://github.com/gerkone/segnn-jax
 """
 
-
 import warnings
 from math import prod
 from typing import Any, Callable, Dict, Optional, Tuple, Union
@@ -21,6 +20,7 @@ import jraph
 from e3nn_jax import Irreps, IrrepsArray
 from jax.tree_util import Partial, tree_map
 
+from lagrangebench.config import custom_config
 from lagrangebench.utils import NodeType
 
 from .base import BaseModel
@@ -608,3 +608,16 @@ class SEGNN(BaseModel):
         nodes = self._decoder(st_graph)
         out = self._postprocess(nodes, dim)
         return out
+
+
+@custom_config
+def segnn_config(cfg):
+    """SEGNN only parameters."""
+    # Steerable attributes level
+    cfg.model.lmax_attributes = 1
+    # Level of the hidden layer
+    cfg.model.lmax_hidden = 1
+    # SEGNN normalization. instance, batch, none
+    cfg.model.segnn_norm = "none"
+    # SEGNN velocity aggregation. avg or last
+    cfg.model.velocity_aggregate = "avg"
