@@ -5,7 +5,6 @@ model:
   num_mp_steps: 10
   latent_dim: 64
 
-
 train:
   isotropic_norm: True
 
@@ -14,3 +13,6 @@ optimizer:
 
 logging:
   wandb_project: ldc_3d
+
+neighbors:
+  multiplier: 2.0

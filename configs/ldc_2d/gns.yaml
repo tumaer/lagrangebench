@@ -7,6 +7,10 @@ model:
 
 optimizer:
   lr_start: 5.e-4
+  noise_std: 0.001
 
 logging:
   wandb_project: ldc_3d
+
+neighbors:
+  multiplier: 2.0

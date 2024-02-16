@@ -10,3 +10,6 @@ optimizer:
 
 logging:
   wandb_project: ldc_3d
+
+neighbors:
+  multiplier: 2.0
