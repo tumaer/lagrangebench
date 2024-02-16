@@ -20,7 +20,7 @@ import jraph
 from e3nn_jax import Irreps, IrrepsArray
 from jax.tree_util import Partial, tree_map
 
-from lagrangebench.config import custom_config
+from lagrangebench.config import cfg, custom_config
 from lagrangebench.utils import NodeType
 
 from .base import BaseModel
@@ -445,16 +445,9 @@ class SEGNN(BaseModel):
         self,
         node_features_irreps: Irreps,
         edge_features_irreps: Irreps,
-        scalar_units: int,
-        lmax_hidden: int,
-        lmax_attributes: int,
         output_irreps: Irreps,
-        num_mp_steps: int,
         n_vels: int,
-        velocity_aggregate: str = "avg",
         homogeneous_particles: bool = True,
-        norm: Optional[str] = None,
-        blocks_per_step: int = 2,
         embed_msg_features: bool = False,
     ):
         """
@@ -463,30 +456,23 @@ class SEGNN(BaseModel):
         Args:
             node_features_irreps: Irreps of the node features.
             edge_features_irreps: Irreps of the additional message passing features.
-            scalar_units: Hidden units (lower bound). Actual number depends on lmax.
-            lmax_hidden: Maximum L of the hidden layer representations.
-            lmax_attributes: Maximum L of the attributes.
             output_irreps: Output representation.
-            num_mp_steps: Number of message passing layers
             n_vels: Number of velocities in the history.
-            velocity_aggregate: Velocity sequence aggregation method.
             homogeneous_particles: If all particles are of homogeneous type.
-            norm: Normalization type. Either None, 'instance' or 'batch'
-            blocks_per_step: Number of tensor product blocks in each message passing
             embed_msg_features: Set to true to also embed edges/message passing features
         """
         super().__init__()
 
         # network
-        self._attribute_irreps = Irreps.spherical_harmonics(lmax_attributes)
+        self._attribute_irreps = Irreps.spherical_harmonics(cfg.model.lmax_attributes)
         self._hidden_irreps = weight_balanced_irreps(
-            scalar_units, self._attribute_irreps, lmax_hidden
+            cfg.model.latent_dim, self._attribute_irreps, cfg.model.lmax_hidden
         )
         self._output_irreps = output_irreps
-        self._num_mp_steps = num_mp_steps
+        self._num_mp_steps = cfg.model.num_mp_steps
+        self._norm = cfg.model.segnn_norm
+        self._blocks_per_step = cfg.model.num_mlp_layers
         self._embed_msg_features = embed_msg_features
-        self._norm = norm
-        self._blocks_per_step = blocks_per_step
 
         self._embedding = O3Embedding(
             self._hidden_irreps,
@@ -500,13 +486,13 @@ class SEGNN(BaseModel):
         )
 
         # transform
-        assert velocity_aggregate in [
+        assert cfg.model.velocity_aggregate in [
             "avg",
             "last",
         ], "Invalid velocity aggregate. Must be one of 'avg', 'sum' or 'last'."
         self._node_features_irreps = node_features_irreps
         self._edge_features_irreps = edge_features_irreps
-        self._velocity_aggregate = velocity_aggregate
+        self._velocity_aggregate = cfg.model.velocity_aggregate
         self._n_vels = n_vels
         self._homogeneous_particles = homogeneous_particles
 
@@ -610,6 +596,7 @@ class SEGNN(BaseModel):
         return out
 
 
+# TODO figure out why this is not working
 @custom_config
 def segnn_config(cfg):
     """SEGNN only parameters."""

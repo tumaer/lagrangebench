@@ -16,6 +16,7 @@ import jraph
 from jax.tree_util import Partial
 from jax_md import space
 
+from lagrangebench.config import cfg
 from lagrangebench.utils import NodeType
 
 from .base import BaseModel
@@ -249,7 +250,6 @@ class EGNN(BaseModel):
 
     def __init__(
         self,
-        hidden_size: int,
         output_size: int,
         dt: float,
         n_vels: int,
@@ -257,7 +257,6 @@ class EGNN(BaseModel):
         shift_fn: space.ShiftFn,
         normalization_stats: Optional[Dict[str, jnp.ndarray]] = None,
         act_fn: Callable = jax.nn.silu,
-        num_mp_steps: int = 4,
         homogeneous_particles: bool = True,
         residual: bool = True,
         attention: bool = False,
@@ -290,17 +289,17 @@ class EGNN(BaseModel):
         """
         super().__init__()
         # network
-        self._hidden_size = hidden_size
+        self._hidden_size = cfg.model.latent_dim
         self._output_size = output_size
         self._act_fn = act_fn
-        self._num_mp_steps = num_mp_steps
+        self._num_mp_steps = cfg.model.num_mp_steps
         self._residual = residual
         self._attention = attention
         self._normalize = normalize
         self._tanh = tanh
 
         # integrator
-        self._dt = dt / num_mp_steps
+        self._dt = dt / self._num_mp_steps
         self._displacement_fn = displacement_fn
         self._shift_fn = shift_fn
         if normalization_stats is None:

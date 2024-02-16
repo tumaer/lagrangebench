@@ -77,10 +77,6 @@ def setup_model(
     """Setup model based on cfg."""
     model_name = cfg.model.name.lower()
 
-    latent_dim = cfg.model.latent_dim
-    num_mlp_layers = cfg.model.num_mlp_layers
-    num_mp_steps = cfg.model.num_mp_steps
-
     input_seq_length = cfg.model.input_seq_length
     magnitude_features = cfg.train.magnitude_features
 
@@ -89,21 +85,18 @@ def setup_model(
         def model_fn(x):
             return models.GNS(
                 particle_dimension=metadata["dim"],
-                latent_size=latent_dim,
-                blocks_per_step=num_mlp_layers,
-                num_mp_steps=num_mp_steps,
                 num_particle_types=NodeType.SIZE,
                 particle_type_embedding_size=16,
             )(x)
 
         MODEL = models.GNS
     elif model_name == "segnn":
-        segnn_cfg = cfg.model.segnn
         # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
         node_feature_irreps = node_irreps(
             metadata,
             input_seq_length,
             has_external_force,
+            magnitude_features,
             homogeneous_particles,
         )
         # 1o displacement, 0e distance
@@ -113,16 +106,9 @@ def setup_model(
             return models.SEGNN(
                 node_features_irreps=node_feature_irreps,
                 edge_features_irreps=edge_feature_irreps,
-                scalar_units=latent_dim,
-                lmax_hidden=segnn_cfg.lmax_hidden,
-                lmax_attributes=segnn_cfg.lmax_attributes,
                 output_irreps=Irreps("1x1o"),
-                num_mp_steps=num_mp_steps,
                 n_vels=input_seq_length - 1,
-                velocity_aggregate=segnn_cfg.velocity_aggregate,
-                homogeneous_particles=cfg.train.homogeneous_particles,
-                blocks_per_step=num_mlp_layers,
-                norm=segnn_cfg.segnn_norm,
+                homogeneous_particles=homogeneous_particles,
             )(x)
 
         MODEL = models.SEGNN
@@ -138,13 +124,11 @@ def setup_model(
 
         def model_fn(x):
             return models.EGNN(
-                hidden_size=cfg.latent_dim,
                 output_size=1,
                 dt=metadata["dt"] * metadata["write_every"],
                 displacement_fn=displacement_fn,
                 shift_fn=shift_fn,
                 normalization_stats=normalization_stats,
-                num_mp_steps=num_mp_steps,
                 n_vels=input_seq_length - 1,
                 residual=True,
             )(x)
@@ -156,12 +140,10 @@ def setup_model(
 
         def model_fn(x):
             return models.PaiNN(
-                hidden_size=latent_dim,
                 output_size=1,
                 n_vels=input_seq_length - 1,
                 radial_basis_fn=models.painn.gaussian_rbf(20, radius, trainable=True),
                 cutoff_fn=models.painn.cosine_cutoff(radius),
-                num_mp_steps=num_mp_steps,
             )(x)
 
         MODEL = models.PaiNN

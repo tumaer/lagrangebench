@@ -1,4 +1,5 @@
 from .case_setup.case import case_builder
+from .config import cfg
 from .data import DAM2D, LDC2D, LDC3D, RPF2D, RPF3D, TGV2D, TGV3D, H5Dataset
 from .evaluate import infer
 from .models import EGNN, GNS, SEGNN, PaiNN
@@ -20,6 +21,7 @@ __all__ = [
     "LDC2D",
     "LDC3D",
     "DAM2D",
+    "cfg",
 ]
 
 __version__ = "0.0.1"

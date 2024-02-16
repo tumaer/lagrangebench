@@ -16,6 +16,7 @@ import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
 
+from lagrangebench.config import cfg
 from lagrangebench.utils import NodeType
 
 from .utils import LinearXav
@@ -366,9 +367,7 @@ class PaiNN(hk.Module):
 
     def __init__(
         self,
-        hidden_size: int,
         output_size: int,
-        num_mp_steps: int,
         radial_basis_fn: Callable,
         cutoff_fn: Callable,
         n_vels: int,
@@ -399,8 +398,8 @@ class PaiNN(hk.Module):
 
         self._n_vels = n_vels
         self._homogeneous_particles = homogeneous_particles
-        self._hidden_size = hidden_size
-        self._num_mp_steps = num_mp_steps
+        self._hidden_size = cfg.model.latent_dim
+        self._num_mp_steps = cfg.model.num_mp_steps
         self._eps = eps
         self._shared_filters = shared_filters
         self._shared_interactions = shared_interactions
@@ -408,27 +407,27 @@ class PaiNN(hk.Module):
         self.radial_basis_fn = radial_basis_fn
         self.cutoff_fn = cutoff_fn
 
-        self.scalar_emb = LinearXav(hidden_size, name="scalar_embedding")
+        self.scalar_emb = LinearXav(self._hidden_size, name="scalar_embedding")
         # mix vector channels (only used if vector features are present in input)
         self.vector_emb = LinearXav(
-            hidden_size, with_bias=False, name="vector_embedding"
+            self._hidden_size, with_bias=False, name="vector_embedding"
         )
 
         if shared_filters:
-            self.filter_net = LinearXav(3 * hidden_size, name="filter_net")
+            self.filter_net = LinearXav(3 * self._hidden_size, name="filter_net")
         else:
             self.filter_net = LinearXav(
-                num_mp_steps * 3 * hidden_size, name="filter_net"
+                self._num_mp_steps * 3 * self._hidden_size, name="filter_net"
             )
 
         if self._shared_interactions:
             self.layers = [
-                PaiNNLayer(hidden_size, 0, activation, eps=eps)
-            ] * num_mp_steps
+                PaiNNLayer(self._hidden_size, 0, activation, eps=eps)
+            ] * self._num_mp_steps
         else:
             self.layers = [
-                PaiNNLayer(hidden_size, i, activation, eps=eps)
-                for i in range(num_mp_steps)
+                PaiNNLayer(self._hidden_size, i, activation, eps=eps)
+                for i in range(self._num_mp_steps)
             ]
 
         self._readout = PaiNNReadout(self._hidden_size, out_channels=output_size)

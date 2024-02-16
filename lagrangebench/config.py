@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import yaml
 from yacs.config import CfgNode as CN
@@ -7,12 +7,9 @@ from yacs.config import CfgNode as CN
 cfg = CN()
 
 
-__custom_cfg_fn: Dict[str, Any] = {}
-
-
 def custom_config(fn):
-    """ "Decorator to add custom config functions."""
-    __custom_cfg_fn[fn.__name__] = fn
+    """Decorator to add custom config functions."""
+    fn(cfg)
     return fn
 
 
@@ -158,10 +155,6 @@ def defaults(cfg):
     neighbors.multiplier = 1.25
 
     cfg.neighbors = neighbors
-
-    # custom and user configs
-    for cfg_fn in __custom_cfg_fn.values():
-        cfg_fn(cfg)
 
 
 def check_cfg(cfg):
