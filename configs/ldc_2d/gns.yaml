@@ -1,6 +1,12 @@
-extends: ldc_2d/base.yaml
+data_dir: datasets/2D_LDC_2708_10kevery100
 
-model: gns
-num_mp_steps: 10
-latent_dim: 128
-lr_start: 5.e-4
+model: 
+  name: gns
+  num_mp_steps: 10
+  latent_dim: 128
+
+optimizer:
+  lr_start: 5.e-4
+
+logging:
+  wandb_project: ldc_3d

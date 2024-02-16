@@ -1,7 +1,0 @@
-extends: defaults.yaml
-
-data_dir: datasets/2D_DAM_5740_20kevery100
-wandb_project: dam_2d
-
-neighbor_list_multiplier: 2.0
-noise_std: 0.001

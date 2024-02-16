@@ -1,9 +1,17 @@
-extends: rpf_3d/base.yaml
 
-model: painn
-num_mp_steps: 5
-latent_dim: 128
-lr_start: 5.e-4
+data_dir: datasets/3D_RPF_8000_10kevery100
 
-isotropic_norm: True
-magnitude_features: True
+model: 
+  name: painn
+  num_mp_steps: 5
+  latent_dim: 128
+
+train:
+  isotropic_norm: True
+  magnitude_features: True
+
+optimizer:
+  lr_start: 5.e-4
+
+logging:
+  wandb_project: rpf_3d

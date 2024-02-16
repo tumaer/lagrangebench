@@ -1,8 +1,19 @@
-extends: dam_2d/base.yaml
+data_dir: datasets/2D_DAM_5740_20kevery100
 
-model: segnn
-num_mp_steps: 10
-latent_dim: 64
-lr_start: 5.e-4
+model: 
+  name: segnn
+  num_mp_steps: 10
+  latent_dim: 64
 
-isotropic_norm: True
+train:
+  isotropic_norm: True
+
+optimizer:
+  lr_start: 5.e-4
+  noise_std: 0.001
+
+logging:
+  wandb_project: dam_2d
+
+neighbors:
+  multiplier: 2.0

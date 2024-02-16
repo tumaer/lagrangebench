@@ -1,8 +1,16 @@
-extends: tgv_2d/base.yaml
+data_dir: datasets/2D_TGV_2500_10kevery100
 
-model: segnn
-num_mp_steps: 10
-latent_dim: 64
-lr_start: 5.e-4
+model: 
+  name: segnn
+  num_mp_steps: 10
+  latent_dim: 64
 
-isotropic_norm: True
+train:
+  isotropic_norm: True
+
+
+optimizer:
+  lr_start: 5.e-4
+
+logging:
+  wandb_project: tgv_2d

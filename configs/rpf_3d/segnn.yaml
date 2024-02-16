@@ -1,8 +1,15 @@
-extends: rpf_3d/base.yaml
+data_dir: datasets/3D_RPF_8000_10kevery100
 
-model: segnn
-num_mp_steps: 10
-latent_dim: 64
-lr_start: 1.e-3
+model: 
+  name: segnn
+  num_mp_steps: 10
+  latent_dim: 64
 
-isotropic_norm: True
+train:
+  isotropic_norm: True
+
+optimizer:
+  lr_start: 1.e-3
+
+logging:
+  wandb_project: rpf_3d

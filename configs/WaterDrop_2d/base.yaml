@@ -1,6 +1,0 @@
-extends: defaults.yaml
-
-data_dir: /tmp/datasets/WaterDrop
-wandb_project: waterdrop_2d
-
-neighbor_list_backend: matscipy
