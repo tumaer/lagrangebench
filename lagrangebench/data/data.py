@@ -15,6 +15,7 @@ import numpy as np
 import wget
 from torch.utils.data import Dataset
 
+from lagrangebench.config import cfg
 from lagrangebench.utils import NodeType
 
 URLS = {
@@ -41,17 +42,16 @@ class H5Dataset(Dataset):
     def __init__(
         self,
         split: str,
-        dataset_path: str,
+        dataset_path: Optional[str] = None,
         name: Optional[str] = None,
         input_seq_length: int = 6,
         extra_seq_length: int = 0,
-        nl_backend: str = "jaxmd_vmap",
     ):
         """Initialize the dataset. If the dataset is not present, it is downloaded.
 
         Args:
             split: "train", "valid", or "test"
-            dataset_path: Path to the dataset
+            dataset_path: Path to the dataset. If none it reads from the config.
             name: Name of the dataset. If None, it is inferred from the path.
             input_seq_length: Length of the input sequence. The number of historic
                 velocities is input_seq_length - 1. And during training, the returned
@@ -60,8 +60,9 @@ class H5Dataset(Dataset):
             extra_seq_length: During training, this is the maximum number of pushforward
                 unroll steps. During validation/testing, this specifies the largest
                 N-step MSE loss we are interested in, e.g. for best model checkpointing.
-            nl_backend: Which backend to use for the neighbor list
         """
+        if dataset_path is None:
+            dataset_path = cfg.data_dir
 
         if dataset_path.endswith("/"):  # remove trailing slash in dataset path
             dataset_path = dataset_path[:-1]
@@ -80,7 +81,7 @@ class H5Dataset(Dataset):
         self.dataset_path = dataset_path
         self.file_path = osp.join(dataset_path, split + ".h5")
         self.input_seq_length = input_seq_length
-        self.nl_backend = nl_backend
+        self.nl_backend = cfg.neighbors.backend
 
         force_fn_path = osp.join(dataset_path, "force.py")
         if osp.exists(force_fn_path):
