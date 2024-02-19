@@ -10,7 +10,7 @@ optimizer:
   noise_std: 0.001
 
 logging:
-  wandb_project: ldc_3d
+  wandb_project: ldc_2d
 
 neighbors:
   multiplier: 2.0

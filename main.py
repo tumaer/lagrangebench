@@ -14,10 +14,10 @@ def cli_arguments():
         "--gpu", type=int, required=False, help="CUDA device ID to use."
     )
     parser.add_argument(
-        "--f64",
+        "--f32",
         required=False,
         action=argparse.BooleanOptionalAction,
-        help="Whether to use double precision.",
+        help="Whether to use single precision for pre-/postprocessing. Default is f64.",
     )
     parser.add_argument(
         "--xla_mem_fraction",
@@ -54,7 +54,7 @@ if __name__ == "__main__":
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152 from TensorFlow
     os.environ["CUDA_VISIBLE_DEVICES"] = str(cli_args.gpu)
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(cli_args.xla_mem_fraction)
-    if cli_args.f64:
+    if not cli_args.f32:
         from jax import config
 
         config.update("jax_enable_x64", True)
@@ -69,6 +69,6 @@ if __name__ == "__main__":
     print(cfg.dump())
     print("#" * 79)
 
-    from experiments.run import train_or_infer
+    from lagrangebench.runner import train_or_infer
 
     train_or_infer(cfg)

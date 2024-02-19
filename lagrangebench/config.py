@@ -79,7 +79,7 @@ def defaults(cfg):
     # optimizer: pushforward
     pushforward = CN()
     # At which training step to introduce next unroll stage
-    pushforward.steps = [-1, 200000, 300000, 400000]
+    pushforward.steps = [-1, 20000, 300000, 400000]
     # For how many steps to unroll
     pushforward.unrolls = [0, 1, 2, 3]
     # Which probability ratio to keep between the unrolls
@@ -119,8 +119,10 @@ def defaults(cfg):
     eval.n_extrap_steps = 0
     # batch size for validation/testing
     eval.batch_size_infer = 2
-    # loggingging directory
-    eval.out_type = None
+    # write validation rollouts. One of "none", "vtk", or "pkl"
+    eval.out_type_train = "none"
+    # write inference rollouts. One of "none", "vtk", or "pkl"
+    eval.out_type_infer = "pkl"
     # rollouts directory
     eval.rollout_dir = None
     # whether to use the test split
@@ -143,6 +145,8 @@ def defaults(cfg):
     logging.wandb_entity = "lagrangebench"
     # checkpoint directory
     logging.ckp_dir = "ckp"
+    # name of training run
+    logging.run_name = None
 
     cfg.logging = logging
 

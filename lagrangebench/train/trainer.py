@@ -11,9 +11,9 @@ import jraph
 import optax
 from jax import vmap
 from torch.utils.data import DataLoader
-from wandb.wandb_run import Run
 
-from lagrangebench.config import cfg
+import wandb
+from lagrangebench.config import cfg, cfg_to_dict
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout
@@ -172,7 +172,6 @@ def Trainer(
         opt_state: Optional[optax.OptState] = None,
         store_checkpoint: Optional[str] = None,
         load_checkpoint: Optional[str] = None,
-        wandb_run: Optional[Run] = None,
     ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
         Training loop.
@@ -187,7 +186,6 @@ def Trainer(
             opt_state: Optional optimizer state.
             store_checkpoint: Checkpoints destination. Without it params aren't saved.
             load_checkpoint: Initial checkpoint directory. If provided resumes training.
-            wandb_run: Wandb run.
 
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
@@ -228,9 +226,26 @@ def Trainer(
             key, subkey = jax.random.split(key, 2)
             params, state = model.init(subkey, (features, particle_type[0]))
 
-        if wandb_run is not None:
-            wandb_run.log({"info/num_params": get_num_params(params)}, 0)
-            wandb_run.log({"info/step_start": step}, 0)
+        # start logging
+        if cfg.logging.wandb:
+            cfg_dict = cfg_to_dict(cfg)
+            cfg_dict["info"] = {
+                "dataset_name": data_train.name,
+                "len_train": len(data_train),
+                "len_eval": len(data_valid),
+                "num_params": get_num_params(params).item(),
+                "step_start": step,
+            }
+
+            wandb_run = wandb.init(
+                project=cfg.logging.wandb_project,
+                entity=cfg.logging.wandb_entity,
+                name=cfg.logging.run_name,
+                config=cfg_dict,
+                save_code=True,
+            )
+        else:
+            wandb_run = None
 
         # initialize optimizer state
         if opt_state is None:
@@ -346,6 +361,9 @@ def Trainer(
                 step += 1
                 if step == step_max + 1:
                     break
+
+        if cfg.logging.wandb:
+            wandb.finish()
 
         return params, state, opt_state
 

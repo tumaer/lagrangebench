@@ -13,4 +13,4 @@ optimizer:
   lr_start: 1.e-4
 
 logging:
-  wandb_project: rpf_3d
+  wandb_project: rpf_2d

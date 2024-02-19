@@ -1,17 +1,110 @@
 import os
 import os.path as osp
 from argparse import Namespace
+from datetime import datetime
 from typing import Callable, Dict, Optional, Tuple, Type
 
+import haiku as hk
 import jax
 import jax.numpy as jnp
+import jmp
+import numpy as np
 from e3nn_jax import Irreps
 from jax_md import space
 
-from lagrangebench import models
+from lagrangebench import Trainer, infer, models
+from lagrangebench.case_setup import case_builder
 from lagrangebench.data import H5Dataset
+from lagrangebench.evaluate import averaged_metrics
 from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
+
+
+def train_or_infer(cfg):
+    mode = cfg.mode
+    old_model_dir = cfg.model.model_dir
+    is_test = cfg.eval.test
+
+    data_train, data_valid, data_test = setup_data(cfg)
+
+    metadata = data_train.metadata
+    # neighbors search
+    bounds = np.array(metadata["bounds"])
+    box = bounds[:, 1] - bounds[:, 0]
+
+    # setup core functions
+    case = case_builder(
+        box=box,
+        metadata=metadata,
+        external_force_fn=data_train.external_force_fn,
+    )
+
+    _, particle_type = data_train[0]
+
+    # setup model from configs
+    model, MODEL = setup_model(
+        cfg,
+        metadata=metadata,
+        homogeneous_particles=particle_type.max() == particle_type.min(),
+        has_external_force=data_train.external_force_fn is not None,
+        normalization_stats=case.normalization_stats,
+    )
+    model = hk.without_apply_rng(hk.transform_with_state(model))
+
+    # mixed precision training based on this reference:
+    # https://github.com/deepmind/dm-haiku/blob/main/examples/imagenet/train.py
+    policy = jmp.get_policy("params=float32,compute=float32,output=float32")
+    hk.mixed_precision.set_policy(MODEL, policy)
+
+    if mode == "train" or mode == "all":
+        print("Start training...")
+
+        if cfg.logging.run_name is None:
+            run_prefix = f"{cfg.model.name}_{data_train.name}"
+            data_and_time = datetime.today().strftime("%Y%m%d-%H%M%S")
+            cfg.logging.run_name = f"{run_prefix}_{data_and_time}"
+
+        cfg.model.model_dir = os.path.join(cfg.logging.ckp_dir, cfg.logging.run_name)
+        os.makedirs(cfg.model.model_dir, exist_ok=True)
+        os.makedirs(os.path.join(cfg.model.model_dir, "best"), exist_ok=True)
+        with open(os.path.join(cfg.model.model_dir, "config.yaml"), "w") as f:
+            cfg.dump(stream=f)
+        with open(os.path.join(cfg.model.model_dir, "best", "config.yaml"), "w") as f:
+            cfg.dump(stream=f)
+
+        trainer = Trainer(model, case, data_train, data_valid)
+        _, _, _ = trainer(
+            step_max=cfg.train.step_max,
+            load_checkpoint=old_model_dir,
+            store_checkpoint=cfg.model.model_dir,
+        )
+
+    if mode == "infer" or mode == "all":
+        print("Start inference...")
+
+        if mode == "infer":
+            model_dir = cfg.model.model_dir
+        if mode == "all":
+            model_dir = os.path.join(cfg.model.model_dir, "best")
+            assert osp.isfile(os.path.join(model_dir, "params_tree.pkl"))
+
+            cfg.eval.rollout_dir = model_dir.replace("ckp", "rollout")
+            os.makedirs(cfg.eval.rollout_dir, exist_ok=True)
+
+            if cfg.eval.n_trajs_infer is None:
+                cfg.eval.n_trajs_infer = cfg.eval.n_trajs_train
+
+        assert model_dir, "model_dir must be specified for inference."
+        metrics = infer(
+            model,
+            case,
+            data_test if is_test else data_valid,
+            load_checkpoint=model_dir,
+        )
+
+        split = "test" if is_test else "valid"
+        print(f"Metrics of {model_dir} on {split} split:")
+        print(averaged_metrics(metrics))
 
 
 def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
@@ -20,11 +113,9 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     rollout_dir = cfg.eval.rollout_dir
     input_seq_length = cfg.model.input_seq_length
     n_rollout_steps = cfg.eval.n_rollout_steps
-    neighbor_list_backend = cfg.neighbors.backend
     if not osp.isabs(data_dir):
         data_dir = osp.join(os.getcwd(), data_dir)
 
-    dataset_name = osp.basename(data_dir.split("/")[-1])
     if ckp_dir is not None:
         os.makedirs(ckp_dir, exist_ok=True)
     if rollout_dir is not None:
@@ -36,21 +127,18 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         dataset_path=data_dir,
         input_seq_length=input_seq_length,
         extra_seq_length=cfg.optimizer.pushforward.unrolls[-1],
-        nl_backend=neighbor_list_backend,
     )
     data_valid = H5Dataset(
         "valid",
         dataset_path=data_dir,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
-        nl_backend=neighbor_list_backend,
     )
     data_test = H5Dataset(
         "test",
         dataset_path=data_dir,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
-        nl_backend=neighbor_list_backend,
     )
 
     # TODO find another way to set these
@@ -64,7 +152,7 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         f"exceeds eval_n_trajs ({cfg.eval.n_trajs_train})"
     )
 
-    return data_train, data_valid, data_test, dataset_name
+    return data_train, data_valid, data_test
 
 
 def setup_model(

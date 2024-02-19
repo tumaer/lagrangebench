@@ -289,7 +289,7 @@ def eval_rollout(
                             "tag": example_rollout["particle_type"],
                         }
                         write_vtk(ref_state_vtk, f"{file_prefix}_ref_{k}.vtk")
-                if out_type == "pkl":
+                elif out_type == "pkl":
                     filename = f"{file_prefix}.pkl"
 
                     with open(filename, "wb") as f:
@@ -383,7 +383,7 @@ def infer(
         n_rollout_steps=cfg.eval.n_rollout_steps,
         n_trajs=cfg.eval.n_trajs_infer,
         rollout_dir=cfg.eval.rollout_dir,
-        out_type=cfg.eval.out_type,
+        out_type=cfg.eval.out_type_infer,
         n_extrap_steps=cfg.eval.n_extrap_steps,
     )
     return eval_metrics

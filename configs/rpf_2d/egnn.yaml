@@ -17,4 +17,4 @@ optimizer:
     acc: 0.0
 
 logging:
-  wandb_project: rpf_3d
+  wandb_project: rpf_2d
