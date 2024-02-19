@@ -10,7 +10,11 @@ project = "LagrangeBench"
 copyright = "2023, Chair of Aerodynamics and Fluid Mechanics, TUM"
 author = "Artur Toshev, Gianluca Galletti"
 
-version = "0.0.1"
+# read the version from pyproject.toml
+import toml
+
+pyproject = toml.load("../pyproject.toml")
+version = pyproject["tool"]["poetry"]["version"]
 
 # -- Path setup --------------------------------------------------------------
 

@@ -55,6 +55,7 @@ matscipy = "^0.8.0"
 torch = {version = "2.1.0+cpu", source = "torchcpu"}
 wget = "^3.2"
 yacs = "^0.1.8"
+toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
 # mypy = ">=1.8.0" - consider in the future

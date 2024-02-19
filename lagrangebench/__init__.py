@@ -24,4 +24,7 @@ __all__ = [
     "cfg",
 ]
 
-__version__ = "0.0.1"
+import toml
+
+pyproject = toml.load("pyproject.toml")
+__version__ = pyproject["tool"]["poetry"]["version"]
