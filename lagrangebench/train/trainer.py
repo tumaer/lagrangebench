@@ -9,10 +9,10 @@ import jax
 import jax.numpy as jnp
 import jraph
 import optax
+import wandb
 from jax import vmap
 from torch.utils.data import DataLoader
 
-import wandb
 from lagrangebench.config import cfg, cfg_to_dict
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
