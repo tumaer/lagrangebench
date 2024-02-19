@@ -75,7 +75,6 @@ url = "https://download.pytorch.org/whl/cpu"
 priority = "explicit"
 
 [tool.ruff]
-ignore = ["F811", "E402"]
 exclude = [
     ".git",
     ".venv",
@@ -87,6 +86,7 @@ show-fixes = true
 line-length = 88
 
 [tool.ruff.lint]
+ignore = ["F811", "E402"]
 select = [
     "E", # pycodestyle
     "F", # Pyflakes
