@@ -10,7 +10,6 @@ partition_*
 *.pkl
 datasets/
 # dev
-.vscode
 __pycache__
 *.pyc
 venv*/
@@ -20,6 +19,8 @@ rollouts
 profile
 dist
 .coverage
+*.sh
+*.png
 
 # Sphinx documentation
 docs/_build/
