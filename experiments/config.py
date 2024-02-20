@@ -203,6 +203,49 @@ def cli_arguments() -> Dict:
         type=int,
         help="Number of rollout steps during validation/testing.",
     )
+    # PDE Refiner Arguments
+    parser.add_argument(
+        "--sigma_min",
+        required=False,
+        type=float,
+        help="Minimum noise std for PDE Refiner.",
+    )
+
+    parser.add_argument(
+        "--num_refinement_steps",
+        required=False,
+        type=int,
+        help="Number of refinement steps for PDE Refiner.",
+    )
+
+    parser.add_argument(
+        "--wandb",
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="To store data on weights and biases",
+    )
+
+    parser.add_argument(
+        "--log_steps",
+        required=False,
+        type=int,
+        help="To define the number of steps to log data",
+    )
+
+    parser.add_argument(
+        "--eval_steps",
+        required=False,
+        type=int,
+        help="To define the number of steps after which the model is evaluated",
+    )
+
+    parser.add_argument(
+        "--step_max",
+        required=False,
+        type=int,
+        help="To define the maximum number of steps for training",
+    )
+
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 
