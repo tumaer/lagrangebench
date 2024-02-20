@@ -95,6 +95,9 @@ select = [
     # "D", # pydocstyle - consider in the future
 ]
 
+[tool.ruff.lint.isort]
+known-third-party = ["wandb"]
+
 [tool.pytest.ini_options]
 testpaths = "tests/"
 addopts = "--cov=lagrangebench --cov-fail-under=50"
