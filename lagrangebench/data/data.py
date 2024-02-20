@@ -17,7 +17,7 @@ from torch.utils.data import Dataset
 
 from lagrangebench.utils import NodeType
 
-ZENODO_PREFIX="https://zenodo.org/records/10491868/files/"
+ZENODO_PREFIX = "https://zenodo.org/records/10491868/files/"
 URLS = {
     "tgv2d": f"{ZENODO_PREFIX}2D_TGV_2500_10kevery100.zip",
     "rpf2d": f"{ZENODO_PREFIX}2D_RPF_3200_20kevery100.zip",

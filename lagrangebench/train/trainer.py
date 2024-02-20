@@ -11,7 +11,6 @@ import jraph
 import optax
 from jax import vmap
 from torch.utils.data import DataLoader
-from wandb.wandb_run import Run
 
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
@@ -28,6 +27,7 @@ from lagrangebench.utils import (
     save_haiku,
     set_seed,
 )
+from wandb.wandb_run import Run
 
 from .strats import push_forward_build, push_forward_sample_steps
 
