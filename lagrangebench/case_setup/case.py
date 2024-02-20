@@ -1,10 +1,11 @@
 """Case setup functions."""
 
 import warnings
+from functools import partial
 from typing import Callable, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
-from jax import Array, jit, lax, vmap
+from jax import Array, jit, lax, random, vmap
 from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
@@ -25,6 +26,15 @@ AllocateEvalFn = Callable[[SampleIn], EvalCaseOut]
 
 PreprocessFn = Callable[[Array, SampleIn, float, NeighborList, int], TrainCaseOut]
 PreprocessEvalFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
+
+# For PDE Refiner
+AllocatePdeRefinerFn = Callable[[random.KeyArray, SampleIn, float, int], TrainCaseOut]
+AllocateEvalPdeRefinerFn = Callable[[SampleIn], EvalCaseOut]
+PreprocessPdeRefinerFn = Callable[
+    [random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut
+]
+PreprocessEvalPdeRefinerFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
+
 
 IntegrateFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
@@ -54,6 +64,10 @@ class CaseSetupFn:
     preprocess: PreprocessFn = static_field()
     allocate_eval: AllocateEvalFn = static_field()
     preprocess_eval: PreprocessEvalFn = static_field()
+    allocate_pde_refiner: AllocatePdeRefinerFn = static_field()
+    preprocess_pde_refiner: PreprocessPdeRefinerFn = static_field()
+    allocate_eval_pde_refiner: AllocateEvalPdeRefinerFn = static_field()
+    preprocess_eval_pde_refiner: PreprocessEvalPdeRefinerFn = static_field()
     integrate: IntegrateFn = static_field()
     displacement: space.DisplacementFn = static_field()
     normalization_stats: Dict = static_field()
@@ -220,6 +234,152 @@ def case_builder(
     def preprocess_eval_fn(sample, neighbors):
         return _preprocess(sample, neighbors, mode="eval")
 
+    # Additional functions for PDE Refiner
+    def _preprocess_pde_refiner(
+        sample: Tuple[jnp.ndarray, jnp.ndarray],
+        neighbors: Optional[NeighborList] = None,
+        is_allocate: bool = False,  # bool to allocate new Neighbour List
+        mode: str = "train",
+        **kwargs,
+    ) -> Union[TrainCaseOut, EvalCaseOut]:
+        pos_input = jnp.asarray(
+            sample[0], dtype=dtype
+        )  # shape of sample[0] == pos_input = (3200,3,2).
+        particle_type = jnp.asarray(sample[1])
+
+        if mode == "train":
+            key, noise_std = kwargs["key"], kwargs["noise_std"]
+            unroll_steps = kwargs["unroll_steps"]
+            if pos_input.shape[1] > 1:  # pos_input.shape[1] = 7
+                key, pos_input = add_gns_noise(
+                    key, pos_input, particle_type, input_seq_length, noise_std, shift_fn
+                )
+
+        # allocate the neighbor list
+        most_recent_position = pos_input[
+            :, input_seq_length - 1
+        ]  # input_seq_length = 6
+        num_particles = (particle_type != -1).sum()
+        if is_allocate:
+            neighbors = neighbor_fn.allocate(
+                most_recent_position, num_particles=num_particles
+            )
+        else:
+            neighbors = neighbors.update(
+                most_recent_position, num_particles=num_particles
+            )
+
+        features = feature_transform(pos_input[:, :input_seq_length], neighbors)
+
+        if mode == "train":
+            key = kwargs["key"]
+            k = kwargs["k"]
+            is_k_zero = kwargs["is_k_zero"]
+
+            key, subkey = random.split(key, 2)
+
+            min_noise_std = kwargs["sigma_min"]
+            max_refinement_steps = kwargs["num_refinement_steps"]
+
+            features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
+
+            if max_refinement_steps != 0:
+                features["k"] = features["k"] * (1000 / max_refinement_steps)
+
+            slice_begin = (
+                0,
+                input_seq_length - 2 + unroll_steps,
+                0,
+            )
+            # =(0,0,0) if unroll_steps = 0 and input_seq_length = 2
+            slice_size = (pos_input.shape[0], 3, pos_input.shape[2])
+
+            # target_dict has the target position, velocity and acceleration
+            target_dict = _compute_target(
+                lax.dynamic_slice(pos_input, slice_begin, slice_size)
+            )
+
+            if is_k_zero:
+                features["u_t_noised"] = jnp.zeros((features["vel_hist"].shape[0], 2))
+                target_dict["noise"] = target_dict["acc"]
+
+            else:
+                noise_std = min_noise_std ** (k / max_refinement_steps)
+                # dependingg on value of k select the noise_std
+                # noise_std_list = jnp.array([3e-4, 3e-5, 3e-6])  # hardcoded_stds
+                # noise_std_list = jnp.array([3e-4, 1e-4, 3e-5])
+                # noise_std = noise_std_list[k - 1]
+
+                noise = random.normal(
+                    subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
+                )
+                features["u_t_noised"] = target_dict["acc"] + noise_std * noise
+                target_dict["noise"] = noise
+
+            #
+            return (
+                key,
+                features,
+                target_dict,
+                neighbors,
+            )
+
+        if mode == "eval":
+            return features, neighbors
+
+    def allocate_pde_refiner_fn(
+        key,
+        sample,
+        k,
+        is_k_zero,
+        sigma_min,
+        num_refinement_steps,
+        noise_std=0.0,
+        unroll_steps=0,
+    ):
+        return _preprocess_pde_refiner(
+            sample,
+            key=key,
+            k=k,
+            is_k_zero=is_k_zero,
+            sigma_min=sigma_min,
+            num_refinement_steps=num_refinement_steps,
+            noise_std=noise_std,
+            unroll_steps=unroll_steps,
+            is_allocate=True,
+        )
+
+    @partial(jit, static_argnames=["is_k_zero", "num_refinement_steps"])
+    def preprocess_pde_refiner_fn(
+        key,
+        sample,
+        noise_std,
+        neighbors,
+        k,
+        is_k_zero,
+        sigma_min,
+        num_refinement_steps,
+        unroll_steps=0,
+    ):
+        return _preprocess_pde_refiner(
+            sample,
+            neighbors,
+            key=key,
+            k=k,
+            is_k_zero=is_k_zero,
+            sigma_min=sigma_min,
+            num_refinement_steps=num_refinement_steps,
+            noise_std=noise_std,
+            unroll_steps=unroll_steps,
+        )
+
+    def allocate_eval_pde_refiner_fn(sample):
+        return _preprocess_pde_refiner(sample, is_allocate=True, mode="eval")
+
+    @jit
+    def preprocess_eval_pde_refiner_fn(sample, neighbors):
+        return _preprocess_pde_refiner(sample, neighbors, mode="eval")
+
     @jit
     def integrate_fn(normalized_in, position_sequence):
         """Euler integrator to get position shift."""
@@ -256,6 +416,10 @@ def case_builder(
         preprocess_fn,
         allocate_eval_fn,
         preprocess_eval_fn,
+        allocate_pde_refiner_fn,
+        preprocess_pde_refiner_fn,
+        allocate_eval_pde_refiner_fn,
+        preprocess_eval_pde_refiner_fn,
         integrate_fn,
         displacement_fn,
         normalization_stats,

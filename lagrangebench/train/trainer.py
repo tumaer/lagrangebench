@@ -9,13 +9,18 @@ import jax
 import jax.numpy as jnp
 import jraph
 import optax
-from jax import vmap
+from jax import random, vmap
 from torch.utils.data import DataLoader
 
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.defaults import defaults
-from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout
+from lagrangebench.evaluate import (
+    MetricsComputer,
+    averaged_metrics,
+    eval_rollout,
+    eval_rollout_pde_refiner,
+)
 from lagrangebench.utils import (
     LossConfig,
     PushforwardConfig,
@@ -114,6 +119,9 @@ def Trainer(
     metrics_stride: int = defaults.metrics_stride,
     num_workers: int = defaults.num_workers,
     batch_size_infer: int = defaults.batch_size_infer,
+    is_pde_refiner: bool = defaults.is_pde_refiner,
+    num_refinement_steps: int = defaults.num_refinement_steps,
+    sigma_min: float = defaults.sigma_min,
 ) -> Callable:
     """
     Builds a function that automates model training and evaluation.
@@ -250,7 +258,22 @@ def Trainer(
         # init values
         pos_input_and_target, particle_type = next(iter(loader_train))
         raw_sample = (pos_input_and_target[0], particle_type[0])
-        key, features, _, neighbors = case.allocate(base_key, raw_sample)
+
+        if is_pde_refiner:
+            key, subkey = jax.random.split(base_key, 2)
+            k = random.randint(subkey, (), 0, num_refinement_steps + 1)
+            is_k_zero = jnp.where(k == 0, True, False)
+            key, features, _, neighbors = case.allocate_pde_refiner(
+                key, raw_sample, k, is_k_zero, sigma_min, num_refinement_steps
+            )
+            preprocess_vmap = jax.vmap(
+                case.preprocess_pde_refiner,
+                in_axes=(0, 0, None, 0, None, None, None, None, None),
+            )
+
+        else:
+            key, features, _, neighbors = case.allocate(base_key, raw_sample)
+            preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
 
         step = 0
         if params is not None:
@@ -278,7 +301,6 @@ def Trainer(
             os.makedirs(store_checkpoint, exist_ok=True)
             os.makedirs(os.path.join(store_checkpoint, "best"), exist_ok=True)
 
-        preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
         push_forward = push_forward_build(model_apply, case)
         push_forward_vmap = jax.vmap(push_forward, in_axes=(0, 0, 0, 0, None, None))
 
@@ -294,13 +316,51 @@ def Trainer(
 
                 key, unroll_steps = push_forward_sample_steps(key, step, pushforward)
                 # target computation incorporates the sampled number pushforward steps
-                _keys, features_batch, target_batch, neighbors_batch = preprocess_vmap(
-                    keys,
-                    raw_batch,
-                    noise_std,
-                    neighbors_batch,
-                    unroll_steps,
-                )
+                # _keys, features_batch, target_batch, neighbors_batch =
+                #  preprocess_vmap(
+                #     keys,
+                #     raw_batch,
+                #     noise_std,
+                #     neighbors_batch,
+                #     unroll_steps,
+                # )
+                if is_pde_refiner:
+                    key, subkey = jax.random.split(key, 2)
+                    k = random.randint(subkey, (), 0, num_refinement_steps + 1)
+                    is_k_zero = jnp.where(k == 0, True, False)  # to be checked
+
+                    # in this case, preprocess_vmap() is case.preprocess_pde_refiner
+                    (
+                        _keys,
+                        features_batch,
+                        target_batch,
+                        neighbors_batch,
+                    ) = preprocess_vmap(
+                        keys,
+                        raw_batch,
+                        noise_std,
+                        neighbors_batch,
+                        k,
+                        is_k_zero,
+                        sigma_min,
+                        num_refinement_steps,
+                        unroll_steps,
+                    )
+
+                else:
+                    (
+                        _keys,
+                        features_batch,
+                        target_batch,
+                        neighbors_batch,
+                    ) = preprocess_vmap(
+                        keys,
+                        raw_batch,
+                        noise_std,
+                        neighbors_batch,
+                        unroll_steps,
+                    )
+
                 # unroll for push-forward steps
                 _current_pos = raw_batch[0][:, :, :input_seq_length]
                 for _ in range(unroll_steps):
@@ -351,19 +411,51 @@ def Trainer(
 
                 if step % eval_steps == 0 and step > 0:
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
-                    eval_metrics = eval_rollout(
-                        case=case,
-                        metrics_computer=metrics_computer,
-                        model_apply=model_apply,
-                        params=params,
-                        state=state,
-                        neighbors=nbrs,
-                        loader_eval=loader_valid,
-                        n_rollout_steps=n_rollout_steps,
-                        n_trajs=eval_n_trajs,
-                        rollout_dir=rollout_dir,
-                        out_type=out_type,
-                    )
+                    # eval_metrics = eval_rollout(
+                    #     case=case,
+                    #     metrics_computer=metrics_computer,
+                    #     model_apply=model_apply,
+                    #     params=params,
+                    #     state=state,
+                    #     neighbors=nbrs,
+                    #     loader_eval=loader_valid,
+                    #     n_rollout_steps=n_rollout_steps,
+                    #     n_trajs=eval_n_trajs,
+                    #     rollout_dir=rollout_dir,
+                    #     out_type=out_type,
+                    # )
+                    if is_pde_refiner:
+                        eval_metrics = eval_rollout_pde_refiner(
+                            case=case,
+                            metrics_computer=metrics_computer,
+                            model_apply=model_apply,
+                            params=params,
+                            state=state,
+                            neighbors=nbrs,
+                            loader_eval=loader_valid,
+                            n_rollout_steps=n_rollout_steps,
+                            n_trajs=eval_n_trajs,
+                            rollout_dir=rollout_dir,
+                            key=key,
+                            num_refinement_steps=num_refinement_steps,
+                            sigma_min=sigma_min,
+                            out_type=out_type,
+                        )
+
+                    else:
+                        eval_metrics = eval_rollout(
+                            case=case,
+                            metrics_computer=metrics_computer,
+                            model_apply=model_apply,
+                            params=params,
+                            state=state,
+                            neighbors=nbrs,
+                            loader_eval=loader_valid,
+                            n_rollout_steps=n_rollout_steps,
+                            n_trajs=eval_n_trajs,
+                            rollout_dir=rollout_dir,
+                            out_type=out_type,
+                        )
 
                     metrics = averaged_metrics(eval_metrics)
                     metadata_ckp = {
