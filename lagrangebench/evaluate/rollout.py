@@ -348,23 +348,30 @@ def eval_single_rollout_pde_refiner(
         
         features['u_t_noised'] = jnp.zeros((features['vel_hist'].shape[0],2)) #0's
         features['k']= jnp.tile(0, (features['vel_hist'].shape[0],)) #set to 0
-        #STARAT HERE
+        
         u_hat_t , _ = model_apply(params, state, (features, particle_type)) #predicts the 'acc' for gns and 'noise' for pde refiner
 
         max_refinement_steps=kwargs["num_refinement_steps"]
         min_noise_std = kwargs['sigma_min'] 
         key = kwargs["key"]
 
+        #noise_std_list = [3e-4, 1e-4, 3e-5] #hardcoded_stds
+        #noise_std_list = [3e-4, 3e-5, 3e-6]
+        
         for k in range(1, max_refinement_steps+1): #Refinement loop
             
             key, subkey = random.split(key, 2)
 
             noise_std =  min_noise_std**(k/max_refinement_steps)
-
+            #noise_std = noise_std_list[k-1]
             noise = random.normal(subkey, jnp.zeros((features['vel_hist'].shape[0],2)).shape)
 
             features['u_t_noised'] = u_hat_t['noise'] + noise_std*noise
 
+            #Modify the k value before sending it to the model
+            features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
+            features["k"] = features["k"] * (1000 / max_refinement_steps)
+            
             pred, _ = model_apply(params, state, (features, particle_type))
             #pred is a dictionary with key 'noise' 
             u_hat_t['noise'] = features['u_t_noised'] - pred['noise']*noise_std
