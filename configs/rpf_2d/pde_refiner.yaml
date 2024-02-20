@@ -1,0 +1,20 @@
+extends: rpf_2d/base.yaml
+
+model: pde_refiner
+num_mp_steps: 10
+latent_dim: 128
+lr_start: 5.e-4
+
+wandb: True
+wandb_project: pde_refiner_algo1_6_steps
+# Change this with your own entity
+wandb_entity: lagrangebench
+
+noise_std: 0.0000
+
+loss_weight:
+  noise: 1.0
+
+is_pde_refiner: True
+num_refinement_steps: 3
+sigma_min: 1.e-5

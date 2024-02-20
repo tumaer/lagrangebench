@@ -45,11 +45,11 @@ isotropic_norm: False
 # Parameters related to the push-forward trick
 pushforward:
   # At which training step to introduce next unroll stage
-  steps: [-1, 200000, 300000, 400000]
+  steps: [-1]
   # For how many steps to unroll
-  unrolls: [0, 1, 2, 3]
+  unrolls: [0]
   # Which probability ratio to keep between the unrolls
-  probs: [18, 2, 1, 1]
+  probs: [1]
 
 # Loss settings
 # Loss weight for position, acceleration, and velocity components
@@ -115,4 +115,8 @@ metrics_stride_infer: 1
 out_type_infer: pkl
 eval_n_trajs_infer: -1
 # batch size for validation/testing
-batch_size_infer: 2
+batch_size_infer: 1
+
+is_pde_refiner: False
+num_refinement_steps: 3
+sigma_min: 1.e-5
