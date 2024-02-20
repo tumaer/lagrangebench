@@ -24,7 +24,7 @@ from lagrangebench.utils import broadcast_from_batch
 @custom_config
 def eval_test_config(cfg):
     # setup the configuration
-    cfg.data_dir = "tests/3D_LJ_3_1214every1"  # Lennard-Jones dataset
+    cfg.main.data_dir = "tests/3D_LJ_3_1214every1"  # Lennard-Jones dataset
     cfg.model.input_seq_length = 3
     cfg.metrics = ["mse"]
     cfg.eval.n_rollout_steps = 100
@@ -38,7 +38,7 @@ class TestInferBuilder(unittest.TestCase):
     def setUp(self):
         data_valid = H5Dataset(
             split="valid",
-            dataset_path=cfg.data_dir,
+            dataset_path=cfg.main.data_dir,
             name="lj3d",
             input_seq_length=cfg.model.input_seq_length,
             extra_seq_length=cfg.eval.n_rollout_steps,

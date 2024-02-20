@@ -2,7 +2,7 @@
 ckp/
 rollout/
 rollouts/
-wandb
+wandb/
 *.out
 datasets
 baselines

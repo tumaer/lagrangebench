@@ -21,7 +21,7 @@ from lagrangebench.utils import NodeType
 
 
 def train_or_infer(cfg):
-    mode = cfg.mode
+    mode = cfg.main.mode
     old_model_dir = cfg.model.model_dir
     is_test = cfg.eval.test
 
@@ -108,7 +108,7 @@ def train_or_infer(cfg):
 
 
 def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
-    data_dir = cfg.data_dir
+    data_dir = cfg.main.data_dir
     ckp_dir = cfg.logging.ckp_dir
     rollout_dir = cfg.eval.rollout_dir
     input_seq_length = cfg.model.input_seq_length

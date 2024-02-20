@@ -348,7 +348,7 @@ def infer(
     else:
         params, state, _, _ = load_haiku(load_checkpoint)
 
-    key, seed_worker, generator = set_seed(cfg.seed)
+    key, seed_worker, generator = set_seed(cfg.main.seed)
 
     loader_test = DataLoader(
         dataset=data_test,

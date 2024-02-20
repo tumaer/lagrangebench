@@ -19,15 +19,23 @@ def defaults(cfg):
     if cfg is None:
         raise ValueError("cfg should be a yacs CfgNode")
 
-    # random seed
-    cfg.seed = 0
-    # data type for preprocessing
-    cfg.dtype = "float64"
+    # global and hardware-related configs
+    main = CN()
 
+    # One of "train", "infer" or "all" (= both)
+    main.mode = "all"
+    # random seed
+    main.seed = 0
+    # data type for preprocessing. One of "float32" or "float64"
+    main.dtype = "float64"
+    # gpu device
+    main.gpu = 0
+    # XLA memory fraction to be preallocated
+    main.xla_mem_fraction = 0.7
     # data directory
-    cfg.data_dir = None
-    # run, evaluation or both
-    cfg.mode = "all"
+    main.data_dir = None
+
+    cfg.main = main
 
     # model
     model = CN()
@@ -162,7 +170,7 @@ def defaults(cfg):
 
 
 def check_cfg(cfg):
-    assert cfg.data_dir is not None, "cfg.data_dir must be specified."
+    assert cfg.main.data_dir is not None, "cfg.main.data_dir must be specified."
     assert (
         cfg.train.step_max is not None and cfg.train.step_max > 0
     ), "cfg.train.step_max must be specified and larger than 0."
@@ -185,3 +193,16 @@ def cfg_to_dict(cfg: CN) -> Dict:
 
 # TODO find a better way
 defaults(cfg)
+
+
+@custom_config
+def segnn_config(cfg):
+    """SEGNN only parameters."""
+    # Steerable attributes level
+    cfg.model.lmax_attributes = 1
+    # Level of the hidden layer
+    cfg.model.lmax_hidden = 1
+    # SEGNN normalization. instance, batch, none
+    cfg.model.segnn_norm = "none"
+    # SEGNN velocity aggregation. avg or last
+    cfg.model.velocity_aggregate = "avg"

@@ -1,4 +1,5 @@
-data_dir: datasets/3D_RPF_8000_10kevery100
+main:
+  data_dir: datasets/3D_RPF_8000_10kevery100
 
 model: 
   name: segnn

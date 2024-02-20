@@ -1,4 +1,5 @@
-data_dir: /tmp/datasets/WaterDrop
+main:
+  data_dir: /tmp/datasets/WaterDrop
 
 model: 
   name: gns

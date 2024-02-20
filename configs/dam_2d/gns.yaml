@@ -1,4 +1,5 @@
-data_dir: datasets/2D_DAM_5740_20kevery100
+main:
+  data_dir: datasets/2D_DAM_5740_20kevery100
 
 model: 
   name: gns

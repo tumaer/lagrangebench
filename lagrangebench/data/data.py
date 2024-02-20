@@ -62,7 +62,7 @@ class H5Dataset(Dataset):
                 N-step MSE loss we are interested in, e.g. for best model checkpointing.
         """
         if dataset_path is None:
-            dataset_path = cfg.data_dir
+            dataset_path = cfg.main.data_dir
 
         if dataset_path.endswith("/"):  # remove trailing slash in dataset path
             dataset_path = dataset_path[:-1]

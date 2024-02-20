@@ -85,7 +85,7 @@ def case_builder(
     magnitude_features = cfg.train.magnitude_features
     neighbor_list_backend = cfg.neighbors.backend
     neighbor_list_multiplier = cfg.neighbors.multiplier
-    dtype = cfg.dtype
+    dtype = cfg.main.dtype
 
     normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
 

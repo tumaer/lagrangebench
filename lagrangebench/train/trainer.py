@@ -125,7 +125,7 @@ def Trainer(
     loss_weight = LossConfig(**dict(cfg.optimizer.loss_weight))
     pushforward = cfg.optimizer.pushforward
 
-    base_key, seed_worker, generator = set_seed(cfg.seed)
+    base_key, seed_worker, generator = set_seed(cfg.main.seed)
 
     # dataloaders
     loader_train = DataLoader(

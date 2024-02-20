@@ -20,7 +20,7 @@ import jraph
 from e3nn_jax import Irreps, IrrepsArray
 from jax.tree_util import Partial, tree_map
 
-from lagrangebench.config import cfg, custom_config
+from lagrangebench.config import cfg
 from lagrangebench.utils import NodeType
 
 from .base import BaseModel
@@ -594,17 +594,3 @@ class SEGNN(BaseModel):
         nodes = self._decoder(st_graph)
         out = self._postprocess(nodes, dim)
         return out
-
-
-# TODO figure out why this is not working
-@custom_config
-def segnn_config(cfg):
-    """SEGNN only parameters."""
-    # Steerable attributes level
-    cfg.model.lmax_attributes = 1
-    # Level of the hidden layer
-    cfg.model.lmax_hidden = 1
-    # SEGNN normalization. instance, batch, none
-    cfg.model.segnn_norm = "none"
-    # SEGNN velocity aggregation. avg or last
-    cfg.model.velocity_aggregate = "avg"
