@@ -1,5 +1,6 @@
 import argparse
 import os
+from typing import List
 
 
 def cli_arguments():
@@ -8,37 +9,30 @@ def cli_arguments():
 
     # config arguments
     parser.add_argument("-c", "--config", type=str, help="Path to the config yaml.")
-    parser.add_argument(
-        "extra",
-        default=None,
-        nargs="*",
-        help="Extra, optional config overrides. Need to be separated from '--config' "
-        "by the pseudo-argument '--'.",
-    )
 
-    args = parser.parse_args()
-    if args.extra is None:
-        args.extra = []
-    args.extra = preprocess_extras(args.extra)
+    args, extras = parser.parse_known_args()
+    if extras is None:
+        extras = []
+    args.extra = preprocess_extras(extras)
 
     return args
 
 
-def preprocess_extras(extras):
+def preprocess_extras(extras: List[str]):
     """Preprocess extras.
 
-    args.extra can be in any of the following 6 formats:
-    {"--","-",""}key{" ","="}value
+    Args:
+        extras: key value pairs in any of the following formats:
+        `--key value`, `--key=value`, `key value`, `key=value`
 
-    Here we clean up {"--", "-", "="} and split into key value pairs
+    Return:
+        All key value pairs formatted as `key value`
     """
 
     temp = []
     for arg in extras:
         if arg.startswith("--"):  # remove preceding "--"
             arg = arg[2:]
-        elif arg.startswith("-"):  # remove preceding "-"
-            arg = arg[1:]
         temp += arg.split("=")  # split key value pairs
 
     return temp
