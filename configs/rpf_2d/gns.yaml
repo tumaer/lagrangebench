@@ -4,3 +4,8 @@ model: gns
 num_mp_steps: 10
 latent_dim: 128
 lr_start: 5.e-4
+batch_size: 1
+
+is_pde_refiner: False
+num_refinement_steps: 3
+sigma_min: 1.e-5

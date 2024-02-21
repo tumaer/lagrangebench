@@ -68,3 +68,8 @@ class defaults:
     # neighbor list
     neighbor_list_backend: str = "jaxmd_vmap"  # backend for neighbor list computation
     neighbor_list_multiplier: float = 1.25  # multiplier for neighbor list capacity
+
+    # pde refiner defaults
+    is_pde_refiner: bool = False
+    num_refinement_steps: int = 4
+    sigma_min: float = 1e-3

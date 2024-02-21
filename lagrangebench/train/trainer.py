@@ -315,20 +315,11 @@ def Trainer(
                 raw_batch = jax.tree_map(lambda x: jnp.array(x), raw_batch)
 
                 key, unroll_steps = push_forward_sample_steps(key, step, pushforward)
-                # target computation incorporates the sampled number pushforward steps
-                # _keys, features_batch, target_batch, neighbors_batch =
-                #  preprocess_vmap(
-                #     keys,
-                #     raw_batch,
-                #     noise_std,
-                #     neighbors_batch,
-                #     unroll_steps,
-                # )
-                if is_pde_refiner:
+
+                if is_pde_refiner:  # not yet batched
                     key, subkey = jax.random.split(key, 2)
                     k = random.randint(subkey, (), 0, num_refinement_steps + 1)
-                    is_k_zero = jnp.where(k == 0, True, False)  # to be checked
-
+                    is_k_zero = bool(jnp.where(k == 0, True, False))
                     # in this case, preprocess_vmap() is case.preprocess_pde_refiner
                     (
                         _keys,
@@ -347,7 +338,7 @@ def Trainer(
                         unroll_steps,
                     )
 
-                else:
+                else:  # batched
                     (
                         _keys,
                         features_batch,
@@ -411,19 +402,7 @@ def Trainer(
 
                 if step % eval_steps == 0 and step > 0:
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
-                    # eval_metrics = eval_rollout(
-                    #     case=case,
-                    #     metrics_computer=metrics_computer,
-                    #     model_apply=model_apply,
-                    #     params=params,
-                    #     state=state,
-                    #     neighbors=nbrs,
-                    #     loader_eval=loader_valid,
-                    #     n_rollout_steps=n_rollout_steps,
-                    #     n_trajs=eval_n_trajs,
-                    #     rollout_dir=rollout_dir,
-                    #     out_type=out_type,
-                    # )
+
                     if is_pde_refiner:
                         eval_metrics = eval_rollout_pde_refiner(
                             case=case,
@@ -435,10 +414,10 @@ def Trainer(
                             loader_eval=loader_valid,
                             n_rollout_steps=n_rollout_steps,
                             n_trajs=eval_n_trajs,
-                            rollout_dir=rollout_dir,
                             key=key,
                             num_refinement_steps=num_refinement_steps,
                             sigma_min=sigma_min,
+                            rollout_dir=rollout_dir,
                             out_type=out_type,
                         )
 
