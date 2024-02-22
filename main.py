@@ -10,12 +10,24 @@ def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
     while "extends" in cfgs[0]:
         extends_path = cfgs[0]["extends"]
         del cfgs[0]["extends"]
-        cfgs = [OmegaConf.load(extends_path)] + cfgs
+
+        # go to parents configs until defaults.py is reached
+        if extends_path != "lagrangebench/defaults.py":
+            cfgs = [OmegaConf.load(extends_path)] + cfgs
+        else:
+            from lagrangebench.defaults import defaults
+
+            cfgs = [defaults] + cfgs
+            break
+
+    # merge all embedded configs and give highest priority to cli_args
     cfg = OmegaConf.merge(*cfgs, cli_args)
     return cfg
 
 
 if __name__ == "__main__":
+    # TODO: add optional wandb.sweeps
+
     cli_args = OmegaConf.from_cli()
     assert ("config" in cli_args.main) != (
         "model_dir" in cli_args.main
