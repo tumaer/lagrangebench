@@ -137,6 +137,8 @@ def train_or_infer(cfg: DictConfig):
         print(f"Metrics of {model_dir} on {split} split:")
         print(averaged_metrics(metrics))
 
+    return 0
+
 
 def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     data_dir = cfg.main.data_dir

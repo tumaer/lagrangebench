@@ -28,8 +28,8 @@ class TestInferBuilder(unittest.TestCase):
         self.cfg = OmegaConf.create(
             {
                 "main": {
-                    "data_dir": "tests/3D_LJ_3_1214every1"
-                },  # Lennard-Jones dataset
+                    "data_dir": "tests/3D_LJ_3_1214every1"  # Lennard-Jones dataset
+                },
                 "model": {
                     "input_seq_length": 3,  # two past velocities
                     "isotropic_norm": False,
