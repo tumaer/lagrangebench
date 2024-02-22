@@ -9,7 +9,6 @@ import haiku as hk
 import jax.numpy as jnp
 import jraph
 
-from lagrangebench.config import cfg
 from lagrangebench.utils import NodeType
 
 from .base import BaseModel
@@ -36,21 +35,27 @@ class GNS(BaseModel):
     def __init__(
         self,
         particle_dimension: int,
-        particle_type_embedding_size: int = 16,
+        latent_size: int,
+        blocks_per_step: int,
+        num_mp_steps: int,
+        particle_type_embedding_size: int,
         num_particle_types: int = NodeType.SIZE,
     ):
         """Initialize the model.
 
         Args:
             particle_dimension: Space dimensionality (e.g. 2 or 3).
+            latent_size: Size of the latent representations.
+            blocks_per_step: Number of MLP layers per block.
+            num_mp_steps: Number of message passing steps.
             particle_type_embedding_size: Size of the particle type embedding.
             num_particle_types: Max number of particle types.
         """
         super().__init__()
         self._output_size = particle_dimension
-        self._latent_size = cfg.model.latent_dim
-        self._blocks_per_step = cfg.model.num_mlp_layers
-        self._mp_steps = cfg.model.num_mp_steps
+        self._latent_size = latent_size
+        self._blocks_per_step = blocks_per_step
+        self._mp_steps = num_mp_steps
         self._num_particle_types = num_particle_types
 
         self._embedding = hk.Embed(

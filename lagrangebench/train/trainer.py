@@ -11,11 +11,14 @@ import jraph
 import optax
 import wandb
 from jax import vmap
+
+# to remove the depencence on omegaconf, one could use OmegaConf.to_container()
+from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
-from lagrangebench.config import cfg, cfg_to_dict
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
+from lagrangebench.defaults import defaults
 from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from lagrangebench.utils import (
     LossConfig,
@@ -92,6 +95,11 @@ def Trainer(
     case,
     data_train: H5Dataset,
     data_valid: H5Dataset,
+    cfg_model: DictConfig = defaults.model,
+    cfg_train: DictConfig = defaults.train,
+    cfg_eval: DictConfig = defaults.eval,
+    cfg_logging: DictConfig = defaults.logging,
+    seed: int = defaults.main.seed,
 ) -> Callable:
     """
     Builds a function that automates model training and evaluation.
@@ -108,6 +116,11 @@ def Trainer(
         case: Case setup class.
         data_train: Training dataset.
         data_valid: Validation dataset.
+        cfg_model: Model configuration.
+        cfg_train: Training configuration.
+        cfg_eval: Evaluation configuration.
+        cfg_logging: Logging configuration.
+        seed: Random seed for model init, training tricks and dataloading.
 
     Returns:
         Configured training function.
@@ -116,23 +129,24 @@ def Trainer(
         model, hk.TransformedWithState
     ), "Model must be passed as an Haiku transformed function."
 
-    input_seq_length = cfg.model.input_seq_length
-    noise_std = cfg.optimizer.noise_std
-    n_rollout_steps = cfg.eval.n_rollout_steps
-    eval_n_trajs = cfg.eval.n_trajs_train
+    input_seq_length = cfg_model.input_seq_length
+    noise_std = cfg_train.noise_std
+    n_rollout_steps = cfg_eval.n_rollout_steps
+    eval_n_trajs = cfg_eval.train.n_trajs
     # make immutable for jitting
     # TODO look for simpler alternatives to LossConfig
-    loss_weight = LossConfig(**dict(cfg.optimizer.loss_weight))
-    pushforward = cfg.optimizer.pushforward
+    # TODO(at): why moved away from LossConfig(**loss_weight) ?
+    loss_weight = LossConfig(**dict(cfg_train.loss_weight))
+    pushforward = cfg_train.pushforward
 
-    base_key, seed_worker, generator = set_seed(cfg.main.seed)
+    base_key, seed_worker, generator = set_seed(seed)
 
     # dataloaders
     loader_train = DataLoader(
         dataset=data_train,
-        batch_size=cfg.train.batch_size,
+        batch_size=cfg_eval.train.batch_size,
         shuffle=True,
-        num_workers=cfg.train.num_workers,
+        num_workers=cfg_train.num_workers,
         collate_fn=numpy_collate,
         drop_last=True,
         worker_init_fn=seed_worker,
@@ -140,7 +154,7 @@ def Trainer(
     )
     loader_valid = DataLoader(
         dataset=data_valid,
-        batch_size=cfg.eval.batch_size_infer,
+        batch_size=cfg_eval.infer.batch_size,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
         generator=generator,
@@ -148,30 +162,31 @@ def Trainer(
 
     # learning rate decays from lr_start to lr_final over lr_decay_steps exponentially
     lr_scheduler = optax.exponential_decay(
-        init_value=cfg.optimizer.lr_start,
-        transition_steps=cfg.optimizer.lr_decay_steps,
-        decay_rate=cfg.optimizer.lr_decay_rate,
-        end_value=cfg.optimizer.lr_final,
+        init_value=cfg_train.optimizer.lr_start,
+        transition_steps=cfg_train.optimizer.lr_decay_steps,
+        decay_rate=cfg_train.optimizer.lr_decay_rate,
+        end_value=cfg_train.optimizer.lr_final,
     )
     # optimizer
     opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
 
     # metrics computer config
     metrics_computer = MetricsComputer(
-        cfg.eval.metrics_train,
+        cfg_eval.train.metrics,
         dist_fn=case.displacement,
         metadata=data_train.metadata,
         input_seq_length=input_seq_length,
-        stride=cfg.eval.metrics_stride_train,
+        stride=cfg_eval.train.metrics_stride,
     )
 
     def _train(
-        step_max: Optional[int] = None,
+        step_max: int = defaults.train.step_max,
         params: Optional[hk.Params] = None,
         state: Optional[hk.State] = None,
         opt_state: Optional[optax.OptState] = None,
         store_checkpoint: Optional[str] = None,
         load_checkpoint: Optional[str] = None,
+        **kwargs,
     ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
         Training loop.
@@ -194,12 +209,10 @@ def Trainer(
             "You cannot evaluate the loss on longer than a ground truth trajectory "
             f"({n_rollout_steps}, {data_valid.subseq_length}, {input_seq_length})"
         )
-        assert eval_n_trajs <= len(
-            loader_valid
-        ), "eval_n_trajs must be <= len(loader_valid)"
-
-        if step_max is None:
-            step_max = cfg.train.step_max
+        assert eval_n_trajs <= loader_valid.dataset.num_samples, (
+            f"eval_n_trajs must be <= loader_valid.dataset.num_samples, but it is "
+            f"{eval_n_trajs} > {loader_valid.dataset.num_samples}"
+        )
 
         # Precompile model for evaluation
         model_apply = jax.jit(model.apply)
@@ -227,9 +240,9 @@ def Trainer(
             params, state = model.init(subkey, (features, particle_type[0]))
 
         # start logging
-        if cfg.logging.wandb:
-            cfg_dict = cfg_to_dict(cfg)
-            cfg_dict["info"] = {
+        if cfg_logging.wandb:
+            wandb_track_config = kwargs.get("wandb_track_config", {})
+            wandb_track_config["info"] = {
                 "dataset_name": data_train.name,
                 "len_train": len(data_train),
                 "len_eval": len(data_valid),
@@ -238,10 +251,10 @@ def Trainer(
             }
 
             wandb_run = wandb.init(
-                project=cfg.logging.wandb_project,
-                entity=cfg.logging.wandb_entity,
-                name=cfg.logging.run_name,
-                config=cfg_dict,
+                project=cfg_logging.wandb_project,
+                entity=cfg_logging.wandb_entity,
+                name=cfg_logging.run_name,
+                config=wandb_track_config,  # TODO: check whether this works
                 save_code=True,
             )
         else:
@@ -319,7 +332,7 @@ def Trainer(
                     opt_state=opt_state,
                 )
 
-                if step % cfg.logging.log_steps == 0:
+                if step % cfg_logging.log_steps == 0:
                     loss.block_until_ready()
                     if wandb_run:
                         wandb_run.log({"train/loss": loss.item()}, step)
@@ -327,7 +340,7 @@ def Trainer(
                         step_str = str(step).zfill(len(str(int(step_max))))
                         print(f"{step_str}, train/loss: {loss.item():.5f}.")
 
-                if step % cfg.logging.eval_steps == 0 and step > 0:
+                if step % cfg_logging.eval_steps == 0 and step > 0:
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
                     eval_metrics = eval_rollout(
                         case=case,
@@ -339,8 +352,8 @@ def Trainer(
                         loader_eval=loader_valid,
                         n_rollout_steps=n_rollout_steps,
                         n_trajs=eval_n_trajs,
-                        rollout_dir=cfg.eval.rollout_dir,
-                        out_type=cfg.eval.out_type_train,
+                        rollout_dir=cfg_eval.rollout_dir,
+                        out_type=cfg_eval.train.out_type,
                     )
 
                     metrics = averaged_metrics(eval_metrics)
@@ -362,7 +375,7 @@ def Trainer(
                 if step == step_max + 1:
                     break
 
-        if cfg.logging.wandb:
+        if cfg_logging.wandb:
             wandb.finish()
 
         return params, state, opt_state

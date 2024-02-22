@@ -1,3 +1,5 @@
+extends: lagrangebench/defaults.yaml
+
 main:
   data_dir: datasets/2D_TGV_2500_10kevery100
 
@@ -5,13 +7,11 @@ model:
   name: segnn
   num_mp_steps: 10
   latent_dim: 64
-
-train:
   isotropic_norm: True
 
-
-optimizer:
-  lr_start: 5.e-4
+train:
+  optimizer:
+    lr_start: 5.e-4
 
 logging:
   wandb_project: tgv_2d

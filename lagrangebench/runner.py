@@ -10,7 +10,9 @@ import jax.numpy as jnp
 import jmp
 import numpy as np
 from e3nn_jax import Irreps
+from jax import config
 from jax_md import space
+from omegaconf import DictConfig, OmegaConf
 
 from lagrangebench import Trainer, infer, models
 from lagrangebench.case_setup import case_builder
@@ -20,10 +22,13 @@ from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
 
 
-def train_or_infer(cfg):
+def train_or_infer(cfg: DictConfig):
     mode = cfg.main.mode
-    old_model_dir = cfg.model.model_dir
+    old_model_dir = cfg.main.model_dir
     is_test = cfg.eval.test
+
+    if cfg.main.dtype == "float64":
+        config.update("jax_enable_x64", True)
 
     data_train, data_valid, data_test = setup_data(cfg)
 
@@ -36,7 +41,13 @@ def train_or_infer(cfg):
     case = case_builder(
         box=box,
         metadata=metadata,
+        input_seq_length=cfg.model.input_seq_length,
+        cfg_neighbors=cfg.neighbors,
+        isotropic_norm=cfg.model.isotropic_norm,
+        noise_std=cfg.train.noise_std,
         external_force_fn=data_train.external_force_fn,
+        magnitude_features=cfg.model.magnitude_features,
+        dtype=cfg.main.dtype,
     )
 
     _, particle_type = data_train[0]
@@ -64,35 +75,46 @@ def train_or_infer(cfg):
             data_and_time = datetime.today().strftime("%Y%m%d-%H%M%S")
             cfg.logging.run_name = f"{run_prefix}_{data_and_time}"
 
-        cfg.model.model_dir = os.path.join(cfg.logging.ckp_dir, cfg.logging.run_name)
-        os.makedirs(cfg.model.model_dir, exist_ok=True)
-        os.makedirs(os.path.join(cfg.model.model_dir, "best"), exist_ok=True)
-        with open(os.path.join(cfg.model.model_dir, "config.yaml"), "w") as f:
-            cfg.dump(stream=f)
-        with open(os.path.join(cfg.model.model_dir, "best", "config.yaml"), "w") as f:
-            cfg.dump(stream=f)
+        cfg.main.model_dir = os.path.join(cfg.logging.ckp_dir, cfg.logging.run_name)
+        os.makedirs(cfg.main.model_dir, exist_ok=True)
+        os.makedirs(os.path.join(cfg.main.model_dir, "best"), exist_ok=True)
+        with open(os.path.join(cfg.main.model_dir, "config.yaml"), "w") as f:
+            OmegaConf.save(config=cfg, f=f.name)
+        with open(os.path.join(cfg.main.model_dir, "best", "config.yaml"), "w") as f:
+            OmegaConf.save(config=cfg, f=f.name)
 
-        trainer = Trainer(model, case, data_train, data_valid)
+        trainer = Trainer(
+            model,
+            case,
+            data_train,
+            data_valid,
+            cfg.model,
+            cfg.train,
+            cfg.eval,
+            cfg.logging,
+            seed=cfg.main.seed,
+        )
         _, _, _ = trainer(
             step_max=cfg.train.step_max,
             load_checkpoint=old_model_dir,
-            store_checkpoint=cfg.model.model_dir,
+            store_checkpoint=cfg.main.model_dir,
+            wandb_track_config=OmegaConf.to_container(cfg),
         )
 
     if mode == "infer" or mode == "all":
         print("Start inference...")
 
         if mode == "infer":
-            model_dir = cfg.model.model_dir
+            model_dir = cfg.main.model_dir
         if mode == "all":
-            model_dir = os.path.join(cfg.model.model_dir, "best")
+            model_dir = os.path.join(cfg.main.model_dir, "best")
             assert osp.isfile(os.path.join(model_dir, "params_tree.pkl"))
 
             cfg.eval.rollout_dir = model_dir.replace("ckp", "rollout")
             os.makedirs(cfg.eval.rollout_dir, exist_ok=True)
 
-            if cfg.eval.n_trajs_infer is None:
-                cfg.eval.n_trajs_infer = cfg.eval.n_trajs_train
+            if cfg.eval.infer.n_trajs is None:
+                cfg.eval.infer.n_trajs = cfg.eval.train.n_trajs
 
         assert model_dir, "model_dir must be specified for inference."
         metrics = infer(
@@ -100,6 +122,10 @@ def train_or_infer(cfg):
             case,
             data_test if is_test else data_valid,
             load_checkpoint=model_dir,
+            cfg_eval_infer=cfg.eval.infer,
+            rollout_dir=cfg.eval.rollout_dir,
+            n_rollout_steps=cfg.eval.n_rollout_steps,
+            seed=cfg.main.seed,
         )
 
         split = "test" if is_test else "valid"
@@ -113,6 +139,8 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     rollout_dir = cfg.eval.rollout_dir
     input_seq_length = cfg.model.input_seq_length
     n_rollout_steps = cfg.eval.n_rollout_steps
+    nl_backend = cfg.neighbors.backend
+
     if not osp.isabs(data_dir):
         data_dir = osp.join(os.getcwd(), data_dir)
 
@@ -126,30 +154,33 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         "train",
         dataset_path=data_dir,
         input_seq_length=input_seq_length,
-        extra_seq_length=cfg.optimizer.pushforward.unrolls[-1],
+        extra_seq_length=cfg.train.pushforward.unrolls[-1],
+        nl_backend=nl_backend,
     )
     data_valid = H5Dataset(
         "valid",
         dataset_path=data_dir,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
+        nl_backend=nl_backend,
     )
     data_test = H5Dataset(
         "test",
         dataset_path=data_dir,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
+        nl_backend=nl_backend,
     )
 
     # TODO find another way to set these
-    if cfg.eval.n_trajs_train == -1:
-        cfg.eval.n_trajs_train = data_valid.num_samples
-    if cfg.eval.n_trajs_infer == -1:
-        cfg.eval.n_trajs_infer = data_valid.num_samples
+    if cfg.eval.train.n_trajs == -1:
+        cfg.eval.train.n_trajs = data_valid.num_samples
+    if cfg.eval.infer.n_trajs == -1:
+        cfg.eval.infer.n_trajs = data_valid.num_samples
 
-    assert data_valid.num_samples >= cfg.eval.n_trajs_train, (
+    assert data_valid.num_samples >= cfg.eval.train.n_trajs, (
         f"Number of available evaluation trajectories ({data_valid.num_samples}) "
-        f"exceeds eval_n_trajs ({cfg.eval.n_trajs_train})"
+        f"exceeds eval_n_trajs ({cfg.eval.train.n_trajs})"
     )
 
     return data_train, data_valid, data_test
@@ -166,13 +197,16 @@ def setup_model(
     model_name = cfg.model.name.lower()
 
     input_seq_length = cfg.model.input_seq_length
-    magnitude_features = cfg.train.magnitude_features
+    magnitude_features = cfg.model.magnitude_features
 
     if model_name == "gns":
 
         def model_fn(x):
             return models.GNS(
                 particle_dimension=metadata["dim"],
+                latent_size=cfg.model.latent_dim,
+                blocks_per_step=cfg.model.num_mlp_layers,
+                num_mp_steps=cfg.model.num_mp_steps,
                 num_particle_types=NodeType.SIZE,
                 particle_type_embedding_size=16,
             )(x)
@@ -194,9 +228,16 @@ def setup_model(
             return models.SEGNN(
                 node_features_irreps=node_feature_irreps,
                 edge_features_irreps=edge_feature_irreps,
+                scalar_units=cfg.model.latent_dim,
+                lmax_hidden=cfg.model.lmax_hidden,
+                lmax_attributes=cfg.model.lmax_attributes,
                 output_irreps=Irreps("1x1o"),
-                n_vels=input_seq_length - 1,
+                num_mp_steps=cfg.model.num_mp_steps,
+                n_vels=cfg.model.input_seq_length - 1,
+                velocity_aggregate=cfg.model.velocity_aggregate,
                 homogeneous_particles=homogeneous_particles,
+                blocks_per_step=cfg.model.num_mlp_layers,
+                norm=cfg.model.segnn_norm,
             )(x)
 
         MODEL = models.SEGNN
@@ -212,11 +253,13 @@ def setup_model(
 
         def model_fn(x):
             return models.EGNN(
+                hidden_size=cfg.model.latent_dim,
                 output_size=1,
                 dt=metadata["dt"] * metadata["write_every"],
                 displacement_fn=displacement_fn,
                 shift_fn=shift_fn,
                 normalization_stats=normalization_stats,
+                num_mp_steps=cfg.model.num_mp_steps,
                 n_vels=input_seq_length - 1,
                 residual=True,
             )(x)
@@ -228,10 +271,12 @@ def setup_model(
 
         def model_fn(x):
             return models.PaiNN(
+                hidden_size=cfg.model.latent_dim,
                 output_size=1,
                 n_vels=input_seq_length - 1,
                 radial_basis_fn=models.painn.gaussian_rbf(20, radius, trainable=True),
                 cutoff_fn=models.painn.cosine_cutoff(radius),
+                num_mp_steps=cfg.model.num_mp_steps,
             )(x)
 
         MODEL = models.PaiNN

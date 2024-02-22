@@ -1,3 +1,5 @@
+extends: lagrangebench/defaults.yaml
+
 main:
   data_dir: datasets/2D_RPF_3200_20kevery100
 
@@ -6,8 +8,9 @@ model:
   num_mp_steps: 10
   latent_dim: 128
 
-optimizer:
-  lr_start: 5.e-4
+train:
+  optimizer:
+    lr_start: 5.e-4
 
 logging:
   wandb_project: rpf_2d

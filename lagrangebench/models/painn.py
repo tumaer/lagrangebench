@@ -16,7 +16,6 @@ import jax.numpy as jnp
 import jax.tree_util as tree
 import jraph
 
-from lagrangebench.config import cfg
 from lagrangebench.utils import NodeType
 
 from .utils import LinearXav
@@ -367,7 +366,9 @@ class PaiNN(hk.Module):
 
     def __init__(
         self,
+        hidden_size: int,
         output_size: int,
+        num_mp_steps: int,
         radial_basis_fn: Callable,
         cutoff_fn: Callable,
         n_vels: int,
@@ -398,8 +399,8 @@ class PaiNN(hk.Module):
 
         self._n_vels = n_vels
         self._homogeneous_particles = homogeneous_particles
-        self._hidden_size = cfg.model.latent_dim
-        self._num_mp_steps = cfg.model.num_mp_steps
+        self._hidden_size = hidden_size
+        self._num_mp_steps = num_mp_steps
         self._eps = eps
         self._shared_filters = shared_filters
         self._shared_interactions = shared_interactions

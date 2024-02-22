@@ -1,89 +1,44 @@
-import argparse
 import os
-from typing import List
+
+from omegaconf import DictConfig, OmegaConf
 
 
-def cli_arguments():
-    """Inspired by https://stackoverflow.com/a/51686813"""
-    parser = argparse.ArgumentParser()
+def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
+    """Loads all 'extends' embedded configs and merge them with the cli overwrites."""
 
-    # config arguments
-    parser.add_argument("-c", "--config", type=str, help="Path to the config yaml.")
-
-    args, extras = parser.parse_known_args()
-    if extras is None:
-        extras = []
-    args.extra = preprocess_extras(extras)
-
-    return args
-
-
-def preprocess_extras(extras: List[str]):
-    """Preprocess extras.
-
-    Args:
-        extras: key value pairs in any of the following formats:
-        `--key value`, `--key=value`, `key value`, `key=value`
-
-    Return:
-        All key value pairs formatted as `key value`
-    """
-
-    temp = []
-    for arg in extras:
-        if arg.startswith("--"):  # remove preceding "--"
-            arg = arg[2:]
-        temp += arg.split("=")  # split key value pairs
-
-    return temp
-
-
-def import_cfg(config_path, extras):
-    """Import cfg without executing lagrangebench.__init__().
-
-    Based on:
-    https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
-    """
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("temp", "lagrangebench/config.py")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    cfg = module.cfg
-    load_cfg = module.load_cfg
-    load_cfg(cfg, config_path, extras)
+    cfgs = [OmegaConf.load(config_path)]
+    while "extends" in cfgs[0]:
+        extends_path = cfgs[0]["extends"]
+        del cfgs[0]["extends"]
+        cfgs = [OmegaConf.load(extends_path)] + cfgs
+    cfg = OmegaConf.merge(*cfgs, cli_args)
     return cfg
 
 
 if __name__ == "__main__":
-    cli_args = cli_arguments()
+    cli_args = OmegaConf.from_cli()
+    assert ("config" in cli_args.main) != (
+        "model_dir" in cli_args.main
+    ), "You must specify one of main.config or main.model_dir."
 
-    if cli_args.config is not None:  # start from config.yaml
-        config_path = cli_args.config.strip()
-    elif "model.model_dir" in cli_args.extra:  # start from a checkpoint
-        model_dir = cli_args.extra[cli_args.extra.index("model.model_dir") + 1]
-        config_path = os.path.join(model_dir, "config.yaml")
+    if "config" in cli_args.main:  # start from config.yaml
+        config_path = cli_args.main.config
+    elif "model_dir" in cli_args.main:  # start from a checkpoint
+        config_path = os.path.join(cli_args.main.model_dir, "config.yaml")
 
-    # load cfg without executing lagrangebench.__init__() -> temporary cfg for cuda
-    cfg = import_cfg(config_path, cli_args.extra)
+    # values that need to be specified before importing jax
+    cli_args.main.gpu = cli_args.main.get("gpu", -1)
+    cli_args.main.xla_mem_fraction = cli_args.main.get("xla_mem_fraction", 0.75)
 
     # specify cuda device
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152 from TensorFlow
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(cfg.main.gpu)
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(cfg.main.xla_mem_fraction)
-    if cfg.main.dtype == "float64":
-        from jax import config
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(cli_args.main.gpu)
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(cli_args.main.xla_mem_fraction)
 
-        config.update("jax_enable_x64", True)
-
-    # load cfg once again, this time executing lagrangebench.__init__() -> global cfg
-    from lagrangebench.config import cfg, load_cfg
-
-    load_cfg(cfg, config_path, cli_args.extra)
+    cfg = load_embedded_configs(config_path, cli_args)
 
     print("#" * 79, "\nStarting a LagrangeBench run with the following configs:")
-    print(cfg.dump())
+    print(OmegaConf.to_yaml(cfg))
     print("#" * 79)
 
     from lagrangebench.runner import train_or_infer

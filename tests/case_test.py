@@ -5,14 +5,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from lagrangebench.case_setup import case_builder
-from lagrangebench.config import custom_config
-
-
-@custom_config
-def case_test_config(cfg):
-    cfg.model.input_seq_length = 3  # two past velocities
-    cfg.train.isotropic_norm = False
-    cfg.optimizer.noise_std = 0.0
 
 
 class TestCaseBuilder(unittest.TestCase):
@@ -33,7 +25,14 @@ class TestCaseBuilder(unittest.TestCase):
         bounds = np.array(self.metadata["bounds"])
         box = bounds[:, 1] - bounds[:, 0]
 
-        self.case = case_builder(box, self.metadata, external_force_fn=None)
+        self.case = case_builder(
+            box,
+            self.metadata,
+            input_seq_length=3,  # two past velocities
+            isotropic_norm=False,
+            noise_std=0.0,
+            external_force_fn=None,
+        )
         self.key = jax.random.PRNGKey(0)
 
         # position input shape (num_particles, sequence_len, dim) = (3, 5, 3)

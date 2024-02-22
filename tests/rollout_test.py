@@ -8,12 +8,12 @@ import numpy as np
 from jax import config as jax_config
 from jax import jit, vmap
 from jax_md import space
+from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 
 jax_config.update("jax_enable_x64", True)
 
 from lagrangebench.case_setup import case_builder
-from lagrangebench.config import cfg, custom_config
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import get_dataset_stats, numpy_collate
 from lagrangebench.evaluate import MetricsComputer
@@ -21,27 +21,44 @@ from lagrangebench.evaluate.rollout import _eval_batched_rollout, _forward_eval
 from lagrangebench.utils import broadcast_from_batch
 
 
-@custom_config
+# TODO: fix
 def eval_test_config(cfg):
     # setup the configuration
     cfg.main.data_dir = "tests/3D_LJ_3_1214every1"  # Lennard-Jones dataset
     cfg.model.input_seq_length = 3
     cfg.metrics = ["mse"]
     cfg.eval.n_rollout_steps = 100
-    cfg.train.isotropic_norm = False
-    cfg.optimizer.noise_std = 0.0
+    cfg.model.isotropic_norm = False
+    cfg.train.noise_std = 0.0
 
 
 class TestInferBuilder(unittest.TestCase):
     """Class for unit testing the evaluate_single_rollout function."""
 
     def setUp(self):
+        self.cfg = OmegaConf.create(
+            {
+                "main": {
+                    "data_dir": "tests/3D_LJ_3_1214every1"
+                },  # Lennard-Jones dataset
+                "model": {
+                    "input_seq_length": 3,  # two past velocities
+                    "isotropic_norm": False,
+                },
+                "eval": {
+                    "train": {"metrics": ["mse"]},
+                    "n_rollout_steps": 100,
+                },
+                "train": {"noise_std": 0.0},
+            }
+        )
+
         data_valid = H5Dataset(
             split="valid",
-            dataset_path=cfg.main.data_dir,
+            dataset_path=self.cfg.main.data_dir,
             name="lj3d",
-            input_seq_length=cfg.model.input_seq_length,
-            extra_seq_length=cfg.eval.n_rollout_steps,
+            input_seq_length=self.cfg.model.input_seq_length,
+            extra_seq_length=self.cfg.eval.n_rollout_steps,
         )
         self.loader_valid = DataLoader(
             dataset=data_valid, batch_size=1, collate_fn=numpy_collate
@@ -49,14 +66,19 @@ class TestInferBuilder(unittest.TestCase):
 
         self.metadata = data_valid.metadata
         self.normalization_stats = get_dataset_stats(
-            self.metadata, cfg.train.isotropic_norm, cfg.optimizer.noise_std
+            self.metadata, self.cfg.model.isotropic_norm, self.cfg.train.noise_std
         )
 
         bounds = np.array(self.metadata["bounds"])
         box = bounds[:, 1] - bounds[:, 0]
         self.displacement_fn, self.shift_fn = space.periodic(side=box)
 
-        self.case = case_builder(box, self.metadata)
+        self.case = case_builder(
+            box,
+            self.metadata,
+            self.cfg.model.input_seq_length,
+            noise_std=self.cfg.train.noise_std,
+        )
 
         self.key = jax.random.PRNGKey(0)
 
@@ -145,7 +167,7 @@ class TestInferBuilder(unittest.TestCase):
                     traj_batch_i=traj_batch_i,
                     neighbors=neighbors,
                     metrics_computer_vmap=metrics_computer_vmap,
-                    n_rollout_steps=cfg.eval.n_rollout_steps,
+                    n_rollout_steps=self.cfg.eval.n_rollout_steps,
                     n_extrap_steps=n_extrap_steps,
                     t_window=isl,
                 )
@@ -180,7 +202,7 @@ class TestInferBuilder(unittest.TestCase):
                     "Wrong rollout prediction",
                 )
 
-                total_steps = cfg.eval.n_rollout_steps + n_extrap_steps
+                total_steps = self.cfg.eval.n_rollout_steps + n_extrap_steps
                 assert example_rollout_batch.shape[1] == total_steps
 
 

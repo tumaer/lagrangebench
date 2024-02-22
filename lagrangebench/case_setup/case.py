@@ -8,9 +8,10 @@ from jax import Array, jit, lax, vmap
 from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
+from omegaconf import DictConfig
 
-from lagrangebench.config import cfg
 from lagrangebench.data.utils import get_dataset_stats
+from lagrangebench.defaults import defaults
 from lagrangebench.train.strats import add_gns_noise
 
 from .features import FeatureDict, TargetDict, physical_feature_builder
@@ -62,7 +63,13 @@ class CaseSetupFn:
 def case_builder(
     box: Tuple[float, float, float],
     metadata: Dict,
+    input_seq_length: int,
+    cfg_neighbors: DictConfig = defaults.neighbors,
+    isotropic_norm: bool = defaults.model.isotropic_norm,
+    noise_std: float = defaults.train.noise_std,
     external_force_fn: Optional[Callable] = None,
+    magnitude_features: bool = defaults.model.magnitude_features,
+    dtype: jnp.dtype = defaults.main.dtype,
 ):
     """Set up a CaseSetupFn that contains every required function besides the model.
 
@@ -76,17 +83,14 @@ def case_builder(
     Args:
         box: Box xyz sizes of the system.
         metadata: Dataset metadata dictionary.
+        cfg_neighbors: Configuration dictionary for the neighbor list.
+        input_seq_length: Length of the input sequence.
+        isotropic_norm: Whether to normalize dimensions equally.
+        noise_std: Noise standard deviation.
         external_force_fn: External force function.
+        magnitude_features: Whether to add velocity magnitudes in the features.
+        dtype: Data type.
     """
-
-    input_seq_length = cfg.model.input_seq_length
-    isotropic_norm = cfg.train.isotropic_norm
-    noise_std = cfg.optimizer.noise_std
-    magnitude_features = cfg.train.magnitude_features
-    neighbor_list_backend = cfg.neighbors.backend
-    neighbor_list_multiplier = cfg.neighbors.multiplier
-    dtype = cfg.main.dtype
-
     normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
 
     # apply PBC in all directions or not at all
@@ -97,9 +101,9 @@ def case_builder(
 
     displacement_fn_set = vmap(displacement_fn, in_axes=(0, 0))
 
-    if neighbor_list_multiplier < 1.25:
+    if cfg_neighbors.multiplier < 1.25:
         warnings.warn(
-            f"neighbor_list_multiplier={neighbor_list_multiplier} < 1.25 is very low. "
+            f"cfg_neighbors.multiplier={cfg_neighbors.multiplier} < 1.25 is very low. "
             "Be especially cautious if you batch training and/or inference as "
             "reallocation might be necessary based on different overflow conditions. "
             "See https://github.com/tumaer/lagrangebench/pull/20#discussion_r1443811262"
@@ -108,9 +112,9 @@ def case_builder(
     neighbor_fn = neighbor_list(
         displacement_fn,
         jnp.array(box),
-        backend=neighbor_list_backend,
+        backend=cfg_neighbors.backend,
         r_cutoff=metadata["default_connectivity_radius"],
-        capacity_multiplier=neighbor_list_multiplier,
+        capacity_multiplier=cfg_neighbors.multiplier,
         mask_self=False,
         format=NeighborListFormat.Sparse,
         num_particles_max=metadata["num_particles_max"],

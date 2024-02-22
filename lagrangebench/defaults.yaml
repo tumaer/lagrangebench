@@ -1,0 +1,147 @@
+# global and hardware-related configs
+main:
+  # configuration file. Either main.config or main.model_dir must be specified.
+  # If main.config is specified, main.model_dir is ignored.
+  config: 
+  # Load checkpointed model from this directory
+  model_dir: 
+  # One of "train", "infer" or "all" (= both)
+  mode: "all"
+  # random seed
+  seed: 0
+  # data type for preprocessing. One of "float32" or "float64"
+  dtype: "float64"
+  # gpu device. -1 for CPU
+  gpu:
+  # XLA memory fraction to be preallocated. The JAX default is 0.75
+  xla_mem_fraction:
+  # data directory
+  data_dir: 
+
+# model
+model:
+  # model architecture name. gns, segnn, egnn
+  name: 
+  # Length of the position input sequence
+  input_seq_length: 6
+  # Number of message passing steps
+  num_mp_steps: 10
+  # Number of MLP layers
+  num_mlp_layers: 2
+  # Hidden dimension
+  latent_dim: 128
+  # whether to include velocity magnitude features
+  magnitude_features: False
+  #  whether to normalize dimensions equally
+  isotropic_norm: False
+
+  # SEGNN only parameters
+  # steerable attributes level
+  lmax_attributes: 1
+  # Level of the hidden layer
+  lmax_hidden: 1
+  # SEGNN normalization. instance, batch, none
+  segnn_norm: none
+  # SEGNN velocity aggregation. avg or last
+  velocity_aggregate: avg
+
+# training
+train:
+  # batch size
+  batch_size: 1
+  # max number of training steps
+  step_max: 500_000
+  # number of workers for data loading
+  num_workers: 4
+  # standard deviation of the GNS-style noise
+  noise_std: 3.e-4
+
+  # optimizer
+  optimizer:
+    # initial learning rate
+    lr_start: 1.e-4
+    # final learning rate (after exponential decay)
+    lr_final: 1.e-6
+    # learning rate decay rate
+    lr_decay_rate: 0.1
+    # number of steps to decay learning rate
+    lr_decay_steps: 1.e+5
+
+  # pushforward
+  pushforward:
+    # At which training step to introduce next unroll stage
+    steps: [-1, 20000, 300000, 400000]
+    # For how many steps to unroll
+    unrolls: [0, 1, 2, 3]
+    # Which probability ratio to keep between the unrolls
+    probs: [18, 2, 1, 1]
+
+  # loss weights
+  loss_weight:
+    # weight for acceleration error
+    acc: 1.0
+    # weight for velocity error
+    vel: 0.0
+    # weight for position error
+    pos: 0.0
+
+# evaluation
+eval:
+  # number of eval rollout steps. -1 is full rollout
+  n_rollout_steps: 20
+  # whether to use the test or valid split
+  test: False
+  # rollouts directory
+  rollout_dir: 
+
+  # configs for validation during training
+  train:
+    # number of trajectories to evaluate
+    n_trajs: 50
+    # stride for e_kin and sinkhorn
+    metrics_stride: 10
+    # batch size
+    batch_size: 1
+    # metrics to evaluate
+    metrics: ["mse"]
+    # write validation rollouts. One of "none", "vtk", or "pkl"
+    out_type: "none"
+  # configs for inference/testing
+  infer:
+    # number of trajectories to evaluate during inference
+    n_trajs: -1
+    # stride for e_kin and sinkhorn
+    metrics_stride: 1
+    # batch size
+    batch_size: 2
+    # metrics for inference
+    metrics: ["mse", "e_kin", "sinkhorn"]
+    # write inference rollouts. One of "none", "vtk", or "pkl"
+    out_type: "pkl"
+
+    # number of extrapolation steps during inference
+    n_extrap_steps: 0
+
+# logging
+logging:
+  # number of steps between loggings
+  log_steps: 1000
+  # number of steps between evaluations and checkpoints
+  eval_steps: 10000
+  # wandb enable
+  wandb: False
+  # wandb project name
+  wandb_project: 
+  # wandb entity name
+  wandb_entity: "lagrangebench"
+  # checkpoint directory
+  ckp_dir: "ckp"
+  # name of training run
+  run_name:
+
+# neighbor list
+neighbors:
+  # backend for neighbor list computation
+  backend: "jaxmd_vmap"
+  # multiplier for neighbor list capacity
+  multiplier: 1.25

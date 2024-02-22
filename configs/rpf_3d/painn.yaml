@@ -1,3 +1,5 @@
+extends: lagrangebench/defaults.yaml
+
 main:
   data_dir: datasets/3D_RPF_8000_10kevery100
 
@@ -5,13 +7,12 @@ model:
   name: painn
   num_mp_steps: 5
   latent_dim: 128
-
-train:
   isotropic_norm: True
   magnitude_features: True
 
-optimizer:
-  lr_start: 5.e-4
+train:
+  optimizer:
+    lr_start: 5.e-4
 
 logging:
   wandb_project: rpf_3d

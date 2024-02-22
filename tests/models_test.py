@@ -7,17 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from lagrangebench import models
-from lagrangebench.config import custom_config
 from lagrangebench.utils import NodeType
-
-
-@custom_config
-def model_test_config(cfg):
-    cfg.model.hidden_dim = 8
-    cfg.model.output_size = 1
-    cfg.model.num_mp_steps = 1
-    cfg.model.lmax_attributes = 1
-    cfg.model.lmax_hidden = 1
 
 
 class ModelTest(unittest.TestCase):
@@ -82,7 +72,11 @@ class ModelTest(unittest.TestCase):
             return models.SEGNN(
                 node_features_irreps="5x1o + 5x0e",
                 edge_features_irreps="1x1o + 1x0e",
+                scalar_units=8,
+                lmax_hidden=1,
+                lmax_attributes=1,
                 n_vels=5,
+                num_mp_steps=1,
                 output_irreps="1x1o",
             )(x)
 
@@ -95,7 +89,9 @@ class ModelTest(unittest.TestCase):
     def test_egnn(self):
         def egnn(x):
             return models.EGNN(
+                hidden_size=8,
                 output_size=1,
+                num_mp_steps=1,
                 dt=0.01,
                 n_vels=5,
                 displacement_fn=lambda x, y: x - y,
@@ -111,7 +107,9 @@ class ModelTest(unittest.TestCase):
     def test_painn(self):
         def painn(x):
             return models.PaiNN(
+                hidden_size=8,
                 output_size=1,
+                num_mp_steps=1,
                 radial_basis_fn=models.painn.gaussian_rbf(20, 10, trainable=True),
                 cutoff_fn=models.painn.cosine_cutoff(10),
                 n_vels=5,

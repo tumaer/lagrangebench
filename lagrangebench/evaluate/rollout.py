@@ -11,11 +11,12 @@ import jax
 import jax.numpy as jnp
 import jax_md.partition as partition
 from jax import jit, vmap
+from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
-from lagrangebench.config import cfg
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
+from lagrangebench.defaults import defaults
 from lagrangebench.evaluate.metrics import MetricsComputer, MetricsDict
 from lagrangebench.evaluate.utils import write_vtk
 from lagrangebench.utils import (
@@ -314,6 +315,10 @@ def infer(
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,
     load_checkpoint: Optional[str] = None,
+    cfg_eval_infer: DictConfig = defaults.eval.infer,
+    rollout_dir: Optional[str] = defaults.eval.rollout_dir,
+    n_rollout_steps: int = defaults.eval.n_rollout_steps,
+    seed: int = defaults.main.seed,
 ):
     """
     Infer on a dataset, compute metrics and optionally save rollout in out_type format.
@@ -325,15 +330,10 @@ def infer(
         params: Haiku params.
         state: Haiku state.
         load_checkpoint: Path to checkpoint directory.
-        metrics: Metrics to compute.
         rollout_dir: Path to rollout directory.
-        eval_n_trajs: Number of trajectories to evaluate.
+        cfd_eval_infer: Evaluation configuration for inference mode.
         n_rollout_steps: Number of rollout steps.
-        out_type: Output type. Either "none", "vtk" or "pkl".
-        n_extrap_steps: Number of extrapolation steps.
         seed: Seed.
-        metrics_stride: Stride for e_kin and sinkhorn.
-        batch_size: Batch size for inference.
 
     Returns:
         eval_metrics: Metrics per trajectory.
@@ -348,21 +348,21 @@ def infer(
     else:
         params, state, _, _ = load_haiku(load_checkpoint)
 
-    key, seed_worker, generator = set_seed(cfg.main.seed)
+    key, seed_worker, generator = set_seed(seed)
 
     loader_test = DataLoader(
         dataset=data_test,
-        batch_size=cfg.eval.batch_size_infer,
+        batch_size=cfg_eval_infer.batch_size,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
         generator=generator,
     )
     metrics_computer = MetricsComputer(
-        cfg.eval.metrics_infer,
+        cfg_eval_infer.metrics,
         dist_fn=case.displacement,
         metadata=data_test.metadata,
         input_seq_length=data_test.input_seq_length,
-        stride=cfg.eval.metrics_stride_infer,
+        stride=cfg_eval_infer.metrics_stride,
     )
     # Precompile model
     model_apply = jit(model.apply)
@@ -380,10 +380,10 @@ def infer(
         state=state,
         neighbors=neighbors,
         loader_eval=loader_test,
-        n_rollout_steps=cfg.eval.n_rollout_steps,
-        n_trajs=cfg.eval.n_trajs_infer,
-        rollout_dir=cfg.eval.rollout_dir,
-        out_type=cfg.eval.out_type_infer,
-        n_extrap_steps=cfg.eval.n_extrap_steps,
+        n_rollout_steps=n_rollout_steps,
+        n_trajs=cfg_eval_infer.n_trajs,
+        rollout_dir=rollout_dir,
+        out_type=cfg_eval_infer.out_type,
+        n_extrap_steps=cfg_eval_infer.n_extrap_steps,
     )
     return eval_metrics

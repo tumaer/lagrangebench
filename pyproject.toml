@@ -54,7 +54,7 @@ ott-jax = "^0.4.2"
 matscipy = "^0.8.0"
 torch = {version = "2.1.0+cpu", source = "torchcpu"}
 wget = "^3.2"
-yacs = "^0.1.8"
+omegaconf = "^2.3.0"
 toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
