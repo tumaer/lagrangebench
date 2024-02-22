@@ -1,4 +1,4 @@
-extends: lagrangebench/defaults.yaml
+extends: lagrangebench/defaults.py
 
 main:
   data_dir: datasets/2D_TGV_2500_10kevery100

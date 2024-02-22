@@ -15,7 +15,6 @@ from jax import vmap
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
-from lagrangebench.case_setup import CaseSetupFn
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.defaults import defaults
@@ -105,7 +104,7 @@ class Trainer:
     def __init__(
         self,
         model: hk.TransformedWithState,
-        case: CaseSetupFn,
+        case,
         data_train: H5Dataset,
         data_valid: H5Dataset,
         cfg_train: DictConfig = defaults.train,

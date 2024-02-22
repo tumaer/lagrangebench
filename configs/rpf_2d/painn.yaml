@@ -1,4 +1,4 @@
-extends: lagrangebench/defaults.yaml
+extends: lagrangebench/defaults.py
 
 main:
   data_dir: datasets/2D_RPF_3200_20kevery100

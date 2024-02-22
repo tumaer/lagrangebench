@@ -98,12 +98,12 @@ def train_or_infer(cfg: DictConfig):
             cfg.logging,
             input_seq_length=cfg.model.input_seq_length,
             seed=cfg.main.seed,
+            wandb_config=wandb_config,
         )
         _, _, _ = trainer.train(
             step_max=cfg.train.step_max,
             load_checkpoint=old_model_dir,
             store_checkpoint=cfg.main.model_dir,
-            wandb_config=wandb_config,
         )
 
     if mode == "infer" or mode == "all":
