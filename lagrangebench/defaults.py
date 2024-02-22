@@ -172,3 +172,18 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
 
 
 defaults = set_defaults()
+
+
+def check_cfg(cfg: DictConfig):
+    """Check if the configs are valid."""
+
+    assert cfg.main.mode in ["train", "infer", "all"]
+    assert cfg.main.dtype in ["float32", "float64"]
+    assert cfg.main.data_dir is not None, "main.data_dir must be specified."
+
+    assert cfg.eval.train.n_trajs >= -1
+    assert cfg.eval.infer.n_trajs >= -1
+    assert set(cfg.eval.train.metrics).issubset(["mse", "e_kin", "sinkhorn"])
+    assert set(cfg.eval.infer.metrics).issubset(["mse", "e_kin", "sinkhorn"])
+    assert cfg.eval.train.out_type in ["none", "vtk", "pkl"]
+    assert cfg.eval.infer.out_type in ["none", "vtk", "pkl"]

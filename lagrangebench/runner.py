@@ -17,13 +17,15 @@ from omegaconf import DictConfig, OmegaConf
 from lagrangebench import Trainer, infer, models
 from lagrangebench.case_setup import case_builder
 from lagrangebench.data import H5Dataset
+from lagrangebench.defaults import check_cfg
 from lagrangebench.evaluate import averaged_metrics
 from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
 
 
 def train_or_infer(cfg: DictConfig):
-    # TODO: sanity checks on the passed configs go in here
+    # sanity check on the passed configs
+    check_cfg(cfg)
 
     mode = cfg.main.mode
     old_model_dir = cfg.main.model_dir
