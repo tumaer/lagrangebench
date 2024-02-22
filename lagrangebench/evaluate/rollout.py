@@ -342,6 +342,10 @@ def infer(
         params is not None or load_checkpoint is not None
     ), "Either params or a load_checkpoint directory must be provided for inference."
 
+    n_trajs = cfg_eval_infer.n_trajs
+    if n_trajs == -1:
+        n_trajs = data_test.num_samples
+
     if params is not None:
         if state is None:
             state = {}
@@ -381,7 +385,7 @@ def infer(
         neighbors=neighbors,
         loader_eval=loader_test,
         n_rollout_steps=n_rollout_steps,
-        n_trajs=cfg_eval_infer.n_trajs,
+        n_trajs=n_trajs,
         rollout_dir=rollout_dir,
         out_type=cfg_eval_infer.out_type,
         n_extrap_steps=cfg_eval_infer.n_extrap_steps,

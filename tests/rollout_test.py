@@ -21,17 +21,6 @@ from lagrangebench.evaluate.rollout import _eval_batched_rollout, _forward_eval
 from lagrangebench.utils import broadcast_from_batch
 
 
-# TODO: fix
-def eval_test_config(cfg):
-    # setup the configuration
-    cfg.main.data_dir = "tests/3D_LJ_3_1214every1"  # Lennard-Jones dataset
-    cfg.model.input_seq_length = 3
-    cfg.metrics = ["mse"]
-    cfg.eval.n_rollout_steps = 100
-    cfg.model.isotropic_norm = False
-    cfg.train.noise_std = 0.0
-
-
 class TestInferBuilder(unittest.TestCase):
     """Class for unit testing the evaluate_single_rollout function."""
 

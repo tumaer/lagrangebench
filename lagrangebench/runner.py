@@ -23,6 +23,8 @@ from lagrangebench.utils import NodeType
 
 
 def train_or_infer(cfg: DictConfig):
+    # TODO: sanity checks on the passed configs go in here
+
     mode = cfg.main.mode
     old_model_dir = cfg.main.model_dir
     is_test = cfg.eval.test
@@ -83,22 +85,25 @@ def train_or_infer(cfg: DictConfig):
         with open(os.path.join(cfg.main.model_dir, "best", "config.yaml"), "w") as f:
             OmegaConf.save(config=cfg, f=f.name)
 
+        # dictionary of configs which will be stored on W&B
+        wandb_config = OmegaConf.to_container(cfg)
+
         trainer = Trainer(
             model,
             case,
             data_train,
             data_valid,
-            cfg.model,
             cfg.train,
             cfg.eval,
             cfg.logging,
+            input_seq_length=cfg.model.input_seq_length,
             seed=cfg.main.seed,
         )
-        _, _, _ = trainer(
+        _, _, _ = trainer.train(
             step_max=cfg.train.step_max,
             load_checkpoint=old_model_dir,
             store_checkpoint=cfg.main.model_dir,
-            wandb_track_config=OmegaConf.to_container(cfg),
+            wandb_config=wandb_config,
         )
 
     if mode == "infer" or mode == "all":
@@ -172,17 +177,6 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
         nl_backend=nl_backend,
     )
 
-    # TODO find another way to set these
-    if cfg.eval.train.n_trajs == -1:
-        cfg.eval.train.n_trajs = data_valid.num_samples
-    if cfg.eval.infer.n_trajs == -1:
-        cfg.eval.infer.n_trajs = data_valid.num_samples
-
-    assert data_valid.num_samples >= cfg.eval.train.n_trajs, (
-        f"Number of available evaluation trajectories ({data_valid.num_samples}) "
-        f"exceeds eval_n_trajs ({cfg.eval.train.n_trajs})"
-    )
-
     return data_train, data_valid, data_test
 
 
@@ -195,7 +189,6 @@ def setup_model(
 ) -> Tuple[Callable, Type]:
     """Setup model based on cfg."""
     model_name = cfg.model.name.lower()
-
     input_seq_length = cfg.model.input_seq_length
     magnitude_features = cfg.model.magnitude_features
 

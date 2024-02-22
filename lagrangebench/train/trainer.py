@@ -1,6 +1,7 @@
 """Training utils and functions."""
 
 import os
+from dataclasses import dataclass
 from functools import partial
 from typing import Callable, Dict, Optional, Tuple
 
@@ -11,17 +12,15 @@ import jraph
 import optax
 import wandb
 from jax import vmap
-
-# to remove the depencence on omegaconf, one could use OmegaConf.to_container()
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
+from lagrangebench.case_setup import CaseSetupFn
 from lagrangebench.data import H5Dataset
 from lagrangebench.data.utils import numpy_collate
 from lagrangebench.defaults import defaults
 from lagrangebench.evaluate import MetricsComputer, averaged_metrics, eval_rollout
 from lagrangebench.utils import (
-    LossConfig,
     broadcast_from_batch,
     broadcast_to_batch,
     get_kinematic_mask,
@@ -32,6 +31,18 @@ from lagrangebench.utils import (
 )
 
 from .strats import push_forward_build, push_forward_sample_steps
+
+
+@dataclass(frozen=True)
+class LossConfig:
+    """Weights for the different targets in the loss function."""
+
+    pos: float = 0.0
+    vel: float = 0.0
+    acc: float = 1.0
+
+    def __getitem__(self, key):
+        return getattr(self, key)
 
 
 @partial(jax.jit, static_argnames=["model_fn", "loss_weight"])
@@ -90,103 +101,127 @@ def _update(
     return loss, new_params, state, opt_state
 
 
-def Trainer(
-    model: hk.TransformedWithState,
-    case,
-    data_train: H5Dataset,
-    data_valid: H5Dataset,
-    cfg_model: DictConfig = defaults.model,
-    cfg_train: DictConfig = defaults.train,
-    cfg_eval: DictConfig = defaults.eval,
-    cfg_logging: DictConfig = defaults.logging,
-    seed: int = defaults.main.seed,
-) -> Callable:
-    """
-    Builds a function that automates model training and evaluation.
+class Trainer:
+    def __init__(
+        self,
+        model: hk.TransformedWithState,
+        case: CaseSetupFn,
+        data_train: H5Dataset,
+        data_valid: H5Dataset,
+        cfg_train: DictConfig = defaults.train,
+        cfg_eval: DictConfig = defaults.eval,
+        cfg_logging: DictConfig = defaults.logging,
+        input_seq_length: int = defaults.model.input_seq_length,
+        seed: int = defaults.main.seed,
+        **kwargs,
+    ) -> Callable:
+        """
+        Builds a function that automates model training and evaluation.
 
-    Given a model, training and validation datasets and a case this function returns
-    another function that:
+        Given a model, training and validation datasets and a case this function returns
+        another function that:
 
-    1. Initializes (or resumes from a checkpoint) model, optimizer and loss function.
-    2. Trains the model on data_train, using the given pushforward and noise tricks.
-    3. Evaluates the model on data_valid on the specified metrics.
+        1. Initializes (or restarts a checkpoint) model, optimizer and loss function.
+        2. Trains the model on data_train, using the given pushforward and noise tricks.
+        3. Evaluates the model on data_valid on the specified metrics.
 
-    Args:
-        model: (Transformed) Haiku model.
-        case: Case setup class.
-        data_train: Training dataset.
-        data_valid: Validation dataset.
-        cfg_model: Model configuration.
-        cfg_train: Training configuration.
-        cfg_eval: Evaluation configuration.
-        cfg_logging: Logging configuration.
-        seed: Random seed for model init, training tricks and dataloading.
+        Args:
+            model: (Transformed) Haiku model.
+            case: Case setup class.
+            data_train: Training dataset.
+            data_valid: Validation dataset.
+            cfg_train: Training configuration.
+            cfg_eval: Evaluation configuration.
+            cfg_logging: Logging configuration.
+            input_seq_length: Input sequence length, i.e. number of past positions.
+            seed: Random seed for model init, training tricks and dataloading.
 
-    Returns:
-        Configured training function.
-    """
-    assert isinstance(
-        model, hk.TransformedWithState
-    ), "Model must be passed as an Haiku transformed function."
+        Returns:
+            Configured training function.
+        """
+        assert isinstance(
+            model, hk.TransformedWithState
+        ), "Model must be passed as an Haiku transformed function."
 
-    input_seq_length = cfg_model.input_seq_length
-    noise_std = cfg_train.noise_std
-    n_rollout_steps = cfg_eval.n_rollout_steps
-    eval_n_trajs = cfg_eval.train.n_trajs
-    # make immutable for jitting
-    # TODO look for simpler alternatives to LossConfig
-    # TODO(at): why moved away from LossConfig(**loss_weight) ?
-    loss_weight = LossConfig(**dict(cfg_train.loss_weight))
-    pushforward = cfg_train.pushforward
+        available_rollout_length = data_valid.subseq_length - input_seq_length
+        assert cfg_eval.n_rollout_steps <= available_rollout_length, (
+            "The loss cannot be evaluated on longer than a ground truth trajectory "
+            f"({cfg_eval.n_rollout_steps} > {available_rollout_length})"
+        )
+        assert cfg_eval.train.n_trajs <= data_valid.num_samples, (
+            f"Number of requested validation trajectories exceeds the available ones "
+            f"({cfg_eval.train.n_trajs} > {data_valid.num_samples})"
+        )
 
-    base_key, seed_worker, generator = set_seed(seed)
+        self.model = model
+        self.case = case
+        self.input_seq_length = input_seq_length
+        # if one of the cfg_* arguments has a subset of the default configs, merge them
+        self.cfg_train = OmegaConf.merge(defaults.train, cfg_train)
+        self.cfg_eval = OmegaConf.merge(defaults.eval, cfg_eval)
+        self.cfg_logging = OmegaConf.merge(defaults.logging, cfg_logging)
 
-    # dataloaders
-    loader_train = DataLoader(
-        dataset=data_train,
-        batch_size=cfg_eval.train.batch_size,
-        shuffle=True,
-        num_workers=cfg_train.num_workers,
-        collate_fn=numpy_collate,
-        drop_last=True,
-        worker_init_fn=seed_worker,
-        generator=generator,
-    )
-    loader_valid = DataLoader(
-        dataset=data_valid,
-        batch_size=cfg_eval.infer.batch_size,
-        collate_fn=numpy_collate,
-        worker_init_fn=seed_worker,
-        generator=generator,
-    )
+        # set the number of validation trajectories during training
+        if self.cfg_eval.train.n_trajs == -1:
+            self.cfg_eval.train.n_trajs = data_valid.num_samples
+        if self.cfg_logging.wandb:
+            self.wandb_config = kwargs["wandb_config"]
+            self.wandb_config["eval"]["train"]["n_trajs"] = self.cfg_eval.train.n_trajs
 
-    # learning rate decays from lr_start to lr_final over lr_decay_steps exponentially
-    lr_scheduler = optax.exponential_decay(
-        init_value=cfg_train.optimizer.lr_start,
-        transition_steps=cfg_train.optimizer.lr_decay_steps,
-        decay_rate=cfg_train.optimizer.lr_decay_rate,
-        end_value=cfg_train.optimizer.lr_final,
-    )
-    # optimizer
-    opt_init, opt_update = optax.adamw(learning_rate=lr_scheduler, weight_decay=1e-8)
+        # make immutable for jitting
+        # TODO look for simpler alternatives to LossConfig
+        self.loss_weight = LossConfig(**dict(self.cfg_train.loss_weight))
 
-    # metrics computer config
-    metrics_computer = MetricsComputer(
-        cfg_eval.train.metrics,
-        dist_fn=case.displacement,
-        metadata=data_train.metadata,
-        input_seq_length=input_seq_length,
-        stride=cfg_eval.train.metrics_stride,
-    )
+        self.base_key, seed_worker, generator = set_seed(seed)
 
-    def _train(
+        # dataloaders
+        self.loader_train = DataLoader(
+            dataset=data_train,
+            batch_size=self.cfg_eval.train.batch_size,
+            shuffle=True,
+            num_workers=self.cfg_train.num_workers,
+            collate_fn=numpy_collate,
+            drop_last=True,
+            worker_init_fn=seed_worker,
+            generator=generator,
+        )
+        self.loader_valid = DataLoader(
+            dataset=data_valid,
+            batch_size=self.cfg_eval.infer.batch_size,
+            collate_fn=numpy_collate,
+            worker_init_fn=seed_worker,
+            generator=generator,
+        )
+
+        # exponential learning rate decays from lr_start to lr_final over lr_decay_steps
+        lr_scheduler = optax.exponential_decay(
+            init_value=self.cfg_train.optimizer.lr_start,
+            transition_steps=self.cfg_train.optimizer.lr_decay_steps,
+            decay_rate=self.cfg_train.optimizer.lr_decay_rate,
+            end_value=self.cfg_train.optimizer.lr_final,
+        )
+        # optimizer
+        self.opt_init, self.opt_update = optax.adamw(
+            learning_rate=lr_scheduler, weight_decay=1e-8
+        )
+
+        # metrics computer config
+        self.metrics_computer = MetricsComputer(
+            self.cfg_eval.train.metrics,
+            dist_fn=self.case.displacement,
+            metadata=data_train.metadata,
+            input_seq_length=self.input_seq_length,
+            stride=self.cfg_eval.train.metrics_stride,
+        )
+
+    def train(
+        self,
         step_max: int = defaults.train.step_max,
         params: Optional[hk.Params] = None,
         state: Optional[hk.State] = None,
         opt_state: Optional[optax.OptState] = None,
         store_checkpoint: Optional[str] = None,
         load_checkpoint: Optional[str] = None,
-        **kwargs,
     ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
         Training loop.
@@ -205,26 +240,28 @@ def Trainer(
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
         """
-        assert n_rollout_steps <= data_valid.subseq_length - input_seq_length, (
-            "You cannot evaluate the loss on longer than a ground truth trajectory "
-            f"({n_rollout_steps}, {data_valid.subseq_length}, {input_seq_length})"
-        )
-        assert eval_n_trajs <= loader_valid.dataset.num_samples, (
-            f"eval_n_trajs must be <= loader_valid.dataset.num_samples, but it is "
-            f"{eval_n_trajs} > {loader_valid.dataset.num_samples}"
-        )
+
+        model = self.model
+        case = self.case
+        cfg_train = self.cfg_train
+        cfg_eval = self.cfg_eval
+        cfg_logging = self.cfg_logging
+        loader_train = self.loader_train
+        loader_valid = self.loader_valid
+        noise_std = cfg_train.noise_std
+        pushforward = cfg_train.pushforward
 
         # Precompile model for evaluation
         model_apply = jax.jit(model.apply)
 
         # loss and update functions
-        loss_fn = partial(_mse, model_fn=model_apply, loss_weight=loss_weight)
-        update_fn = partial(_update, loss_fn=loss_fn, opt_update=opt_update)
+        loss_fn = partial(_mse, model_fn=model_apply, loss_weight=self.loss_weight)
+        update_fn = partial(_update, loss_fn=loss_fn, opt_update=self.opt_update)
 
         # init values
         pos_input_and_target, particle_type = next(iter(loader_train))
         raw_sample = (pos_input_and_target[0], particle_type[0])
-        key, features, _, neighbors = case.allocate(base_key, raw_sample)
+        key, features, _, neighbors = case.allocate(self.base_key, raw_sample)
 
         step = 0
         if params is not None:
@@ -241,11 +278,10 @@ def Trainer(
 
         # start logging
         if cfg_logging.wandb:
-            wandb_track_config = kwargs.get("wandb_track_config", {})
-            wandb_track_config["info"] = {
-                "dataset_name": data_train.name,
-                "len_train": len(data_train),
-                "len_eval": len(data_valid),
+            self.wandb_config["info"] = {
+                "dataset_name": loader_train.dataset.name,
+                "len_train": len(loader_train.dataset),
+                "len_eval": len(loader_valid.dataset),
                 "num_params": get_num_params(params).item(),
                 "step_start": step,
             }
@@ -254,7 +290,7 @@ def Trainer(
                 project=cfg_logging.wandb_project,
                 entity=cfg_logging.wandb_entity,
                 name=cfg_logging.run_name,
-                config=wandb_track_config,  # TODO: check whether this works
+                config=self.wandb_config,
                 save_code=True,
             )
         else:
@@ -262,7 +298,7 @@ def Trainer(
 
         # initialize optimizer state
         if opt_state is None:
-            opt_state = opt_init(params)
+            opt_state = self.opt_init(params)
 
         # create new checkpoint directory
         if store_checkpoint is not None:
@@ -293,7 +329,7 @@ def Trainer(
                     unroll_steps,
                 )
                 # unroll for push-forward steps
-                _current_pos = raw_batch[0][:, :, :input_seq_length]
+                _current_pos = raw_batch[0][:, :, : self.input_seq_length]
                 for _ in range(unroll_steps):
                     if neighbors_batch.did_buffer_overflow.sum() > 0:
                         break
@@ -344,14 +380,14 @@ def Trainer(
                     nbrs = broadcast_from_batch(neighbors_batch, index=0)
                     eval_metrics = eval_rollout(
                         case=case,
-                        metrics_computer=metrics_computer,
+                        metrics_computer=self.metrics_computer,
                         model_apply=model_apply,
                         params=params,
                         state=state,
                         neighbors=nbrs,
                         loader_eval=loader_valid,
-                        n_rollout_steps=n_rollout_steps,
-                        n_trajs=eval_n_trajs,
+                        n_rollout_steps=self.cfg_eval.n_rollout_steps,
+                        n_trajs=cfg_eval.train.n_trajs,
                         rollout_dir=cfg_eval.rollout_dir,
                         out_type=cfg_eval.train.out_type,
                     )
@@ -379,5 +415,3 @@ def Trainer(
             wandb.finish()
 
         return params, state, opt_state
-
-    return _train

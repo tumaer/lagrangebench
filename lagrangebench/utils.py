@@ -5,7 +5,6 @@ import json
 import os
 import pickle
 import random
-from dataclasses import dataclass
 from typing import Callable, Tuple
 
 import cloudpickle
@@ -15,7 +14,6 @@ import numpy as np
 import torch
 
 
-# TODO look for a better place to put this and get_kinematic_mask
 class NodeType(enum.IntEnum):
     """Particle types."""
 
@@ -161,15 +159,3 @@ def set_seed(seed: int) -> Tuple[jax.Array, Callable, torch.Generator]:
     generator.manual_seed(seed)
 
     return key, seed_worker, generator
-
-
-@dataclass(frozen=True)
-class LossConfig:
-    """Weights for the different targets in the loss function."""
-
-    pos: float = 0.0
-    vel: float = 0.0
-    acc: float = 1.0
-
-    def __getitem__(self, key):
-        return getattr(self, key)
