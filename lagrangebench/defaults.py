@@ -179,7 +179,17 @@ def check_cfg(cfg: DictConfig):
 
     assert cfg.main.mode in ["train", "infer", "all"]
     assert cfg.main.dtype in ["float32", "float64"]
-    assert cfg.main.data_dir is not None, "main.data_dir must be specified."
+    assert cfg.main.dataset_path is not None, "main.dataset_path must be specified."
+
+    assert cfg.model.input_seq_length >= 2, "At least two positions for one past vel."
+
+    pf = cfg.train.pushforward
+    assert len(pf.steps) == len(pf.unrolls) == len(pf.probs)
+    assert all([s >= 0 for s in pf.unrolls]), "All unrolls must be non-negative."
+    assert all([s >= 0 for s in pf.probs]), "All probabilities must be non-negative."
+    lwv = cfg.train.loss_weight.values()
+    assert all([w >= 0 for w in lwv]), "All loss weights must be non-negative."
+    assert sum(lwv) > 0, "At least one loss weight must be non-zero."
 
     assert cfg.eval.train.n_trajs >= -1
     assert cfg.eval.infer.n_trajs >= -1
