@@ -18,14 +18,15 @@ from torch.utils.data import Dataset
 
 from lagrangebench.utils import NodeType
 
+ZENODO_PREFIX = "https://zenodo.org/records/10491868/files/"
 URLS = {
-    "tgv2d": "https://zenodo.org/records/10491868/files/2D_TGV_2500_10kevery100.zip",
-    "rpf2d": "https://zenodo.org/records/10491868/files/2D_RPF_3200_20kevery100.zip",
-    "ldc2d": "https://zenodo.org/records/10491868/files/2D_LDC_2708_10kevery100.zip",
-    "dam2d": "https://zenodo.org/records/10491868/files/2D_DAM_5740_20kevery100.zip",
-    "tgv3d": "https://zenodo.org/records/10491868/files/3D_TGV_8000_10kevery100.zip",
-    "rpf3d": "https://zenodo.org/records/10491868/files/3D_RPF_8000_10kevery100.zip",
-    "ldc3d": "https://zenodo.org/records/10491868/files/3D_LDC_8160_10kevery100.zip",
+    "tgv2d": f"{ZENODO_PREFIX}2D_TGV_2500_10kevery100.zip",
+    "rpf2d": f"{ZENODO_PREFIX}2D_RPF_3200_20kevery100.zip",
+    "ldc2d": f"{ZENODO_PREFIX}2D_LDC_2708_10kevery100.zip",
+    "dam2d": f"{ZENODO_PREFIX}2D_DAM_5740_20kevery100.zip",
+    "tgv3d": f"{ZENODO_PREFIX}3D_TGV_8000_10kevery100.zip",
+    "rpf3d": f"{ZENODO_PREFIX}3D_RPF_8000_10kevery100.zip",
+    "ldc3d": f"{ZENODO_PREFIX}3D_LDC_8160_10kevery100.zip",
 }
 
 
