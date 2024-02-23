@@ -101,13 +101,13 @@ class Trainer:
         cfg_logging: Union[Dict, DictConfig] = defaults.logging,
         input_seq_length: int = defaults.model.input_seq_length,
         seed: int = defaults.main.seed,
-        **kwargs,
+        wandb_run: Optional[wandb.wandb_sdk.wandb_run.Run] = None,
     ) -> Callable:
         """
-        Builds a function that automates model training and evaluation.
+        Trainer class.
 
-        Given a model, training and validation datasets and a case this function returns
-        another function that:
+        Given a model, case setup, training and validation datasets this class
+        automates training and evaluation.
 
         1. Initializes (or restarts a checkpoint) model, optimizer and loss function.
         2. Trains the model on data_train, using the given pushforward and noise tricks.
@@ -159,9 +159,6 @@ class Trainer:
         # set the number of validation trajectories during training
         if self.cfg_eval.train.n_trajs == -1:
             self.cfg_eval.train.n_trajs = data_valid.num_samples
-        if self.cfg_logging.wandb:
-            self.wandb_config = kwargs["wandb_config"]
-            self.wandb_config["eval"]["train"]["n_trajs"] = self.cfg_eval.train.n_trajs
 
         # make immutable for jitting
         loss_weight = self.cfg_train.loss_weight
@@ -208,6 +205,15 @@ class Trainer:
             input_seq_length=self.input_seq_length,
             stride=self.cfg_eval.train.metrics_stride,
         )
+
+        if wandb_run is None and self.cfg_logging.wandb:
+            wandb_run = wandb.init(
+                project=self.cfg_logging.wandb_project,
+                entity=self.cfg_logging.wandb_entity,
+                name=self.cfg_logging.run_name,
+                save_code=True,
+            )
+        self.wandb_run = wandb_run
 
     def train(
         self,
@@ -272,8 +278,11 @@ class Trainer:
             params, state = model.init(subkey, (features, particle_type[0]))
 
         # start logging
-        if cfg_logging.wandb:
-            self.wandb_config["info"] = {
+        if cfg_logging.wandb and self.wandb_run:
+            extended_config = self.wandb_run.config
+            extended_config["eval"]["train"]["n_trajs"] = self.cfg_eval.train.n_trajs
+
+            extended_config["info"] = {
                 "dataset_name": loader_train.dataset.name,
                 "len_train": len(loader_train.dataset),
                 "len_eval": len(loader_valid.dataset),
@@ -281,15 +290,8 @@ class Trainer:
                 "step_start": step,
             }
 
-            wandb_run = wandb.init(
-                project=cfg_logging.wandb_project,
-                entity=cfg_logging.wandb_entity,
-                name=cfg_logging.run_name,
-                config=self.wandb_config,
-                save_code=True,
-            )
-        else:
-            wandb_run = None
+            self.wandb_run.config.update(extended_config)
+            self.wandb_run.config.persist()
 
         # initialize optimizer state
         if opt_state is None:
@@ -365,8 +367,8 @@ class Trainer:
 
                 if step % cfg_logging.log_steps == 0:
                     loss.block_until_ready()
-                    if wandb_run:
-                        wandb_run.log({"train/loss": loss.item()}, step)
+                    if self.wandb_run:
+                        self.wandb_run.log({"train/loss": loss.item()}, step)
                     else:
                         step_str = str(step).zfill(len(str(int(step_max))))
                         print(f"{step_str}, train/loss: {loss.item():.5f}.")
@@ -397,8 +399,8 @@ class Trainer:
                             store_checkpoint, params, state, opt_state, metadata_ckp
                         )
 
-                    if wandb_run:
-                        wandb_run.log(metrics, step)
+                    if self.wandb_run:
+                        self.wandb_run.log(metrics, step)
                     else:
                         print(metrics)
 
@@ -406,7 +408,7 @@ class Trainer:
                 if step == step_max + 1:
                     break
 
-        if cfg_logging.wandb:
-            wandb.finish()
+        if self.wandb_run:
+            self.wandb_run.finish()
 
         return params, state, opt_state

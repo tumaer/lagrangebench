@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import jmp
 import numpy as np
+import wandb
 from e3nn_jax import Irreps
 from jax import config
 from jax_md import space
@@ -90,7 +91,13 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             OmegaConf.save(config=cfg, f=f.name)
 
         # dictionary of configs which will be stored on W&B
-        wandb_config = OmegaConf.to_container(cfg)
+        wandb_run = wandb.init(
+            project=cfg.logging.wandb_project,
+            entity=cfg.logging.wandb_entity,
+            name=cfg.logging.run_name,
+            config=OmegaConf.to_container(cfg),
+            save_code=True,
+        )
 
         trainer = Trainer(
             model,
@@ -102,8 +109,9 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             cfg.logging,
             input_seq_length=cfg.model.input_seq_length,
             seed=cfg.main.seed,
-            wandb_config=wandb_config,
+            wandb_run=wandb_run,
         )
+
         _, _, _ = trainer.train(
             step_max=cfg.train.step_max,
             load_checkpoint=old_model_dir,
