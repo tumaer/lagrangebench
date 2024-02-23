@@ -2,7 +2,7 @@ import os
 import os.path as osp
 from argparse import Namespace
 from datetime import datetime
-from typing import Callable, Dict, Optional, Tuple, Type
+from typing import Callable, Dict, Optional, Tuple, Type, Union
 
 import haiku as hk
 import jax
@@ -23,7 +23,9 @@ from lagrangebench.models.utils import node_irreps
 from lagrangebench.utils import NodeType
 
 
-def train_or_infer(cfg: DictConfig):
+def train_or_infer(cfg: Union[Dict, DictConfig]):
+    if isinstance(cfg, Dict):
+        cfg = OmegaConf.create(cfg)
     # sanity check on the passed configs
     check_cfg(cfg)
 

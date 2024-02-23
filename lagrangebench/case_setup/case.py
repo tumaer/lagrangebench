@@ -8,7 +8,7 @@ from jax import Array, jit, lax, vmap
 from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from lagrangebench.data.utils import get_dataset_stats
 from lagrangebench.defaults import defaults
@@ -64,7 +64,7 @@ def case_builder(
     box: Tuple[float, float, float],
     metadata: Dict,
     input_seq_length: int,
-    cfg_neighbors: DictConfig = defaults.neighbors,
+    cfg_neighbors: Union[Dict, DictConfig] = defaults.neighbors,
     isotropic_norm: bool = defaults.model.isotropic_norm,
     noise_std: float = defaults.train.noise_std,
     external_force_fn: Optional[Callable] = None,
@@ -91,6 +91,9 @@ def case_builder(
         magnitude_features: Whether to add velocity magnitudes in the features.
         dtype: Data type.
     """
+    if isinstance(cfg_neighbors, Dict):
+        cfg_neighbors = OmegaConf.create(cfg_neighbors)
+
     normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
 
     # apply PBC in all directions or not at all

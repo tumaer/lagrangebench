@@ -4,14 +4,14 @@ import os
 import pickle
 import time
 from functools import partial
-from typing import Callable, Iterable, Optional, Tuple
+from typing import Callable, Dict, Iterable, Optional, Tuple, Union
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
 import jax_md.partition as partition
 from jax import jit, vmap
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from lagrangebench.data import H5Dataset
@@ -315,7 +315,7 @@ def infer(
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,
     load_checkpoint: Optional[str] = None,
-    cfg_eval_infer: DictConfig = defaults.eval.infer,
+    cfg_eval_infer: Union[Dict, DictConfig] = defaults.eval.infer,
     rollout_dir: Optional[str] = defaults.eval.rollout_dir,
     n_rollout_steps: int = defaults.eval.n_rollout_steps,
     seed: int = defaults.main.seed,
@@ -341,6 +341,9 @@ def infer(
     assert (
         params is not None or load_checkpoint is not None
     ), "Either params or a load_checkpoint directory must be provided for inference."
+
+    if isinstance(cfg_eval_infer, Dict):
+        cfg_eval_infer = OmegaConf.create(cfg_eval_infer)
 
     n_trajs = cfg_eval_infer.n_trajs
     if n_trajs == -1:

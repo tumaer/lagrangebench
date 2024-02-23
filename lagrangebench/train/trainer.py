@@ -1,9 +1,9 @@
 """Training utils and functions."""
 
 import os
-from dataclasses import dataclass
+from collections import namedtuple
 from functools import partial
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple, Union
 
 import haiku as hk
 import jax
@@ -32,18 +32,6 @@ from lagrangebench.utils import (
 from .strats import push_forward_build, push_forward_sample_steps
 
 
-@dataclass(frozen=True)
-class LossConfig:
-    """Weights for the different targets in the loss function."""
-
-    pos: float = 0.0
-    vel: float = 0.0
-    acc: float = 1.0
-
-    def __getitem__(self, key):
-        return getattr(self, key)
-
-
 @partial(jax.jit, static_argnames=["model_fn", "loss_weight"])
 def _mse(
     params: hk.Params,
@@ -63,7 +51,8 @@ def _mse(
     # loss components
     losses = []
     for t in pred:
-        losses.append((loss_weight[t] * (pred[t] - target[t]) ** 2).sum(axis=-1))
+        w = getattr(loss_weight, t)
+        losses.append((w * (pred[t] - target[t]) ** 2).sum(axis=-1))
     total_loss = jnp.array(losses).sum(0)
     total_loss = jnp.where(non_kinematic_mask, total_loss, 0)
     total_loss = total_loss.sum() / num_non_kinematic
@@ -107,9 +96,9 @@ class Trainer:
         case,
         data_train: H5Dataset,
         data_valid: H5Dataset,
-        cfg_train: DictConfig = defaults.train,
-        cfg_eval: DictConfig = defaults.eval,
-        cfg_logging: DictConfig = defaults.logging,
+        cfg_train: Union[Dict, DictConfig] = defaults.train,
+        cfg_eval: Union[Dict, DictConfig] = defaults.eval,
+        cfg_logging: Union[Dict, DictConfig] = defaults.logging,
         input_seq_length: int = defaults.model.input_seq_length,
         seed: int = defaults.main.seed,
         **kwargs,
@@ -152,6 +141,13 @@ class Trainer:
             f"({cfg_eval.train.n_trajs} > {data_valid.num_samples})"
         )
 
+        if isinstance(cfg_train, Dict):
+            cfg_train = OmegaConf.create(cfg_train)
+        if isinstance(cfg_eval, Dict):
+            cfg_eval = OmegaConf.create(cfg_eval)
+        if isinstance(cfg_logging, Dict):
+            cfg_logging = OmegaConf.create(cfg_logging)
+
         self.model = model
         self.case = case
         self.input_seq_length = input_seq_length
@@ -168,8 +164,8 @@ class Trainer:
             self.wandb_config["eval"]["train"]["n_trajs"] = self.cfg_eval.train.n_trajs
 
         # make immutable for jitting
-        # TODO look for simpler alternatives to LossConfig
-        self.loss_weight = LossConfig(**dict(self.cfg_train.loss_weight))
+        loss_weight = self.cfg_train.loss_weight
+        self.loss_weight = namedtuple("loss_weight", loss_weight)(**loss_weight)
 
         self.base_key, seed_worker, generator = set_seed(seed)
 
