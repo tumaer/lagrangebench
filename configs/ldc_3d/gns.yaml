@@ -1,4 +1,4 @@
-extends: lagrangebench/defaults.py
+extends: LAGRANGEBENCH_DEFAULTS
 
 main:
   dataset_path: datasets/3D_LDC_8160_10kevery100

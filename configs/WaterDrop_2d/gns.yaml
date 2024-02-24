@@ -1,4 +1,4 @@
-extends: lagrangebench/defaults.py
+extends: LAGRANGEBENCH_DEFAULTS
 
 main:
   dataset_path: /tmp/datasets/WaterDrop

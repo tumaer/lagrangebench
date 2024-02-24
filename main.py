@@ -11,8 +11,8 @@ def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
         extends_path = cfgs[0]["extends"]
         del cfgs[0]["extends"]
 
-        # go to parents configs until defaults.py is reached
-        if extends_path != "lagrangebench/defaults.py":
+        # go to parents configs until the defaults are reached
+        if extends_path != "LAGRANGEBENCH_DEFAULTS":
             cfgs = [OmegaConf.load(extends_path)] + cfgs
         else:
             from lagrangebench.defaults import defaults
