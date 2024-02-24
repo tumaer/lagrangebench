@@ -26,8 +26,8 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
     # XLA memory fraction to be preallocated. The JAX default is 0.75.
     # Should be specified before importing the library.
     cfg.main.xla_mem_fraction = None
-    # data directory
-    cfg.main.data_dir = None
+    # path to data directory
+    cfg.main.dataset_path = None
 
     ### model
     cfg.model = OmegaConf.create({})

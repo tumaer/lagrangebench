@@ -153,15 +153,15 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
 
 
 def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
-    data_dir = cfg.main.data_dir
+    dataset_path = cfg.main.dataset_path
     ckp_dir = cfg.logging.ckp_dir
     rollout_dir = cfg.eval.rollout_dir
     input_seq_length = cfg.model.input_seq_length
     n_rollout_steps = cfg.eval.n_rollout_steps
     nl_backend = cfg.neighbors.backend
 
-    if not osp.isabs(data_dir):
-        data_dir = osp.join(os.getcwd(), data_dir)
+    if not osp.isabs(dataset_path):
+        dataset_path = osp.join(os.getcwd(), dataset_path)
 
     if ckp_dir is not None:
         os.makedirs(ckp_dir, exist_ok=True)
@@ -171,21 +171,21 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     # dataloader
     data_train = H5Dataset(
         "train",
-        dataset_path=data_dir,
+        dataset_path=dataset_path,
         input_seq_length=input_seq_length,
         extra_seq_length=cfg.train.pushforward.unrolls[-1],
         nl_backend=nl_backend,
     )
     data_valid = H5Dataset(
         "valid",
-        dataset_path=data_dir,
+        dataset_path=dataset_path,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
         nl_backend=nl_backend,
     )
     data_test = H5Dataset(
         "test",
-        dataset_path=data_dir,
+        dataset_path=dataset_path,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
         nl_backend=nl_backend,

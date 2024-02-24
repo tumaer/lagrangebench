@@ -1,7 +1,7 @@
 extends: lagrangebench/defaults.py
 
 main:
-  data_dir: datasets/2D_DAM_5740_20kevery100
+  dataset_path: datasets/2D_DAM_5740_20kevery100
 
 model: 
   name: segnn

@@ -9,14 +9,14 @@ from lagrangebench.runner import train_or_infer
 
 
 class TestRunner(unittest.TestCase):
-    """Class for testing the train_or_infer function."""
+    """Test whether train_or_infer runs through."""
 
     def setUp(self):
         self.cfg = OmegaConf.create(
             {
                 "main": {
                     "mode": "all",
-                    "data_dir": "tests/3D_LJ_3_1214every1",
+                    "dataset_path": "tests/3D_LJ_3_1214every1",
                 },
                 "model": {
                     "name": "linear",

@@ -1,7 +1,7 @@
 extends: lagrangebench/defaults.py
 
 main:
-  data_dir: datasets/2D_RPF_3200_20kevery100
+  dataset_path: datasets/2D_RPF_3200_20kevery100
 
 model: 
   name: segnn
