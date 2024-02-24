@@ -28,7 +28,7 @@ def update_wrapper(neighbors_old, r_new):
 
 def compute_neighbors(args):
     Nx = args.Nx
-    mode = args.main.mode
+    mode = args.mode
     nl_backend = args.nl_backend
     num_partitions = args.num_partitions
     print(f"Start with Nx={Nx}, mode={mode}, backend={nl_backend}")

@@ -44,7 +44,7 @@ class TestInferBuilder(unittest.TestCase):
 
         data_valid = H5Dataset(
             split="valid",
-            dataset_path=self.cfg.main.dataset_path,
+            dataset_path=self.cfg.dataset_path,
             name="lj3d",
             input_seq_length=self.cfg.model.input_seq_length,
             extra_seq_length=self.cfg.eval.n_rollout_steps,

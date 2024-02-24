@@ -12,22 +12,22 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
 
     # configuration file. Either main.config or main.model_dir must be specified.
     # If main.config is specified, main.model_dir is ignored.
-    cfg.main.config = None
+    cfg.config = None
     # Load checkpointed model from this directory
-    cfg.main.model_dir = None
+    cfg.model_dir = None
     # One of "train", "infer" or "all" (= both)
-    cfg.main.mode = "all"
+    cfg.mode = "all"
     # random seed
-    cfg.main.seed = 0
+    cfg.seed = 0
     # data type for preprocessing. One of "float32" or "float64"
-    cfg.main.dtype = "float64"
+    cfg.dtype = "float64"
     # gpu device. -1 for CPU. Should be specified before importing the library.
-    cfg.main.gpu = None
+    cfg.gpu = None
     # XLA memory fraction to be preallocated. The JAX default is 0.75.
     # Should be specified before importing the library.
-    cfg.main.xla_mem_fraction = None
+    cfg.xla_mem_fraction = None
     # path to data directory
-    cfg.main.dataset_path = None
+    cfg.dataset_path = None
 
     ### model
     cfg.model = OmegaConf.create({})
@@ -177,9 +177,9 @@ defaults = set_defaults()
 def check_cfg(cfg: DictConfig):
     """Check if the configs are valid."""
 
-    assert cfg.main.mode in ["train", "infer", "all"]
-    assert cfg.main.dtype in ["float32", "float64"]
-    assert cfg.main.dataset_path is not None, "main.dataset_path must be specified."
+    assert cfg.mode in ["train", "infer", "all"]
+    assert cfg.dtype in ["float32", "float64"]
+    assert cfg.dataset_path is not None, "main.dataset_path must be specified."
 
     assert cfg.model.input_seq_length >= 2, "At least two positions for one past vel."
 

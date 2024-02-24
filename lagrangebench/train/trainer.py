@@ -100,7 +100,7 @@ class Trainer:
         cfg_eval: Union[Dict, DictConfig] = defaults.eval,
         cfg_logging: Union[Dict, DictConfig] = defaults.logging,
         input_seq_length: int = defaults.model.input_seq_length,
-        seed: int = defaults.main.seed,
+        seed: int = defaults.seed,
         wandb_run: Optional[wandb.wandb_sdk.wandb_run.Run] = None,
     ) -> Callable:
         """

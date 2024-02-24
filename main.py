@@ -34,18 +34,18 @@ if __name__ == "__main__":
     ), "You must specify one of main.config or main.model_dir."
 
     if "config" in cli_args.main:  # start from config.yaml
-        config_path = cli_args.main.config
+        config_path = cli_args.config
     elif "model_dir" in cli_args.main:  # start from a checkpoint
-        config_path = os.path.join(cli_args.main.model_dir, "config.yaml")
+        config_path = os.path.join(cli_args.model_dir, "config.yaml")
 
     # values that need to be specified before importing jax
-    cli_args.main.gpu = cli_args.main.get("gpu", -1)
-    cli_args.main.xla_mem_fraction = cli_args.main.get("xla_mem_fraction", 0.75)
+    cli_args.gpu = cli_args.get("gpu", -1)
+    cli_args.xla_mem_fraction = cli_args.get("xla_mem_fraction", 0.75)
 
     # specify cuda device
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152 from TensorFlow
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(cli_args.main.gpu)
-    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(cli_args.main.xla_mem_fraction)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(cli_args.gpu)
+    os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(cli_args.xla_mem_fraction)
 
     cfg = load_embedded_configs(config_path, cli_args)
 

@@ -318,7 +318,7 @@ def infer(
     cfg_eval_infer: Union[Dict, DictConfig] = defaults.eval.infer,
     rollout_dir: Optional[str] = defaults.eval.rollout_dir,
     n_rollout_steps: int = defaults.eval.n_rollout_steps,
-    seed: int = defaults.main.seed,
+    seed: int = defaults.seed,
 ):
     """
     Infer on a dataset, compute metrics and optionally save rollout in out_type format.

@@ -69,7 +69,7 @@ def case_builder(
     noise_std: float = defaults.train.noise_std,
     external_force_fn: Optional[Callable] = None,
     magnitude_features: bool = defaults.model.magnitude_features,
-    dtype: jnp.dtype = defaults.main.dtype,
+    dtype: jnp.dtype = defaults.dtype,
 ):
     """Set up a CaseSetupFn that contains every required function besides the model.
 

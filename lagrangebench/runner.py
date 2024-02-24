@@ -30,11 +30,11 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
     # sanity check on the passed configs
     check_cfg(cfg)
 
-    mode = cfg.main.mode
-    old_model_dir = cfg.main.model_dir
+    mode = cfg.mode
+    old_model_dir = cfg.model_dir
     is_test = cfg.eval.test
 
-    if cfg.main.dtype == "float64":
+    if cfg.dtype == "float64":
         config.update("jax_enable_x64", True)
 
     data_train, data_valid, data_test = setup_data(cfg)
@@ -54,7 +54,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
         noise_std=cfg.train.noise_std,
         external_force_fn=data_train.external_force_fn,
         magnitude_features=cfg.model.magnitude_features,
-        dtype=cfg.main.dtype,
+        dtype=cfg.dtype,
     )
 
     _, particle_type = data_train[0]
@@ -82,12 +82,12 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             data_and_time = datetime.today().strftime("%Y%m%d-%H%M%S")
             cfg.logging.run_name = f"{run_prefix}_{data_and_time}"
 
-        cfg.main.model_dir = os.path.join(cfg.logging.ckp_dir, cfg.logging.run_name)
-        os.makedirs(cfg.main.model_dir, exist_ok=True)
-        os.makedirs(os.path.join(cfg.main.model_dir, "best"), exist_ok=True)
-        with open(os.path.join(cfg.main.model_dir, "config.yaml"), "w") as f:
+        cfg.model_dir = os.path.join(cfg.logging.ckp_dir, cfg.logging.run_name)
+        os.makedirs(cfg.model_dir, exist_ok=True)
+        os.makedirs(os.path.join(cfg.model_dir, "best"), exist_ok=True)
+        with open(os.path.join(cfg.model_dir, "config.yaml"), "w") as f:
             OmegaConf.save(config=cfg, f=f.name)
-        with open(os.path.join(cfg.main.model_dir, "best", "config.yaml"), "w") as f:
+        with open(os.path.join(cfg.model_dir, "best", "config.yaml"), "w") as f:
             OmegaConf.save(config=cfg, f=f.name)
 
         # dictionary of configs which will be stored on W&B
@@ -108,23 +108,23 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             cfg.eval,
             cfg.logging,
             input_seq_length=cfg.model.input_seq_length,
-            seed=cfg.main.seed,
+            seed=cfg.seed,
             wandb_run=wandb_run,
         )
 
         _, _, _ = trainer.train(
             step_max=cfg.train.step_max,
             load_checkpoint=old_model_dir,
-            store_checkpoint=cfg.main.model_dir,
+            store_checkpoint=cfg.model_dir,
         )
 
     if mode == "infer" or mode == "all":
         print("Start inference...")
 
         if mode == "infer":
-            model_dir = cfg.main.model_dir
+            model_dir = cfg.model_dir
         if mode == "all":
-            model_dir = os.path.join(cfg.main.model_dir, "best")
+            model_dir = os.path.join(cfg.model_dir, "best")
             assert osp.isfile(os.path.join(model_dir, "params_tree.pkl"))
 
             cfg.eval.rollout_dir = model_dir.replace("ckp", "rollout")
@@ -142,7 +142,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             cfg_eval_infer=cfg.eval.infer,
             rollout_dir=cfg.eval.rollout_dir,
             n_rollout_steps=cfg.eval.n_rollout_steps,
-            seed=cfg.main.seed,
+            seed=cfg.seed,
         )
 
         split = "test" if is_test else "valid"
@@ -153,7 +153,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
 
 
 def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
-    dataset_path = cfg.main.dataset_path
+    dataset_path = cfg.dataset_path
     ckp_dir = cfg.logging.ckp_dir
     rollout_dir = cfg.eval.rollout_dir
     input_seq_length = cfg.model.input_seq_length
