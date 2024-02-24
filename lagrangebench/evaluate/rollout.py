@@ -796,7 +796,7 @@ def infer_pde_refiner(
     key, subkey = jax.random.split(key, 2)
     num_refinement_steps = kwargs["num_refinement_steps"]
     sigma_min = kwargs["sigma_min"]
-    k = random.randint(subkey, (), 0, num_refinement_steps)
+    k = random.randint(subkey, (), 0, num_refinement_steps + 1)
     is_k_zero = jnp.where(k == 0, True, False)
 
     key, _, _, neighbors = case.allocate_pde_refiner(
