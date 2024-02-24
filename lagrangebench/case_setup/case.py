@@ -65,10 +65,9 @@ def case_builder(
     metadata: Dict,
     input_seq_length: int,
     cfg_neighbors: Union[Dict, DictConfig] = defaults.neighbors,
-    isotropic_norm: bool = defaults.model.isotropic_norm,
+    cfg_model: Union[Dict, DictConfig] = defaults.model,
     noise_std: float = defaults.train.noise_std,
     external_force_fn: Optional[Callable] = None,
-    magnitude_features: bool = defaults.model.magnitude_features,
     dtype: jnp.dtype = defaults.dtype,
 ):
     """Set up a CaseSetupFn that contains every required function besides the model.
@@ -85,16 +84,18 @@ def case_builder(
         metadata: Dataset metadata dictionary.
         cfg_neighbors: Configuration dictionary for the neighbor list.
         input_seq_length: Length of the input sequence.
-        isotropic_norm: Whether to normalize dimensions equally.
         noise_std: Noise standard deviation.
         external_force_fn: External force function.
-        magnitude_features: Whether to add velocity magnitudes in the features.
         dtype: Data type.
     """
     if isinstance(cfg_neighbors, Dict):
         cfg_neighbors = OmegaConf.create(cfg_neighbors)
+    if isinstance(cfg_model, Dict):
+        cfg_model = OmegaConf.create(cfg_model)
 
-    normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
+    normalization_stats = get_dataset_stats(
+        metadata, cfg_model.isotropic_norm, noise_std
+    )
 
     # apply PBC in all directions or not at all
     if jnp.array(metadata["periodic_boundary_conditions"]).any():
@@ -130,7 +131,7 @@ def case_builder(
         connectivity_radius=metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=metadata["periodic_boundary_conditions"],
-        magnitude_features=magnitude_features,
+        magnitude_features=cfg_model.magnitude_features,
         external_force_fn=external_force_fn,
     )
 

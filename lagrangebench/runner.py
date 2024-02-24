@@ -49,10 +49,9 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
         metadata=metadata,
         input_seq_length=cfg.model.input_seq_length,
         cfg_neighbors=cfg.neighbors,
-        isotropic_norm=cfg.model.isotropic_norm,
+        cfg_model=cfg.model,
         noise_std=cfg.train.noise_std,
         external_force_fn=data_train.external_force_fn,
-        magnitude_features=cfg.model.magnitude_features,
         dtype=cfg.dtype,
     )
 
