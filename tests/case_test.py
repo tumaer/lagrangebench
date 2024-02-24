@@ -29,7 +29,8 @@ class TestCaseBuilder(unittest.TestCase):
             box,
             self.metadata,
             input_seq_length=3,  # two past velocities
-            isotropic_norm=False,
+            cfg_neighbors={"backend": "jaxmd_vmap", "multiplier": 1.25},
+            cfg_model={"isotropic_norm": False, "magnitude_features": False},
             noise_std=0.0,
             external_force_fn=None,
         )
