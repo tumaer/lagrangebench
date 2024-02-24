@@ -1,7 +1,4 @@
-extends: LAGRANGEBENCH_DEFAULTS
-
-main:
-  dataset_path: datasets/2D_RPF_3200_20kevery100
+extends: configs/rpf_2d/base.yaml
 
 model: 
   name: segnn
@@ -12,6 +9,3 @@ model:
 train:
   optimizer:
     lr_start: 1.e-3
-
-logging:
-  wandb_project: rpf_2d

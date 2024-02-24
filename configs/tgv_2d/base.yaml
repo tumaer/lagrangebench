@@ -1,0 +1,6 @@
+extends: LAGRANGEBENCH_DEFAULTS
+
+dataset_path: datasets/2D_TGV_2500_10kevery100
+
+logging:
+  wandb_project: tgv_2d

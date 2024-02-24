@@ -1,7 +1,4 @@
-extends: LAGRANGEBENCH_DEFAULTS
-
-main:
-  dataset_path: datasets/3D_RPF_8000_10kevery100
+extends: configs/rpf_3d/base.yaml
 
 model: 
   name: egnn
@@ -17,6 +14,3 @@ train:
     pos: 1.0
     vel: 0.0
     acc: 0.0
-
-logging:
-  wandb_project: rpf_3d

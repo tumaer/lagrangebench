@@ -1,7 +1,4 @@
-extends: LAGRANGEBENCH_DEFAULTS
-
-main:
-  dataset_path: datasets/3D_RPF_8000_10kevery100
+extends: configs/rpf_3d/base.yaml
 
 model: 
   name: painn
@@ -13,6 +10,3 @@ model:
 train:
   optimizer:
     lr_start: 5.e-4
-
-logging:
-  wandb_project: rpf_3d

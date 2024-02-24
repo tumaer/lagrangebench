@@ -1,0 +1,6 @@
+extends: LAGRANGEBENCH_DEFAULTS
+
+dataset_path: datasets/2D_RPF_3200_20kevery100
+
+logging:
+  wandb_project: rpf_2d

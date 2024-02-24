@@ -1,0 +1,9 @@
+extends: LAGRANGEBENCH_DEFAULTS
+
+dataset_path: datasets/3D_LDC_8160_10kevery100
+
+logging:
+  wandb_project: ldc_3d
+
+neighbors:
+  multiplier: 2.0

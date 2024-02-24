@@ -1,9 +1,6 @@
-extends: LAGRANGEBENCH_DEFAULTS
+extends: configs/tgv_3d/base.yaml
 
-main:
-  dataset_path: datasets/3D_TGV_8000_10kevery100
-
-model: 
+model:
   name: segnn
   num_mp_steps: 10
   latent_dim: 64
@@ -12,6 +9,3 @@ model:
 train:
   optimizer:
     lr_start: 5.e-4
-
-logging:
-  wandb_project: tgv_3d

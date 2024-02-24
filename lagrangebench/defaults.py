@@ -8,15 +8,16 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
     """Set default lagrangebench configs."""
 
     ### global and hardware-related configs
-    cfg.main = OmegaConf.create({})
 
-    # configuration file. Either main.config or main.model_dir must be specified.
-    # If main.config is specified, main.model_dir is ignored.
+    # configuration file. Either "config" or "model_dir" must be specified.
+    # If "config" is specified, "model_dir" is ignored.
     cfg.config = None
     # Load checkpointed model from this directory
     cfg.model_dir = None
     # One of "train", "infer" or "all" (= both)
     cfg.mode = "all"
+    # path to data directory
+    cfg.dataset_path = None
     # random seed
     cfg.seed = 0
     # data type for preprocessing. One of "float32" or "float64"
@@ -26,8 +27,6 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
     # XLA memory fraction to be preallocated. The JAX default is 0.75.
     # Should be specified before importing the library.
     cfg.xla_mem_fraction = None
-    # path to data directory
-    cfg.dataset_path = None
 
     ### model
     cfg.model = OmegaConf.create({})
@@ -179,7 +178,7 @@ def check_cfg(cfg: DictConfig):
 
     assert cfg.mode in ["train", "infer", "all"]
     assert cfg.dtype in ["float32", "float64"]
-    assert cfg.dataset_path is not None, "main.dataset_path must be specified."
+    assert cfg.dataset_path is not None, "dataset_path must be specified."
 
     assert cfg.model.input_seq_length >= 2, "At least two positions for one past vel."
 

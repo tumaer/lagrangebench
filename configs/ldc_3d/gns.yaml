@@ -1,7 +1,4 @@
-extends: LAGRANGEBENCH_DEFAULTS
-
-main:
-  dataset_path: datasets/3D_LDC_8160_10kevery100
+extends: configs/ldc_3d/base.yaml
 
 model: 
   name: gns
@@ -11,9 +8,3 @@ model:
 train:
   optimizer:
     lr_start: 5.e-4
-
-logging:
-  wandb_project: ldc_3d
-
-neighbors:
-  multiplier: 2.0

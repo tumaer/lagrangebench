@@ -29,13 +29,13 @@ if __name__ == "__main__":
     # TODO: add optional wandb.sweeps
 
     cli_args = OmegaConf.from_cli()
-    assert ("config" in cli_args.main) != (
-        "model_dir" in cli_args.main
-    ), "You must specify one of main.config or main.model_dir."
+    assert ("config" in cli_args) != (
+        "model_dir" in cli_args
+    ), "You must specify one of config or model_dir."
 
-    if "config" in cli_args.main:  # start from config.yaml
+    if "config" in cli_args:  # start from config.yaml
         config_path = cli_args.config
-    elif "model_dir" in cli_args.main:  # start from a checkpoint
+    elif "model_dir" in cli_args:  # start from a checkpoint
         config_path = os.path.join(cli_args.model_dir, "config.yaml")
 
     # values that need to be specified before importing jax
