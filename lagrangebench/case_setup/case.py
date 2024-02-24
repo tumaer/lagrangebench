@@ -82,8 +82,9 @@ def case_builder(
     Args:
         box: Box xyz sizes of the system.
         metadata: Dataset metadata dictionary.
-        cfg_neighbors: Configuration dictionary for the neighbor list.
         input_seq_length: Length of the input sequence.
+        cfg_neighbors: Configuration dictionary for the neighbor list.
+        cfg_model: Configuration dictionary for the model / feature builder.
         noise_std: Noise standard deviation.
         external_force_fn: External force function.
         dtype: Data type.
@@ -92,6 +93,10 @@ def case_builder(
         cfg_neighbors = OmegaConf.create(cfg_neighbors)
     if isinstance(cfg_model, Dict):
         cfg_model = OmegaConf.create(cfg_model)
+
+    # if one of the cfg_* arguments has a subset of the default configs, merge them
+    cfg_neighbors = OmegaConf.merge(defaults.neighbors, cfg_neighbors)
+    cfg_model = OmegaConf.merge(defaults.model, cfg_model)
 
     normalization_stats = get_dataset_stats(
         metadata, cfg_model.isotropic_norm, noise_std

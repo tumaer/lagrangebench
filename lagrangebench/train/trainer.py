@@ -126,20 +126,6 @@ class Trainer:
         Returns:
             Configured training function.
         """
-        assert isinstance(
-            model, hk.TransformedWithState
-        ), "Model must be passed as an Haiku transformed function."
-
-        available_rollout_length = data_valid.subseq_length - input_seq_length
-        assert cfg_eval.n_rollout_steps <= available_rollout_length, (
-            "The loss cannot be evaluated on longer than a ground truth trajectory "
-            f"({cfg_eval.n_rollout_steps} > {available_rollout_length})"
-        )
-        assert cfg_eval.train.n_trajs <= data_valid.num_samples, (
-            f"Number of requested validation trajectories exceeds the available ones "
-            f"({cfg_eval.train.n_trajs} > {data_valid.num_samples})"
-        )
-
         if isinstance(cfg_train, Dict):
             cfg_train = OmegaConf.create(cfg_train)
         if isinstance(cfg_eval, Dict):
@@ -154,6 +140,20 @@ class Trainer:
         self.cfg_train = OmegaConf.merge(defaults.train, cfg_train)
         self.cfg_eval = OmegaConf.merge(defaults.eval, cfg_eval)
         self.cfg_logging = OmegaConf.merge(defaults.logging, cfg_logging)
+
+        assert isinstance(
+            model, hk.TransformedWithState
+        ), "Model must be passed as an Haiku transformed function."
+
+        available_rollout_length = data_valid.subseq_length - input_seq_length
+        assert cfg_eval.n_rollout_steps <= available_rollout_length, (
+            "The loss cannot be evaluated on longer than a ground truth trajectory "
+            f"({cfg_eval.n_rollout_steps} > {available_rollout_length})"
+        )
+        assert cfg_eval.train.n_trajs <= data_valid.num_samples, (
+            f"Number of requested validation trajectories exceeds the available ones "
+            f"({cfg_eval.train.n_trajs} > {data_valid.num_samples})"
+        )
 
         # set the number of validation trajectories during training
         if self.cfg_eval.train.n_trajs == -1:

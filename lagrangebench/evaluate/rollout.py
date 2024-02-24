@@ -345,6 +345,9 @@ def infer(
     if isinstance(cfg_eval_infer, Dict):
         cfg_eval_infer = OmegaConf.create(cfg_eval_infer)
 
+    # if one of the cfg_* arguments has a subset of the default configs, merge them
+    cfg_eval_infer = OmegaConf.merge(defaults.eval.infer, cfg_eval_infer)
+
     n_trajs = cfg_eval_infer.n_trajs
     if n_trajs == -1:
         n_trajs = data_test.num_samples

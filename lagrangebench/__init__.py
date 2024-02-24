@@ -8,10 +8,12 @@ __all__ = [
     "Trainer",
     "infer",
     "case_builder",
+    "models",
     "GNS",
     "EGNN",
     "SEGNN",
     "PaiNN",
+    "data",
     "H5Dataset",
     "TGV2D",
     "TGV3D",
@@ -22,7 +24,4 @@ __all__ = [
     "DAM2D",
 ]
 
-import toml
-
-pyproject = toml.load("pyproject.toml")
-__version__ = pyproject["tool"]["poetry"]["version"]
+__version__ = "0.1.2"
