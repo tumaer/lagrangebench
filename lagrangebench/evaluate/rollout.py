@@ -314,7 +314,7 @@ def infer(
     data_test: H5Dataset,
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,
-    load_checkpoint: Optional[str] = None,
+    load_ckp: Optional[str] = None,
     cfg_eval_infer: Union[Dict, DictConfig] = defaults.eval.infer,
     rollout_dir: Optional[str] = defaults.eval.rollout_dir,
     n_rollout_steps: int = defaults.eval.n_rollout_steps,
@@ -329,7 +329,7 @@ def infer(
         data_test: Test dataset.
         params: Haiku params.
         state: Haiku state.
-        load_checkpoint: Path to checkpoint directory.
+        load_ckp: Path to checkpoint directory.
         rollout_dir: Path to rollout directory.
         cfd_eval_infer: Evaluation configuration for inference mode.
         n_rollout_steps: Number of rollout steps.
@@ -339,8 +339,8 @@ def infer(
         eval_metrics: Metrics per trajectory.
     """
     assert (
-        params is not None or load_checkpoint is not None
-    ), "Either params or a load_checkpoint directory must be provided for inference."
+        params is not None or load_ckp is not None
+    ), "Either params or a load_ckp directory must be provided for inference."
 
     if isinstance(cfg_eval_infer, Dict):
         cfg_eval_infer = OmegaConf.create(cfg_eval_infer)
@@ -353,7 +353,7 @@ def infer(
         if state is None:
             state = {}
     else:
-        params, state, _, _ = load_haiku(load_checkpoint)
+        params, state, _, _ = load_haiku(load_ckp)
 
     key, seed_worker, generator = set_seed(seed)
 

@@ -30,13 +30,13 @@ if __name__ == "__main__":
 
     cli_args = OmegaConf.from_cli()
     assert ("config" in cli_args) != (
-        "model_dir" in cli_args
-    ), "You must specify one of config or model_dir."
+        "load_ckp" in cli_args
+    ), "You must specify one of 'config' or 'load_ckp'."
 
     if "config" in cli_args:  # start from config.yaml
         config_path = cli_args.config
-    elif "model_dir" in cli_args:  # start from a checkpoint
-        config_path = os.path.join(cli_args.model_dir, "config.yaml")
+    elif "load_ckp" in cli_args:  # start from a checkpoint
+        config_path = os.path.join(cli_args.load_ckp, "config.yaml")
 
     # values that need to be specified before importing jax
     cli_args.gpu = cli_args.get("gpu", -1)

@@ -85,7 +85,7 @@ A general tutorial is provided in the example notebook "Training GNS on the 2D T
 ### Running in a local clone (`main.py`)
 Alternatively, experiments can also be set up with `main.py`, based on extensive YAML config files and cli arguments (check [`configs/`](configs/)). By default, the arguments have priority as 1) passed cli arguments, 2) YAML config and 3) [`defaults.py`](lagrangebench/defaults.py) (`lagrangebench` defaults).
 
-When loading a saved model with `--model_dir` the config from the checkpoint is automatically loaded and training is restarted. For more details check the [`experiments/`](experiments/) directory and the [`run.py`](experiments/run.py) file.
+When loading a saved model with `--load_ckp` the config from the checkpoint is automatically loaded and training is restarted. For more details check the [`experiments/`](experiments/) directory and the [`run.py`](experiments/run.py) file.
 
 **Train**
 
@@ -100,16 +100,16 @@ If `--mode=all`, then training (`--mode=train`) and subsequent inference (`--mod
 
 **Restart training**
 
-To restart training from the last checkpoint in `--model_dir` use
+To restart training from the last checkpoint in `--load_ckp` use
 ```
-python main.py --model_dir ckp/gns_rpf2d_yyyymmdd-hhmmss
+python main.py --load_ckp ckp/gns_rpf2d_yyyymmdd-hhmmss
 ```
 
 **Inference**
 
-To evaluate a trained model from `--model_dir` on the test split (`--test`) use
+To evaluate a trained model from `--load_ckp` on the test split (`--test`) use
 ```
-python main.py --model_dir ckp/gns_rpf2d_yyyymmdd-hhmmss/best --rollout_dir rollout/gns_rpf2d_yyyymmdd-hhmmss/best --mode infer --test
+python main.py --load_ckp ckp/gns_rpf2d_yyyymmdd-hhmmss/best --rollout_dir rollout/gns_rpf2d_yyyymmdd-hhmmss/best --mode infer --test
 ```
 
 If the default `--out_type_infer=pkl` is active, then the generated trajectories and a `metricsYYYY_MM_DD_HH_MM_SS.pkl` file will be written to the `--rollout_dir`. The metrics file contains all `--metrics_infer` properties for each generated rollout.

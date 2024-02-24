@@ -211,8 +211,8 @@ class Trainer:
         params: Optional[hk.Params] = None,
         state: Optional[hk.State] = None,
         opt_state: Optional[optax.OptState] = None,
-        store_checkpoint: Optional[str] = None,
-        load_checkpoint: Optional[str] = None,
+        store_ckp: Optional[str] = None,
+        load_ckp: Optional[str] = None,
         wandb_config: Optional[Dict] = None,
     ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
@@ -226,8 +226,8 @@ class Trainer:
             params: Optional model parameters. If provided, training continues from it.
             state: Optional model state.
             opt_state: Optional optimizer state.
-            store_checkpoint: Checkpoints destination. Without it params aren't saved.
-            load_checkpoint: Initial checkpoint directory. If provided resumes training.
+            store_ckp: Checkpoints destination. Without it params aren't saved.
+            load_ckp: Initial checkpoint directory. If provided resumes training.
             wandb_config: Optional configuration to be logged on wandb.
 
         Returns:
@@ -261,9 +261,9 @@ class Trainer:
             # continue training from params
             if state is None:
                 state = {}
-        elif load_checkpoint:
+        elif load_ckp:
             # continue training from checkpoint
-            params, state, opt_state, step = load_haiku(load_checkpoint)
+            params, state, opt_state, step = load_haiku(load_ckp)
         else:
             # initialize new model
             key, subkey = jax.random.split(key, 2)
@@ -304,9 +304,9 @@ class Trainer:
             opt_state = self.opt_init(params)
 
         # create new checkpoint directory
-        if store_checkpoint is not None:
-            os.makedirs(store_checkpoint, exist_ok=True)
-            os.makedirs(os.path.join(store_checkpoint, "best"), exist_ok=True)
+        if store_ckp is not None:
+            os.makedirs(store_ckp, exist_ok=True)
+            os.makedirs(os.path.join(store_ckp, "best"), exist_ok=True)
 
         preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
         push_forward = push_forward_build(model_apply, case)
@@ -400,10 +400,8 @@ class Trainer:
                         "step": step,
                         "loss": metrics.get("val/loss", None),
                     }
-                    if store_checkpoint is not None:
-                        save_haiku(
-                            store_checkpoint, params, state, opt_state, metadata_ckp
-                        )
+                    if store_ckp is not None:
+                        save_haiku(store_ckp, params, state, opt_state, metadata_ckp)
 
                     if cfg_logging.wandb:
                         wandb_run.log(metrics, step)

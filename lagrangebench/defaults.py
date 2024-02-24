@@ -9,11 +9,11 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
 
     ### global and hardware-related configs
 
-    # configuration file. Either "config" or "model_dir" must be specified.
-    # If "config" is specified, "model_dir" is ignored.
+    # configuration file. Either "config" or "load_ckp" must be specified.
+    # If "config" is specified, "load_ckp" is ignored.
     cfg.config = None
     # Load checkpointed model from this directory
-    cfg.model_dir = None
+    cfg.load_ckp = None
     # One of "train", "infer" or "all" (= both)
     cfg.mode = "all"
     # path to data directory

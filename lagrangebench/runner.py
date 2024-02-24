@@ -30,7 +30,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
     check_cfg(cfg)
 
     mode = cfg.mode
-    old_model_dir = cfg.model_dir
+    load_ckp = cfg.load_ckp
     is_test = cfg.eval.test
 
     if cfg.dtype == "float64":
@@ -81,12 +81,12 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             data_and_time = datetime.today().strftime("%Y%m%d-%H%M%S")
             cfg.logging.run_name = f"{run_prefix}_{data_and_time}"
 
-        cfg.model_dir = os.path.join(cfg.logging.ckp_dir, cfg.logging.run_name)
-        os.makedirs(cfg.model_dir, exist_ok=True)
-        os.makedirs(os.path.join(cfg.model_dir, "best"), exist_ok=True)
-        with open(os.path.join(cfg.model_dir, "config.yaml"), "w") as f:
+        store_ckp = os.path.join(cfg.logging.ckp_dir, cfg.logging.run_name)
+        os.makedirs(store_ckp, exist_ok=True)
+        os.makedirs(os.path.join(store_ckp, "best"), exist_ok=True)
+        with open(os.path.join(store_ckp, "config.yaml"), "w") as f:
             OmegaConf.save(config=cfg, f=f.name)
-        with open(os.path.join(cfg.model_dir, "best", "config.yaml"), "w") as f:
+        with open(os.path.join(store_ckp, "best", "config.yaml"), "w") as f:
             OmegaConf.save(config=cfg, f=f.name)
 
         # dictionary of configs which will be stored on W&B
@@ -106,8 +106,8 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
 
         _, _, _ = trainer.train(
             step_max=cfg.train.step_max,
-            load_checkpoint=old_model_dir,
-            store_checkpoint=cfg.model_dir,
+            load_ckp=load_ckp,
+            store_ckp=store_ckp,
             wandb_config=wandb_config,
         )
 
@@ -115,9 +115,9 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
         print("Start inference...")
 
         if mode == "infer":
-            model_dir = cfg.model_dir
+            model_dir = store_ckp
         if mode == "all":
-            model_dir = os.path.join(cfg.model_dir, "best")
+            model_dir = os.path.join(store_ckp, "best")
             assert osp.isfile(os.path.join(model_dir, "params_tree.pkl"))
 
             cfg.eval.rollout_dir = model_dir.replace("ckp", "rollout")
@@ -131,7 +131,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             model,
             case,
             data_test if is_test else data_valid,
-            load_checkpoint=model_dir,
+            load_ckp=model_dir,
             cfg_eval_infer=cfg.eval.infer,
             rollout_dir=cfg.eval.rollout_dir,
             n_rollout_steps=cfg.eval.n_rollout_steps,
