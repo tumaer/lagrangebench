@@ -101,8 +101,7 @@ class Trainer:
         cfg_logging: Union[Dict, DictConfig] = defaults.logging,
         input_seq_length: int = defaults.model.input_seq_length,
         seed: int = defaults.seed,
-        wandb_run: Optional[wandb.wandb_sdk.wandb_run.Run] = None,
-    ) -> Callable:
+    ):
         """
         Trainer class.
 
@@ -206,15 +205,6 @@ class Trainer:
             stride=self.cfg_eval.train.metrics_stride,
         )
 
-        if wandb_run is None and self.cfg_logging.wandb:
-            wandb_run = wandb.init(
-                project=self.cfg_logging.wandb_project,
-                entity=self.cfg_logging.wandb_entity,
-                name=self.cfg_logging.run_name,
-                save_code=True,
-            )
-        self.wandb_run = wandb_run
-
     def train(
         self,
         step_max: int = defaults.train.step_max,
@@ -223,6 +213,7 @@ class Trainer:
         opt_state: Optional[optax.OptState] = None,
         store_checkpoint: Optional[str] = None,
         load_checkpoint: Optional[str] = None,
+        wandb_config: Optional[Dict] = None,
     ) -> Tuple[hk.Params, hk.State, optax.OptState]:
         """
         Training loop.
@@ -237,6 +228,7 @@ class Trainer:
             opt_state: Optional optimizer state.
             store_checkpoint: Checkpoints destination. Without it params aren't saved.
             load_checkpoint: Initial checkpoint directory. If provided resumes training.
+            wandb_config: Optional configuration to be logged on wandb.
 
         Returns:
             Tuple containing the final model parameters, state and optimizer state.
@@ -278,11 +270,20 @@ class Trainer:
             params, state = model.init(subkey, (features, particle_type[0]))
 
         # start logging
-        if cfg_logging.wandb and self.wandb_run:
-            extended_config = self.wandb_run.config
-            extended_config["eval"]["train"]["n_trajs"] = self.cfg_eval.train.n_trajs
+        if cfg_logging.wandb:
+            if wandb_config is None:
+                # minimal config reconstruction without model details
+                wandb_config = {
+                    "train": OmegaConf.to_container(cfg_train),
+                    "eval": OmegaConf.to_container(cfg_eval),
+                    "logging": OmegaConf.to_container(cfg_logging),
+                    "dataset_path": loader_train.dataset.dataset_path,
+                }
 
-            extended_config["info"] = {
+            else:
+                wandb_config["eval"]["train"]["n_trajs"] = cfg_eval.train.n_trajs
+
+            wandb_config["info"] = {
                 "dataset_name": loader_train.dataset.name,
                 "len_train": len(loader_train.dataset),
                 "len_eval": len(loader_valid.dataset),
@@ -290,8 +291,13 @@ class Trainer:
                 "step_start": step,
             }
 
-            self.wandb_run.config.update(extended_config)
-            self.wandb_run.config.persist()
+            wandb_run = wandb.init(
+                project=cfg_logging.wandb_project,
+                entity=cfg_logging.wandb_entity,
+                name=cfg_logging.run_name,
+                config=wandb_config,
+                save_code=True,
+            )
 
         # initialize optimizer state
         if opt_state is None:
@@ -367,8 +373,8 @@ class Trainer:
 
                 if step % cfg_logging.log_steps == 0:
                     loss.block_until_ready()
-                    if self.wandb_run:
-                        self.wandb_run.log({"train/loss": loss.item()}, step)
+                    if cfg_logging.wandb:
+                        wandb_run.log({"train/loss": loss.item()}, step)
                     else:
                         step_str = str(step).zfill(len(str(int(step_max))))
                         print(f"{step_str}, train/loss: {loss.item():.5f}.")
@@ -383,7 +389,7 @@ class Trainer:
                         state=state,
                         neighbors=nbrs,
                         loader_eval=loader_valid,
-                        n_rollout_steps=self.cfg_eval.n_rollout_steps,
+                        n_rollout_steps=cfg_eval.n_rollout_steps,
                         n_trajs=cfg_eval.train.n_trajs,
                         rollout_dir=cfg_eval.rollout_dir,
                         out_type=cfg_eval.train.out_type,
@@ -399,8 +405,8 @@ class Trainer:
                             store_checkpoint, params, state, opt_state, metadata_ckp
                         )
 
-                    if self.wandb_run:
-                        self.wandb_run.log(metrics, step)
+                    if cfg_logging.wandb:
+                        wandb_run.log(metrics, step)
                     else:
                         print(metrics)
 
@@ -408,7 +414,7 @@ class Trainer:
                 if step == step_max + 1:
                     break
 
-        if self.wandb_run:
-            self.wandb_run.finish()
+        if cfg_logging.wandb:
+            wandb_run.finish()
 
         return params, state, opt_state
