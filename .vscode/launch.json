@@ -32,8 +32,14 @@
         },
         {
             "args": [
-                "--model_dir=ckp/gns_rpf2d_20231103-113516",
-                "--mode=infer"
+                "--model_dir=ckp/rpf_2d_pde_ref_algo_1/pde_refiner_rpf2d_20240218-192702",
+                "--mode=infer",
+                "--gpu=1",
+                "--sigma_min=1e-5",
+                "--n_rollout_steps=20",
+                "--no-wandb",
+                "--input_seq_length=6",
+                "--num_refinement_steps=0",
             ],
             "name": "Debug after loading a model from checkpoint",
             "type": "debugpy",
@@ -49,7 +55,7 @@
                 "--ckp_dir=ckp/debug_dump",
                 "--gpu=1",
                 "--sigma_min=1e-5",
-                "--n_rollout_steps=50",
+                "--n_rollout_steps=20",
                 "--no-wandb",
                 "--log_steps=1",
                 "--eval_steps=4",
@@ -57,6 +63,7 @@
                 "--eval_n_trajs=2",
                 "--eval_n_trajs_infer=10",
                 "--input_seq_length=6",
+                "--num_refinement_steps=0",
             ],
             "name": "Debug PDE_Refiner",
             "type": "debugpy",
