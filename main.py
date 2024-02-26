@@ -26,8 +26,6 @@ def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
 
 
 if __name__ == "__main__":
-    # TODO: add optional wandb.sweeps
-
     cli_args = OmegaConf.from_cli()
     assert ("config" in cli_args) != (
         "load_ckp" in cli_args
