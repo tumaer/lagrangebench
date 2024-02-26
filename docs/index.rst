@@ -130,6 +130,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   pages/defaults
    pages/data
    pages/case_setup
    pages/models

@@ -38,6 +38,8 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.intersphinx",
     "sphinx.ext.mathjax",
+    # to get defaults.py in the documentation
+    "sphinx_exec_code",
 ]
 
 numfig = True
@@ -60,6 +62,11 @@ autodoc_default_options = {
     "special-members": True,
     "exclude-members": "__repr__, __str__, __weakref__",
 }
+
+
+# -- Options for sphinx-exec-code ---------------------------------------------
+
+exec_code_working_dir = ".."
 
 
 # drop the docstrings of undocumented the namedtuple attributes

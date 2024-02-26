@@ -127,7 +127,6 @@ class Trainer:
         input_seq_length: int = defaults.model.input_seq_length,
         seed: int = defaults.seed,
     ):
-
         if isinstance(cfg_train, Dict):
             cfg_train = OmegaConf.create(cfg_train)
         if isinstance(cfg_eval, Dict):
