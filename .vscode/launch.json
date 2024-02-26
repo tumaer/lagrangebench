@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Python Debugger: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
+        },
+        {
             "args": [
                 "--config=configs/rpf_2d/gns.yaml",
                 "--data_dir=datasets/2D_RPF_3200_20kevery100",
@@ -14,7 +21,6 @@
                 "--log_steps=1",
                 "--eval_steps=4",
                 "--step_max=10",
-
             ],
             "name": "Debug GNS",
             "type": "debugpy",
@@ -25,8 +31,11 @@
         },
         {
             "args": [
-                "--model_dir=ckp/gns_rpf2d_20231103-113516",
-                "--mode=infer"
+                "--model_dir=ckp/rpf_2d_pde_ref_algo_1/pde_refiner_rpf2d_20240218-192702",
+                "--mode=infer",
+                "--num_refinement_steps=3",
+                "--sigma_min=1e-7",
+                "--no-wandb",
             ],
             "name": "Debug after loading a model from checkpoint",
             "type": "debugpy",
