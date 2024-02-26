@@ -1,8 +1,12 @@
-extends: dam_2d/base.yaml
+extends: configs/dam_2d/base.yaml
 
-model: segnn
-num_mp_steps: 10
-latent_dim: 64
-lr_start: 5.e-4
+model: 
+  name: segnn
+  num_mp_steps: 10
+  latent_dim: 64
+  isotropic_norm: True
 
-isotropic_norm: True
+train:
+  noise_std: 0.001
+  optimizer:
+    lr_start: 5.e-4

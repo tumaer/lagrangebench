@@ -10,3 +10,8 @@ Metrics
 -------
 .. automodule:: lagrangebench.evaluate.metrics
     :members:
+
+Utils
+-----
+.. automodule:: lagrangebench.evaluate.utils
+    :members:

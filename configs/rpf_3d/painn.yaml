@@ -1,9 +1,12 @@
-extends: rpf_3d/base.yaml
+extends: configs/rpf_3d/base.yaml
 
-model: painn
-num_mp_steps: 5
-latent_dim: 128
-lr_start: 5.e-4
+model: 
+  name: painn
+  num_mp_steps: 5
+  latent_dim: 128
+  isotropic_norm: True
+  magnitude_features: True
 
-isotropic_norm: True
-magnitude_features: True
+train:
+  optimizer:
+    lr_start: 5.e-4

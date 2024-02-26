@@ -6,6 +6,7 @@ import json
 import os
 import os.path as osp
 import re
+import warnings
 import zipfile
 from typing import Optional
 
@@ -17,7 +18,7 @@ from torch.utils.data import Dataset
 
 from lagrangebench.utils import NodeType
 
-ZENODO_PREFIX="https://zenodo.org/records/10491868/files/"
+ZENODO_PREFIX = "https://zenodo.org/records/10491868/files/"
 URLS = {
     "tgv2d": f"{ZENODO_PREFIX}2D_TGV_2500_10kevery100.zip",
     "rpf2d": f"{ZENODO_PREFIX}2D_RPF_3200_20kevery100.zip",
@@ -64,8 +65,7 @@ class H5Dataset(Dataset):
             nl_backend: Which backend to use for the neighbor list
         """
 
-        if dataset_path.endswith("/"):  # remove trailing slash in dataset path
-            dataset_path = dataset_path[:-1]
+        dataset_path = osp.normpath(dataset_path)  # remove potential trailing slash
 
         if name is None:
             self.name = get_dataset_name_from_path(dataset_path)
@@ -266,21 +266,29 @@ class H5Dataset(Dataset):
 def get_dataset_name_from_path(path: str) -> str:
     """Infer the dataset name from the provided path.
 
-    This function assumes that the dataset directory name has the following structure:
-    {2D|3D}_{TGV|RPF|LDC|DAM}_{num_particles_max}_{num_steps}every{sampling_rate}
-
-    The dataset name then becomes one of the following:
-    {tgv2d|tgv3d|rpf2d|rpf3d|ldc2d|ldc3d|dam2d}
+    Variant 1:
+        If the dataset directory contains {2|3}D_{ABC}, then the name is inferred as
+        {abc2d|abc3d}. These names are based on the lagrangebench dataset directories:
+        {2D|3D}_{TGV|RPF|LDC|DAM}_{num_particles_max}_{num_steps}every{sampling_rate}
+        The shorter dataset names then become one of the following:
+        {tgv2d|tgv3d|rpf2d|rpf3d|ldc2d|ldc3d|dam2d}
+    Variant 2:
+        If the condition {2|3}D_{ABC} is not met, the name is the dataset directory
     """
 
-    name = re.search(r"(?:2D|3D)_[A-Z]{3}", path)
-    assert name is not None, (
-        f"No valid dataset name found in path {path}. "
-        "Valid name formats: {2D|3D}_{TGV|RPF|LDC|DAM} "
-        "Alternatively, you can specify the dataset name explicitly."
-    )
-    name = name.group(0)
-    name = f"{name.split('_')[1]}{name.split('_')[0]}".lower()
+    dir = osp.basename(osp.normpath(path))
+    name = re.search(r"(?:2D|3D)_[A-Z]{3}", dir)
+
+    if name is not None:  # lagrangebench convention used
+        name = name.group(0)
+        name = f"{name.split('_')[1]}{name.split('_')[0]}".lower()
+    else:
+        warnings.warn(
+            f"Dataset directory {dir} does not follow the lagrangebench convention. "
+            "Valid name formats: {2D|3D}_{TGV|RPF|LDC|DAM}. Alternatively, you can "
+            "specify the dataset name explicitly."
+        )
+        name = dir
     return name
 
 

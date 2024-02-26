@@ -8,6 +8,7 @@ from jax import Array, jit, lax, vmap
 from jax_md import space
 from jax_md.dataclasses import dataclass, static_field
 from jax_md.partition import NeighborList, NeighborListFormat
+from omegaconf import DictConfig, OmegaConf
 
 from lagrangebench.data.utils import get_dataset_stats
 from lagrangebench.defaults import defaults
@@ -63,12 +64,10 @@ def case_builder(
     box: Tuple[float, float, float],
     metadata: Dict,
     input_seq_length: int,
-    isotropic_norm: bool = defaults.isotropic_norm,
-    noise_std: float = defaults.noise_std,
+    cfg_neighbors: Union[Dict, DictConfig] = defaults.neighbors,
+    cfg_model: Union[Dict, DictConfig] = defaults.model,
+    noise_std: float = defaults.train.noise_std,
     external_force_fn: Optional[Callable] = None,
-    magnitude_features: bool = defaults.magnitude_features,
-    neighbor_list_backend: str = defaults.neighbor_list_backend,
-    neighbor_list_multiplier: float = defaults.neighbor_list_multiplier,
     dtype: jnp.dtype = defaults.dtype,
 ):
     """Set up a CaseSetupFn that contains every required function besides the model.
@@ -84,15 +83,24 @@ def case_builder(
         box: Box xyz sizes of the system.
         metadata: Dataset metadata dictionary.
         input_seq_length: Length of the input sequence.
-        isotropic_norm: Whether to normalize dimensions equally.
+        cfg_neighbors: Configuration dictionary for the neighbor list.
+        cfg_model: Configuration dictionary for the model / feature builder.
         noise_std: Noise standard deviation.
         external_force_fn: External force function.
-        magnitude_features: Whether to add velocity magnitudes in the features.
-        neighbor_list_backend: Backend of the neighbor list.
-        neighbor_list_multiplier: Capacity multiplier of the neighbor list.
         dtype: Data type.
     """
-    normalization_stats = get_dataset_stats(metadata, isotropic_norm, noise_std)
+    if isinstance(cfg_neighbors, Dict):
+        cfg_neighbors = OmegaConf.create(cfg_neighbors)
+    if isinstance(cfg_model, Dict):
+        cfg_model = OmegaConf.create(cfg_model)
+
+    # if one of the cfg_* arguments has a subset of the default configs, merge them
+    cfg_neighbors = OmegaConf.merge(defaults.neighbors, cfg_neighbors)
+    cfg_model = OmegaConf.merge(defaults.model, cfg_model)
+
+    normalization_stats = get_dataset_stats(
+        metadata, cfg_model.isotropic_norm, noise_std
+    )
 
     # apply PBC in all directions or not at all
     if jnp.array(metadata["periodic_boundary_conditions"]).any():
@@ -102,9 +110,9 @@ def case_builder(
 
     displacement_fn_set = vmap(displacement_fn, in_axes=(0, 0))
 
-    if neighbor_list_multiplier < 1.25:
+    if cfg_neighbors.multiplier < 1.25:
         warnings.warn(
-            f"neighbor_list_multiplier={neighbor_list_multiplier} < 1.25 is very low. "
+            f"cfg_neighbors.multiplier={cfg_neighbors.multiplier} < 1.25 is very low. "
             "Be especially cautious if you batch training and/or inference as "
             "reallocation might be necessary based on different overflow conditions. "
             "See https://github.com/tumaer/lagrangebench/pull/20#discussion_r1443811262"
@@ -113,9 +121,9 @@ def case_builder(
     neighbor_fn = neighbor_list(
         displacement_fn,
         jnp.array(box),
-        backend=neighbor_list_backend,
+        backend=cfg_neighbors.backend,
         r_cutoff=metadata["default_connectivity_radius"],
-        capacity_multiplier=neighbor_list_multiplier,
+        capacity_multiplier=cfg_neighbors.multiplier,
         mask_self=False,
         format=NeighborListFormat.Sparse,
         num_particles_max=metadata["num_particles_max"],
@@ -128,7 +136,7 @@ def case_builder(
         connectivity_radius=metadata["default_connectivity_radius"],
         displacement_fn=displacement_fn,
         pbc=metadata["periodic_boundary_conditions"],
-        magnitude_features=magnitude_features,
+        magnitude_features=cfg_model.magnitude_features,
         external_force_fn=external_force_fn,
     )
 

@@ -1,4 +1,6 @@
-extends: defaults.yaml
+extends: LAGRANGEBENCH_DEFAULTS
 
-data_dir: datasets/3D_TGV_8000_10kevery100
-wandb_project: tgv_3d
+dataset_path: datasets/3D_TGV_8000_10kevery100
+
+logging:
+  wandb_project: tgv_3d

@@ -11,6 +11,7 @@ jax_md>=0.2.8
 jmp>=0.0.4
 jraph>=0.0.6.dev0
 matscipy>=0.8.0
+omegaconf>=2.3.0
 optax>=0.1.7
 ott-jax>=0.4.2
 pyvista
@@ -18,3 +19,4 @@ PyYAML
 torch==2.1.0+cpu
 wandb
 wget
+yacs>=0.1.8

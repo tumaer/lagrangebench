@@ -1,70 +1,198 @@
-"""Default lagrangebench values."""
-
-from dataclasses import dataclass
-
-import jax.numpy as jnp
+"""Default lagrangebench configs."""
 
 
-@dataclass(frozen=True)
-class defaults:
-    """
-    Default lagrangebench values.
+from omegaconf import DictConfig, OmegaConf
 
-    Attributes:
-        seed: random seed. Default 0.
-        batch_size: batch size. Default 1.
-        step_max: max number of training steps. Default ``1e7``.
-        dtype: data type. Default ``jnp.float32``.
-        magnitude_features: whether to include velocity magnitudes. Default False.
-        isotropic_norm: whether to normalize dimensions equally. Default False.
-        lr_start: initial learning rate. Default 1e-4.
-        lr_final: final learning rate (after exponential decay). Default 1e-6.
-        lr_decay_steps: number of steps to decay learning rate
-        lr_decay_rate: learning rate decay rate. Default 0.1.
-        noise_std: standard deviation of the GNS-style noise. Default 1e-4.
-        input_seq_length: number of input steps. Default 6.
-        n_rollout_steps: number of eval rollout steps. -1 is full rollout. Default -1.
-        eval_n_trajs: number of trajectories to evaluate. Default 1 trajectory.
-        rollout_dir: directory to save rollouts. Default None.
-        out_type: type of output. None means no rollout is stored. Default None.
-        n_extrap_steps: number of extrapolation steps. Default 0.
-        log_steps: number of steps between logs. Default 1000.
-        eval_steps: number of steps between evaluations and checkpoints. Default 5000.
-        neighbor_list_backend: neighbor list routine. Default "jaxmd_vmap".
-        neighbor_list_multiplier: multiplier for neighbor list capacity. Default 1.25.
-    """
 
-    # training
-    seed: int = 0  # random seed
-    batch_size: int = 1  # batch size
-    step_max: int = 5e5  # max number of training steps
-    dtype: jnp.dtype = jnp.float64  # data type for preprocessing
-    magnitude_features: bool = False  # whether to include velocity magnitude features
-    isotropic_norm: bool = False  #  whether to normalize dimensions equally
-    num_workers: int = 4  # number of workers for data loading
+def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
+    """Set default lagrangebench configs."""
 
-    # learning rate
-    lr_start: float = 1e-4  # initial learning rate
-    lr_final: float = 1e-6  # final learning rate (after exponential decay)
-    lr_decay_steps: int = 1e5  # number of steps to decay learning rate
-    lr_decay_rate: float = 0.1  # learning rate decay rate
+    ### global and hardware-related configs
 
-    noise_std: float = 3e-4  # standard deviation of the GNS-style noise
+    # configuration file. Either "config" or "load_ckp" must be specified.
+    # If "config" is specified, "load_ckp" is ignored.
+    cfg.config = None
+    # Load checkpointed model from this directory
+    cfg.load_ckp = None
+    # One of "train", "infer" or "all" (= both)
+    cfg.mode = "all"
+    # path to data directory
+    cfg.dataset_path = None
+    # random seed
+    cfg.seed = 0
+    # data type for preprocessing. One of "float32" or "float64"
+    cfg.dtype = "float64"
+    # gpu device. -1 for CPU. Should be specified before importing the library.
+    cfg.gpu = None
+    # XLA memory fraction to be preallocated. The JAX default is 0.75.
+    # Should be specified before importing the library.
+    cfg.xla_mem_fraction = None
 
-    # evaluation
-    input_seq_length: int = 6  # number of input steps
-    n_rollout_steps: int = -1  # number of eval rollout steps. -1 is full rollout
-    eval_n_trajs: int = 1  # number of trajectories to evaluate
-    rollout_dir: str = None  # directory to save rollouts
-    out_type: str = "none"  # type of output. None means no rollout is stored
-    n_extrap_steps: int = 0  # number of extrapolation steps
-    metrics_stride: int = 10  # stride for e_kin and sinkhorn
-    batch_size_infer: int = 2  # batch size for validation/testing
+    ### model
+    cfg.model = OmegaConf.create({})
 
-    # logging
-    log_steps: int = 1000  # number of steps between logs
-    eval_steps: int = 10000  # number of steps between evaluations and checkpoints
+    # model architecture name. gns, segnn, egnn
+    cfg.model.name = None
+    # Length of the position input sequence
+    cfg.model.input_seq_length = 6
+    # Number of message passing steps
+    cfg.model.num_mp_steps = 10
+    # Number of MLP layers
+    cfg.model.num_mlp_layers = 2
+    # Hidden dimension
+    cfg.model.latent_dim = 128
+    # whether to include velocity magnitude features
+    cfg.model.magnitude_features = False
+    #  whether to normalize dimensions equally
+    cfg.model.isotropic_norm = False
 
-    # neighbor list
-    neighbor_list_backend: str = "jaxmd_vmap"  # backend for neighbor list computation
-    neighbor_list_multiplier: float = 1.25  # multiplier for neighbor list capacity
+    # SEGNN only parameters
+    # steerable attributes level
+    cfg.model.lmax_attributes = 1
+    # Level of the hidden layer
+    cfg.model.lmax_hidden = 1
+    # SEGNN normalization. instance, batch, none
+    cfg.model.segnn_norm = "none"
+    # SEGNN velocity aggregation. avg or last
+    cfg.model.velocity_aggregate = "avg"
+
+    ### training
+    cfg.train = OmegaConf.create({})
+
+    # batch size
+    cfg.train.batch_size = 1
+    # max number of training steps
+    cfg.train.step_max = 500_000
+    # number of workers for data loading
+    cfg.train.num_workers = 4
+    # standard deviation of the GNS-style noise
+    cfg.train.noise_std = 3.0e-4
+
+    # optimizer
+    cfg.train.optimizer = OmegaConf.create({})
+
+    # initial learning rate
+    cfg.train.optimizer.lr_start = 1.0e-4
+    # final learning rate (after exponential decay)
+    cfg.train.optimizer.lr_final = 1.0e-6
+    # learning rate decay rate
+    cfg.train.optimizer.lr_decay_rate = 0.1
+    # number of steps to decay learning rate
+    cfg.train.optimizer.lr_decay_steps = 1.0e5
+
+    # pushforward
+    cfg.train.pushforward = OmegaConf.create({})
+
+    # At which training step to introduce next unroll stage
+    cfg.train.pushforward.steps = [-1, 20000, 300000, 400000]
+    # For how many steps to unroll
+    cfg.train.pushforward.unrolls = [0, 1, 2, 3]
+    # Which probability ratio to keep between the unrolls
+    cfg.train.pushforward.probs = [18, 2, 1, 1]
+
+    # loss weights
+    cfg.train.loss_weight = OmegaConf.create({})
+
+    # weight for acceleration error
+    cfg.train.loss_weight.acc = 1.0
+    # weight for velocity error
+    cfg.train.loss_weight.vel = 0.0
+    # weight for position error
+    cfg.train.loss_weight.pos = 0.0
+
+    ### evaluation
+    cfg.eval = OmegaConf.create({})
+
+    # number of eval rollout steps. -1 is full rollout
+    cfg.eval.n_rollout_steps = 20
+    # whether to use the test or valid split
+    cfg.eval.test = False
+    # rollouts directory
+    cfg.eval.rollout_dir = None
+
+    # configs for validation during training
+    cfg.eval.train = OmegaConf.create({})
+
+    # number of trajectories to evaluate
+    cfg.eval.train.n_trajs = 50
+    # stride for e_kin and sinkhorn
+    cfg.eval.train.metrics_stride = 10
+    # batch size
+    cfg.eval.train.batch_size = 1
+    # metrics to evaluate
+    cfg.eval.train.metrics = ["mse"]
+    # write validation rollouts. One of "none", "vtk", or "pkl"
+    cfg.eval.train.out_type = "none"
+
+    # configs for inference/testing
+    cfg.eval.infer = OmegaConf.create({})
+
+    # number of trajectories to evaluate during inference
+    cfg.eval.infer.n_trajs = -1
+    # stride for e_kin and sinkhorn
+    cfg.eval.infer.metrics_stride = 1
+    # batch size
+    cfg.eval.infer.batch_size = 2
+    # metrics for inference
+    cfg.eval.infer.metrics = ["mse", "e_kin", "sinkhorn"]
+    # write inference rollouts. One of "none", "vtk", or "pkl"
+    cfg.eval.infer.out_type = "pkl"
+
+    # number of extrapolation steps during inference
+    cfg.eval.infer.n_extrap_steps = 0
+
+    ### logging
+    cfg.logging = OmegaConf.create({})
+
+    # number of steps between loggings
+    cfg.logging.log_steps = 1000
+    # number of steps between evaluations and checkpoints
+    cfg.logging.eval_steps = 10000
+    # wandb enable
+    cfg.logging.wandb = False
+    # wandb project name
+    cfg.logging.wandb_project = None
+    # wandb entity name
+    cfg.logging.wandb_entity = "lagrangebench"
+    # checkpoint directory
+    cfg.logging.ckp_dir = "ckp"
+    # name of training run
+    cfg.logging.run_name = None
+
+    ### neighbor list
+    cfg.neighbors = OmegaConf.create({})
+
+    # backend for neighbor list computation
+    cfg.neighbors.backend = "jaxmd_vmap"
+    # multiplier for neighbor list capacity
+    cfg.neighbors.multiplier = 1.25
+
+    return cfg
+
+
+defaults = set_defaults()
+
+
+def check_cfg(cfg: DictConfig):
+    """Check if the configs are valid."""
+
+    assert cfg.mode in ["train", "infer", "all"]
+    assert cfg.dtype in ["float32", "float64"]
+    assert cfg.dataset_path is not None, "dataset_path must be specified."
+
+    assert cfg.model.input_seq_length >= 2, "At least two positions for one past vel."
+
+    pf = cfg.train.pushforward
+    assert len(pf.steps) == len(pf.unrolls) == len(pf.probs)
+    assert all([s >= 0 for s in pf.unrolls]), "All unrolls must be non-negative."
+    assert all([s >= 0 for s in pf.probs]), "All probabilities must be non-negative."
+    lwv = cfg.train.loss_weight.values()
+    assert all([w >= 0 for w in lwv]), "All loss weights must be non-negative."
+    assert sum(lwv) > 0, "At least one loss weight must be non-zero."
+
+    assert cfg.eval.train.n_trajs >= -1
+    assert cfg.eval.infer.n_trajs >= -1
+    assert set(cfg.eval.train.metrics).issubset(["mse", "e_kin", "sinkhorn"])
+    assert set(cfg.eval.infer.metrics).issubset(["mse", "e_kin", "sinkhorn"])
+    assert cfg.eval.train.out_type in ["none", "vtk", "pkl"]
+    assert cfg.eval.infer.out_type in ["none", "vtk", "pkl"]

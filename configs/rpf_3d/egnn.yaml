@@ -1,13 +1,16 @@
-extends: rpf_3d/base.yaml
+extends: configs/rpf_3d/base.yaml
 
-model: egnn
-num_mp_steps: 5
-latent_dim: 128
-lr_start: 1.e-4
+model: 
+  name: egnn
+  num_mp_steps: 5
+  latent_dim: 128
+  isotropic_norm: True
+  magnitude_features: True
 
-isotropic_norm: True
-magnitude_features: True
-loss_weight:
-  pos: 1.0
-  vel: 0.0
-  acc: 0.0
+train:
+  optimizer:
+    lr_start: 1.e-4
+  loss_weight:
+    pos: 1.0
+    vel: 0.0
+    acc: 0.0

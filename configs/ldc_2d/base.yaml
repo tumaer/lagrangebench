@@ -1,7 +1,9 @@
-extends: defaults.yaml
+extends: LAGRANGEBENCH_DEFAULTS
 
-data_dir: datasets/2D_LDC_2708_10kevery100
-wandb_project: ldc_2d
+dataset_path: datasets/2D_LDC_2708_10kevery100
 
-neighbor_list_multiplier: 2.0
-noise_std: 0.001
+logging:
+  wandb_project: ldc_2d
+
+neighbors:
+  multiplier: 2.0

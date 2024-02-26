@@ -51,9 +51,9 @@ preprocessing, and time integration.
    import lagrangebench
 
    # Load data
-   data_train = lagrangebench.data.RPF2D("train")
-   data_valid = lagrangebench.data.RPF2D("valid", is_rollout=True)
-   data_test = lagrangebench.data.RPF2D("test", is_rollout=True)
+   data_train = lagrangebench.RPF2D("train")
+   data_valid = lagrangebench.RPF2D("valid", extra_seq_length=20)
+   data_test = lagrangebench.RPF2D("test", extra_seq_length=20)
 
    # Case setup (preprocessing and graph building)
    bounds = np.array(data_train.metadata["bounds"])
@@ -78,8 +78,8 @@ Initialize a GNS model.
       return lagrangebench.models.GNS(
          particle_dimension=data_train.metadata["dim"],
          latent_size=16,
-         num_mlp_layers=2,
-         num_message_passing_steps=4,
+         blocks_per_step=2,
+         num_mp_steps=4,
          particle_type_embedding_size=8,
       )(x)
 
@@ -98,12 +98,12 @@ The ``Trainer`` provides a convenient way to train a model.
       case=case,
       data_train=data_train,
       data_valid=data_valid,
-      metrics=["mse"],
-      n_rollout_steps=20,
+      cfg_eval={"n_rollout_steps": 20, "train": {"metrics": ["mse"]}},
+      input_seq_length=6
    )
 
    # Train for 25000 steps
-   params, state, _ = trainer(step_max=25000)
+   params, state, _ = trainer.train(step_max=25000)
 
 
 Evaluation
@@ -119,7 +119,7 @@ When training is done, we can evaluate the model on the test set.
       data_test,
       params,
       state,
-      metrics=["mse", "sinkhorn", "e_kin"],
+      cfg_eval_infer={"metrics": ["mse", "sinkhorn", "e_kin"]},
       n_rollout_steps=20,
    )
 
@@ -130,6 +130,7 @@ Contents
 .. toctree::
    :maxdepth: 2
 
+   pages/defaults
    pages/data
    pages/case_setup
    pages/models

@@ -1,6 +1,11 @@
-extends: dam_2d/base.yaml
+extends: configs/dam_2d/base.yaml
 
-model: gns
-num_mp_steps: 10
-latent_dim: 128
-lr_start: 5.e-4
+model: 
+  name: gns
+  num_mp_steps: 10
+  latent_dim: 128
+
+train:
+  noise_std: 0.001
+  optimizer:
+    lr_start: 5.e-4

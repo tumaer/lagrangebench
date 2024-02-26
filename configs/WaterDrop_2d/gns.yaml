@@ -1,6 +1,19 @@
-extends: WaterDrop_2d/base.yaml
+extends: LAGRANGEBENCH_DEFAULTS
 
-model: gns
-num_mp_steps: 10
-latent_dim: 128
-lr_start: 5.e-4
+main:
+  dataset_path: /tmp/datasets/WaterDrop
+
+model: 
+  name: gns
+  num_mp_steps: 10
+  latent_dim: 128
+
+train:
+  optimizer:
+    lr_start: 5.e-4
+
+logging:
+  wandb_project: waterdrop_2d
+
+neighbors:
+  backend: matscipy

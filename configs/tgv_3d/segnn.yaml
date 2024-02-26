@@ -1,8 +1,11 @@
-extends: tgv_3d/base.yaml
+extends: configs/tgv_3d/base.yaml
 
-model: segnn
-num_mp_steps: 10
-latent_dim: 64
-lr_start: 5.e-4
+model:
+  name: segnn
+  num_mp_steps: 10
+  latent_dim: 64
+  isotropic_norm: True
 
-isotropic_norm: True
+train:
+  optimizer:
+    lr_start: 5.e-4

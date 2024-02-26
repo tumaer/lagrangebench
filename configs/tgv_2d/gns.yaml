@@ -1,6 +1,10 @@
-extends: tgv_2d/base.yaml
+extends: configs/tgv_2d/base.yaml
 
-model: gns
-num_mp_steps: 10
-latent_dim: 128
-lr_start: 5.e-4
+model: 
+  name: gns
+  num_mp_steps: 10
+  latent_dim: 128
+
+train:
+  optimizer:
+    lr_start: 5.e-4

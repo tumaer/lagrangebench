@@ -4,13 +4,14 @@ import os
 import pickle
 import time
 from functools import partial
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, Optional, Tuple, Union
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
 import jax_md.partition as partition
 from jax import jit, vmap
+from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader
 
 from lagrangebench.data import H5Dataset
@@ -74,7 +75,7 @@ def _forward_eval(
     return current_positions, state
 
 
-def eval_batched_rollout(
+def _eval_batched_rollout(
     forward_eval_vmap: Callable,
     preprocess_eval_vmap: Callable,
     case,
@@ -237,7 +238,7 @@ def eval_rollout(
         # (pos_input_batch, particle_type_batch) = traj_batch_i
         # pos_input_batch.shape = (batch, num_particles, seq_length, dim)
 
-        example_rollout_batch, metrics_batch, neighbors = eval_batched_rollout(
+        example_rollout_batch, metrics_batch, neighbors = _eval_batched_rollout(
             forward_eval_vmap=forward_eval_vmap,
             preprocess_eval_vmap=preprocess_eval_vmap,
             case=case,
@@ -289,7 +290,7 @@ def eval_rollout(
                             "tag": example_rollout["particle_type"],
                         }
                         write_vtk(ref_state_vtk, f"{file_prefix}_ref_{k}.vtk")
-                if out_type == "pkl":
+                elif out_type == "pkl":
                     filename = f"{file_prefix}.pkl"
 
                     with open(filename, "wb") as f:
@@ -313,16 +314,11 @@ def infer(
     data_test: H5Dataset,
     params: Optional[hk.Params] = None,
     state: Optional[hk.State] = None,
-    load_checkpoint: Optional[str] = None,
-    metrics: List = ["mse"],
-    rollout_dir: Optional[str] = None,
-    eval_n_trajs: int = defaults.eval_n_trajs,
-    n_rollout_steps: int = defaults.n_rollout_steps,
-    out_type: str = defaults.out_type,
-    n_extrap_steps: int = defaults.n_extrap_steps,
+    load_ckp: Optional[str] = None,
+    cfg_eval_infer: Union[Dict, DictConfig] = defaults.eval.infer,
+    rollout_dir: Optional[str] = defaults.eval.rollout_dir,
+    n_rollout_steps: int = defaults.eval.n_rollout_steps,
     seed: int = defaults.seed,
-    metrics_stride: int = defaults.metrics_stride,
-    batch_size: int = defaults.batch_size_infer,
 ):
     """
     Infer on a dataset, compute metrics and optionally save rollout in out_type format.
@@ -333,45 +329,50 @@ def infer(
         data_test: Test dataset.
         params: Haiku params.
         state: Haiku state.
-        load_checkpoint: Path to checkpoint directory.
-        metrics: Metrics to compute.
+        load_ckp: Path to checkpoint directory.
         rollout_dir: Path to rollout directory.
-        eval_n_trajs: Number of trajectories to evaluate.
+        cfg_eval_infer: Evaluation configuration for inference mode.
         n_rollout_steps: Number of rollout steps.
-        out_type: Output type. Either "none", "vtk" or "pkl".
-        n_extrap_steps: Number of extrapolation steps.
         seed: Seed.
-        metrics_stride: Stride for e_kin and sinkhorn.
-        batch_size: Batch size for inference.
 
     Returns:
         eval_metrics: Metrics per trajectory.
     """
     assert (
-        params is not None or load_checkpoint is not None
-    ), "Either params or a load_checkpoint directory must be provided for inference."
+        params is not None or load_ckp is not None
+    ), "Either params or a load_ckp directory must be provided for inference."
+
+    if isinstance(cfg_eval_infer, Dict):
+        cfg_eval_infer = OmegaConf.create(cfg_eval_infer)
+
+    # if one of the cfg_* arguments has a subset of the default configs, merge them
+    cfg_eval_infer = OmegaConf.merge(defaults.eval.infer, cfg_eval_infer)
+
+    n_trajs = cfg_eval_infer.n_trajs
+    if n_trajs == -1:
+        n_trajs = data_test.num_samples
 
     if params is not None:
         if state is None:
             state = {}
     else:
-        params, state, _, _ = load_haiku(load_checkpoint)
+        params, state, _, _ = load_haiku(load_ckp)
 
     key, seed_worker, generator = set_seed(seed)
 
     loader_test = DataLoader(
         dataset=data_test,
-        batch_size=batch_size,
+        batch_size=cfg_eval_infer.batch_size,
         collate_fn=numpy_collate,
         worker_init_fn=seed_worker,
         generator=generator,
     )
     metrics_computer = MetricsComputer(
-        metrics,
+        cfg_eval_infer.metrics,
         dist_fn=case.displacement,
         metadata=data_test.metadata,
         input_seq_length=data_test.input_seq_length,
-        stride=metrics_stride,
+        stride=cfg_eval_infer.metrics_stride,
     )
     # Precompile model
     model_apply = jit(model.apply)
@@ -390,9 +391,9 @@ def infer(
         neighbors=neighbors,
         loader_eval=loader_test,
         n_rollout_steps=n_rollout_steps,
-        n_trajs=eval_n_trajs,
+        n_trajs=n_trajs,
         rollout_dir=rollout_dir,
-        out_type=out_type,
-        n_extrap_steps=n_extrap_steps,
+        out_type=cfg_eval_infer.out_type,
+        n_extrap_steps=cfg_eval_infer.n_extrap_steps,
     )
     return eval_metrics

@@ -95,7 +95,7 @@ def push_forward_sample_steps(key, step, pushforward):
     key, key_unroll = jax.random.split(key, 2)
 
     # steps needs to be an ordered list
-    steps = jnp.array(pushforward["steps"])
+    steps = jnp.array(pushforward.steps)
     assert all(steps[i] <= steps[i + 1] for i in range(len(steps) - 1))
 
     # until which index to sample from
@@ -103,8 +103,8 @@ def push_forward_sample_steps(key, step, pushforward):
 
     unroll_steps = jax.random.choice(
         key_unroll,
-        a=jnp.array(pushforward["unrolls"][:idx]),
-        p=jnp.array(pushforward["probs"][:idx]),
+        a=jnp.array(pushforward.unrolls[:idx]),
+        p=jnp.array(pushforward.probs[:idx]),
     )
     return key, unroll_steps
 

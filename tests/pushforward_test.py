@@ -2,8 +2,8 @@ import unittest
 
 import jax
 import numpy as np
+from omegaconf import OmegaConf
 
-from lagrangebench import PushforwardConfig
 from lagrangebench.train.strats import push_forward_sample_steps
 
 
@@ -11,10 +11,12 @@ class TestPushForward(unittest.TestCase):
     """Class for unit testing the push-forward functions."""
 
     def setUp(self):
-        self.pf = PushforwardConfig(
-            steps=[-1, 20000, 50000, 100000],
-            unrolls=[0, 1, 3, 20],
-            probs=[4.05, 4.05, 1.0, 1.0],
+        self.pf = OmegaConf.create(
+            {
+                "steps": [-1, 20000, 50000, 100000],
+                "unrolls": [0, 1, 3, 20],
+                "probs": [4.05, 4.05, 1.0, 1.0],
+            }
         )
 
         self.key = jax.random.PRNGKey(42)

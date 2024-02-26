@@ -300,7 +300,7 @@ class EGNN(BaseModel):
         self._tanh = tanh
 
         # integrator
-        self._dt = dt / num_mp_steps
+        self._dt = dt / self._num_mp_steps
         self._displacement_fn = displacement_fn
         self._shift_fn = shift_fn
         if normalization_stats is None:

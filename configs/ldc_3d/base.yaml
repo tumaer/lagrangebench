@@ -1,6 +1,9 @@
-extends: defaults.yaml
+extends: LAGRANGEBENCH_DEFAULTS
 
-data_dir: datasets/3D_LDC_8160_10kevery100
-wandb_project: ldc_3d
+dataset_path: datasets/3D_LDC_8160_10kevery100
 
-neighbor_list_multiplier: 2.0
+logging:
+  wandb_project: ldc_3d
+
+neighbors:
+  multiplier: 2.0
