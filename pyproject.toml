@@ -55,7 +55,6 @@ matscipy = "^0.8.0"
 torch = {version = "2.1.0+cpu", source = "torchcpu"}
 wget = "^3.2"
 omegaconf = "^2.3.0"
-toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
 # mypy = ">=1.8.0" - consider in the future
@@ -106,6 +105,7 @@ filterwarnings = [
     "ignore::DeprecationWarning:^(?!.*lagrangebench).*"
 ]
 
+[tool.poetry_bumpversion.file."lagrangebench/__init__.py"]
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

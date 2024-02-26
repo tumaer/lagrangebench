@@ -183,6 +183,10 @@ source $PATH_TO_LAGRANGEBENCH_VENV/bin/activate
 # install pre-commit hooks defined in .pre-commit-config.yaml
 # ruff is configured in pyproject.toml
 pre-commit install
+
+# if you want to bump the version in both pyproject.toml and __init__.py, do
+poetry self add poetry-bumpversion
+poetry version patch  # or minor/major
 ```
 
 After you have run `git add <FILE>` and try to `git commit`, the pre-commit hook will
@@ -201,6 +205,7 @@ LagrangeBench can be installed by cloning the repository or as a standalone libr
 - Configs in `configs/` and `lagrangebench/defaults.py`
 - Zenodo URLs in `download_data.sh` and `lagrangebench/data/data.py`
 - Dependencies in `pyproject.toml`, `requirements_cuda.txt`, and `docs/requirements.txt`
+- Library version in `pyproject.toml` and `lagrangebench/__init__.py`
 
 
 ## Citation

@@ -16,7 +16,6 @@ optax>=0.1.7
 ott-jax>=0.4.2
 pyvista
 PyYAML
-toml>=0.10.2
 torch==2.1.0+cpu
 wandb
 wget
