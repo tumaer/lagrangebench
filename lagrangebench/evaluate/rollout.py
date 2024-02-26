@@ -331,7 +331,7 @@ def infer(
         state: Haiku state.
         load_ckp: Path to checkpoint directory.
         rollout_dir: Path to rollout directory.
-        cfd_eval_infer: Evaluation configuration for inference mode.
+        cfg_eval_infer: Evaluation configuration for inference mode.
         n_rollout_steps: Number of rollout steps.
         seed: Seed.
 

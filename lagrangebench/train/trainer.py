@@ -99,20 +99,6 @@ class Trainer:
     1. Initializes (or restarts a checkpoint) model, optimizer and loss function.
     2. Trains the model on data_train, using the given pushforward and noise tricks.
     3. Evaluates the model on data_valid on the specified metrics.
-
-    Args:
-        model: (Transformed) Haiku model.
-        case: Case setup class.
-        data_train: Training dataset.
-        data_valid: Validation dataset.
-        cfg_train: Training configuration.
-        cfg_eval: Evaluation configuration.
-        cfg_logging: Logging configuration.
-        input_seq_length: Input sequence length, i.e. number of past positions.
-        seed: Random seed for model init, training tricks and dataloading.
-
-    Returns:
-        Configured training function.
     """
 
     def __init__(
@@ -127,6 +113,20 @@ class Trainer:
         input_seq_length: int = defaults.model.input_seq_length,
         seed: int = defaults.seed,
     ):
+        """Initializes the trainer.
+
+        Args:
+            model: (Transformed) Haiku model.
+            case: Case setup class.
+            data_train: Training dataset.
+            data_valid: Validation dataset.
+            cfg_train: Training configuration.
+            cfg_eval: Evaluation configuration.
+            cfg_logging: Logging configuration.
+            input_seq_length: Input sequence length, i.e. number of past positions.
+            seed: Random seed for model init, training tricks and dataloading.
+        """
+
         if isinstance(cfg_train, Dict):
             cfg_train = OmegaConf.create(cfg_train)
         if isinstance(cfg_eval, Dict):
