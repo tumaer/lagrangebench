@@ -29,8 +29,8 @@ NeurIPS page with video and slides [here](https://neurips.cc/virtual/2023/poster
 
 1. [**Installation**](#installation)
 1. [**Usage**](#usage)
-1. [**Pretrained Models**](#pretrained-models)
 1. [**Datasets**](#datasets)
+1. [**Pretrained Models**](#pretrained-models)
 1. [**Directory Structure**](#directory-structure)
 1. [**Contributing**](#contributing)
 1. [**Citation**](#citation)
