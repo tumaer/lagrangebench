@@ -135,22 +135,22 @@ The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https
 ## Pretrained Models
 We provide pretrained model weights of our default GNS and SEGNN models on each of the 7 LagrangeBench datasets. You can download and run the checkpoints given below. In the table, we also provide the 20-step error measures on the full test split.
 
-| Dataset | Model | $\text{MSE}_{pos}^{20}$ | $\text{MSE}_{Sinkhorn}^{20}$ | $\text{MSE}_{E_{kin}}^{20}$ |
-| ------- |-------------------------------------------------------------------------------------- | ------------------ | ------------------ | ------------------ |
-| 2D TGV  | [GNS-10-128](https://drive.google.com/file/d/19TO4PaFGcryXOFFKs93IniuPZKEcaJ37/view)  | $5.9e$$-$$6$ | $3.2e$$-$$7$ | $4.9e$$-$$7$ |
-|  | [SEGNN-10-64](https://drive.google.com/file/d/1llGtakiDmLfarxk6MUAtqj6sLleMQ7RL/view) | $4.4e$$-$$6$ | $2.1e$$-$$7$ | $5.0e$$-$$7$ |
-| 2D RPF  | [GNS-10-128](https://drive.google.com/file/d/1uYusVlP1ykUNuw58vo7Wss-xyTMmopAn/view)  | $4.0e$$-$$6$ | $2.5e$$-$$7$ | $2.7e$$-$$5$ |
-|  | [SEGNN-10-64](https://drive.google.com/file/d/108dZVWs2qxAvKiboeEBW-nIcv-aslhYP/view) | $3.4e$$-$$6$ | $2.5e$$-$$7$ | $1.4e$$-$$5$ |
-| 2D LDC  | [GNS-10-128](https://drive.google.com/file/d/1JvdsW0H6XrgC2_cwV3pP66cAm9j1-AXc/view)  | $1.5e$$-$$5$ | $1.1e$$-$$6$ | $6.1e$$-$$7$ |
-|  | [SEGNN-10-64](https://drive.google.com/file/d/1D_wgs2pD9pTXoJK76yi-R0K2tY_T6lPn/view) | $2.1e$$-$$5$ | $3.7e$$-$$6$ | $1.6e$$-$$5$ |
-| 2D DAM  | [GNS-10-128](https://drive.google.com/file/d/16bJz3VfSMxOG1II8kCg5DlzGhjvdip2p/view)  | $3.1e$$-$$5$ | $1.4e$$-$$5$ | $1.1e$$-$$4$ |
-|  | [SEGNN-10-64](https://drive.google.com/file/d/1_6rHxK81vzrdIMPtJ7rIkeoUgsTeKmSn/view) | $4.1e$$-$$5$ | $2.3e$$-$$5$ | $5.2e$$-$$4$ |
-| 3D TGV  | [GNS-10-128](https://drive.google.com/file/d/1DEkXxrebS9eyLSMlc_ztHrqlh29NgLXC/view)  | $5.8e$$-$$3$ | $4.7e$$-$$6$ | $4.8e$$-$$2$ |
-|  | [SEGNN-10-64](https://drive.google.com/file/d/1ivJnHTgfbQ0IJujc5O0CUoQNiGU4zi_d/view) | $5.0e$$-$$3$ | $4.9e$$-$$6$ | $3.9e$$-$$2$ |
-| 3D RPF  | [GNS-10-128](https://drive.google.com/file/d/1yo-qgShLd1sgS1u5zkMXdJvhuPBwEQQE/view)  | $2.1e$$-$$5$ | $3.3e$$-$$7$ | $1.8e$$-$$6$ |
-|  | [SEGNN-10-64](https://drive.google.com/file/d/1Qczh3Z_z0grTuRuPDHyiYLzV1zg7Liz9/view) | $1.7e$$-$$5$ | $2.7e$$-$$7$ | $1.7e$$-$$6$ |
-| 3D LDC  | [GNS-10-128](https://drive.google.com/file/d/1b3IIkxk5VcWiT8Oyqg1wex8-ZfJv2g_v/view)  | $4.1e$$-$$5$ | $3.2e$$-$$7$ | $1.9e$$-$$8$ |
-|  | [SEGNN-10-64](https://drive.google.com/file/d/1ZIg7FXc1l3C4ekc9WvVvjHEl5KKxOA_U/view) | $4.1e-5$ | $2.9e$$-$$7$ | $2.5e$$-$$8$ |
+| Dataset | Model | $\text{MSE}_{pos}^{20}$ | $\text{MSE}_{Sinkhorn}^{20}$ | $\text{MSE}_{Ekin}^{20}$ |
+| ------- |-------------------------------------------------------------------------------------- | -------- | -------- | -------- |
+| 2D TGV  | [GNS-10-128](https://drive.google.com/file/d/19TO4PaFGcryXOFFKs93IniuPZKEcaJ37/view)  | $5.9e-6$ | $3.2e-7$ | $4.9e-7$ |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1llGtakiDmLfarxk6MUAtqj6sLleMQ7RL/view) | $4.4e-6$ | $2.1e-7$ | $5.0e-7$ |
+| 2D RPF  | [GNS-10-128](https://drive.google.com/file/d/1uYusVlP1ykUNuw58vo7Wss-xyTMmopAn/view)  | $4.0e-6$ | $2.5e-7$ | $2.7e-5$ |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/108dZVWs2qxAvKiboeEBW-nIcv-aslhYP/view) | $3.4e-6$ | $2.5e-7$ | $1.4e-5$ |
+| 2D LDC  | [GNS-10-128](https://drive.google.com/file/d/1JvdsW0H6XrgC2_cwV3pP66cAm9j1-AXc/view)  | $1.5e-5$ | $1.1e-6$ | $6.1e-7$ |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1D_wgs2pD9pTXoJK76yi-R0K2tY_T6lPn/view) | $2.1e-5$ | $3.7e-6$ | $1.6e-5$ |
+| 2D DAM  | [GNS-10-128](https://drive.google.com/file/d/16bJz3VfSMxOG1II8kCg5DlzGhjvdip2p/view)  | $3.1e-5$ | $1.4e-5$ | $1.1e-4$ |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1_6rHxK81vzrdIMPtJ7rIkeoUgsTeKmSn/view) | $4.1e-5$ | $2.3e-5$ | $5.2e-4$ |
+| 3D TGV  | [GNS-10-128](https://drive.google.com/file/d/1DEkXxrebS9eyLSMlc_ztHrqlh29NgLXC/view)  | $5.8e-3$ | $4.7e-6$ | $4.8e-2$ |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1ivJnHTgfbQ0IJujc5O0CUoQNiGU4zi_d/view) | $5.0e-3$ | $4.9e-6$ | $3.9e-2$ |
+| 3D RPF  | [GNS-10-128](https://drive.google.com/file/d/1yo-qgShLd1sgS1u5zkMXdJvhuPBwEQQE/view)  | $2.1e-5$ | $3.3e-7$ | $1.8e-6$ |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1Qczh3Z_z0grTuRuPDHyiYLzV1zg7Liz9/view) | $1.7e-5$ | $2.7e-7$ | $1.7e-6$ |
+| 3D LDC  | [GNS-10-128](https://drive.google.com/file/d/1b3IIkxk5VcWiT8Oyqg1wex8-ZfJv2g_v/view)  | $4.1e-5$ | $3.2e-7$ | $1.9e-8$ |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1ZIg7FXc1l3C4ekc9WvVvjHEl5KKxOA_U/view) | $4.1e-5$ | $2.9e-7$ | $2.5e-8$ |
 
 To reproduce the numbers in the table, e.g., on 2D TGV with GNS, follow these steps:
 ```bash
