@@ -32,7 +32,6 @@ def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
 
             # assert that the cli_args are a subset of the defaults if inheritance from
             # defaults is used.
-            cli_args.test = True
             check_subset(cfgs[0], cli_args)
 
             break
