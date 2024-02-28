@@ -160,7 +160,7 @@ gdown 19TO4PaFGcryXOFFKs93IniuPZKEcaJ37
 # unzip the downloaded file `gns_tgv2d.zip`
 python -c "import shutil; shutil.unpack_archive('gns_tgv2d.zip', 'gns_tgv2d')"
 # evaluate the model on the test split
-python main.py gpu=$GPU_ID mode=infer eval.test=True load_ckp=gns_tgv2d/best"
+python main.py gpu=$GPU_ID mode=infer eval.test=True load_ckp=gns_tgv2d/best
 ```
 
 ## Directory structure
