@@ -30,6 +30,7 @@ NeurIPS page with video and slides [here](https://neurips.cc/virtual/2023/poster
 1. [**Installation**](#installation)
 1. [**Usage**](#usage)
 1. [**Datasets**](#datasets)
+1. [**Pretrained Models**](#pretrained-models)
 1. [**Directory Structure**](#directory-structure)
 1. [**Contributing**](#contributing)
 1. [**Citation**](#citation)
@@ -114,6 +115,12 @@ python main.py load_ckp=ckp/gns_rpf2d_yyyymmdd-hhmmss/best rollout_dir=rollout/g
 
 If the default `eval.infer.out_type=pkl` is active, then the generated trajectories and a `metricsYYYY_MM_DD_HH_MM_SS.pkl` file will be written to `eval.rollout_dir`. The metrics file contains all `eval.infer.metrics` properties for each generated rollout.
 
+### Notebooks
+We provide three notebooks that show LagrangeBench functionalities, namely:
+- [`tutorial.ipynb`](notebooks/tutorial.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb), with a general overview of LagrangeBench library, with training and evaluation of a simple GNS model,
+- [`datasets.ipynb`](notebooks/datasets.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/datasets.ipynb), with more details and visualizations of the datasets, and
+- [`gns_data.ipynb`](notebooks/gns_data.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/gns_data.ipynb), showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
+
 ## Datasets
 The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https://zenodo.org/doi/10.5281/zenodo.10021925). If a dataset is not found in `dataset_path`, the data is automatically downloaded. Alternatively, to manually download the datasets use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
 - __Taylor Green Vortex 2D__: `bash download_data.sh tgv_2d datasets/`
@@ -125,12 +132,36 @@ The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https
 - __Lid Driven Cavity 3D__: `bash download_data.sh ldc_3d datasets/`
 - __All__: `bash download_data.sh all datasets/`
 
+## Pretrained Models
+We provide pretrained model weights of our default GNS and SEGNN models on each of the 7 LagrangeBench datasets. You can download and run the checkpoints given below. In the table, we also provide the 20-step error measures on the full test split.
 
-### Notebooks
-We provide three notebooks that show LagrangeBench functionalities, namely:
-- [`tutorial.ipynb`](notebooks/tutorial.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb), with a general overview of LagrangeBench library, with training and evaluation of a simple GNS model,
-- [`datasets.ipynb`](notebooks/datasets.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/datasets.ipynb), with more details and visualizations of the datasets, and
-- [`gns_data.ipynb`](notebooks/gns_data.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/gns_data.ipynb), showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
+| Dataset | Model | MSE<sub>20</sub> | Sinkhorn | MSE<sub>E<sub>kin</sub></sub> |
+| ------- |-------------------------------------------------------------------------------------- | ------ | ------ | ------ |
+| 2D TGV  | [GNS-10-128](https://drive.google.com/file/d/19TO4PaFGcryXOFFKs93IniuPZKEcaJ37/view)  | 5.9e-6 | 3.2e-7 | 4.9e-7 |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1llGtakiDmLfarxk6MUAtqj6sLleMQ7RL/view) | 4.4e-6 | 2.1e-7 | 5.0e-7 |
+| 2D RPF  | [GNS-10-128](https://drive.google.com/file/d/1uYusVlP1ykUNuw58vo7Wss-xyTMmopAn/view)  | 4.0e-6 | 2.5e-7 | 2.7e-5 |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/108dZVWs2qxAvKiboeEBW-nIcv-aslhYP/view) | 3.4e-6 | 2.5e-7 | 1.4e-5 |
+| 2D LDC  | [GNS-10-128](https://drive.google.com/file/d/1JvdsW0H6XrgC2_cwV3pP66cAm9j1-AXc/view)  | 1.5e-5 | 1.1e-6 | 6.1e-7 |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1D_wgs2pD9pTXoJK76yi-R0K2tY_T6lPn/view) | 2.1e-5 | 3.7e-6 | 1.6e-5 |
+| 2D DAM  | [GNS-10-128](https://drive.google.com/file/d/16bJz3VfSMxOG1II8kCg5DlzGhjvdip2p/view)  | 3.1e-5 | 1.4e-5 | 1.1e-4 |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1_6rHxK81vzrdIMPtJ7rIkeoUgsTeKmSn/view) | 4.1e-5 | 2.3e-5 | 5.2e-4 |
+| 3D TGV  | [GNS-10-128](https://drive.google.com/file/d/1DEkXxrebS9eyLSMlc_ztHrqlh29NgLXC/view)  | 5.8e-3 | 4.7e-6 | 4.8e-2 |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1ivJnHTgfbQ0IJujc5O0CUoQNiGU4zi_d/view) | 5.0e-3 | 4.9e-6 | 3.9e-2 |
+| 3D RPF  | [GNS-10-128](https://drive.google.com/file/d/1yo-qgShLd1sgS1u5zkMXdJvhuPBwEQQE/view)  | 2.1e-5 | 3.3e-7 | 1.8e-6 |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1Qczh3Z_z0grTuRuPDHyiYLzV1zg7Liz9/view) | 1.7e-5 | 2.7e-7 | 1.7e-6 |
+| 3D LDC  | [GNS-10-128](https://drive.google.com/file/d/1b3IIkxk5VcWiT8Oyqg1wex8-ZfJv2g_v/view)  | 4.1e-5 | 3.2e-7 | 1.9e-8 |
+|         | [SEGNN-10-64](https://drive.google.com/file/d/1ZIg7FXc1l3C4ekc9WvVvjHEl5KKxOA_U/view) | 4.1e-5 | 2.9e-7 | 2.5e-8 |
+
+To reproduce the numbers in the table, e.g., on 2D TGV with GNS, follow these steps:
+```bash
+# download the checkpoint (1) through the browser or 
+# (2) using the file ID from the URL, i.e., for 2D TGV + GNS
+gdown 19TO4PaFGcryXOFFKs93IniuPZKEcaJ37
+# unzip the downloaded file `gns_tgv2d.zip`
+python -c "import shutil; shutil.unpack_archive('gns_tgv2d.zip', 'gns_tgv2d')"
+# evaluate the model on the test split
+python main.py gpu=$GPU_ID mode=infer eval.test=True load_ckp=gns_tgv2d/best
+```
 
 ## Directory structure
 ```

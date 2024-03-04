@@ -114,7 +114,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
         print("Start inference...")
 
         if mode == "infer":
-            model_dir = store_ckp
+            model_dir = load_ckp
         if mode == "all":
             model_dir = os.path.join(store_ckp, "best")
             assert osp.isfile(os.path.join(model_dir, "params_tree.pkl"))

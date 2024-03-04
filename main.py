@@ -3,6 +3,17 @@ import os
 from omegaconf import DictConfig, OmegaConf
 
 
+def check_subset(superset, subset, full_key=""):
+    """Check that the keys of 'subset' are a subset of 'superset'."""
+    for k, v in subset.items():
+        key = full_key + k
+        if isinstance(v, dict):
+            check_subset(superset[k], v, key + ".")
+        else:
+            msg = f"cli_args must be a subset of the defaults. Wrong cli key: '{key}'"
+            assert k in superset, msg
+
+
 def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
     """Loads all 'extends' embedded configs and merge them with the cli overwrites."""
 
@@ -18,6 +29,11 @@ def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
             from lagrangebench.defaults import defaults
 
             cfgs = [defaults] + cfgs
+
+            # assert that the cli_args are a subset of the defaults if inheritance from
+            # defaults is used.
+            check_subset(cfgs[0], cli_args)
+
             break
 
     # merge all embedded configs and give highest priority to cli_args
@@ -26,8 +42,6 @@ def load_embedded_configs(config_path: str, cli_args: DictConfig) -> DictConfig:
 
 
 if __name__ == "__main__":
-    # TODO: add optional wandb.sweeps
-
     cli_args = OmegaConf.from_cli()
     assert ("config" in cli_args) != (
         "load_ckp" in cli_args
