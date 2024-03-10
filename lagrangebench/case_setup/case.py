@@ -283,8 +283,8 @@ def case_builder(
 
             features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
 
-            if max_refinement_steps != 0:
-                features["k"] = features["k"] * (1000 / max_refinement_steps)
+            # if max_refinement_steps != 0:
+            #     features["k"] = features["k"] * (1000 / max_refinement_steps)
 
             slice_begin = (
                 0,

@@ -446,7 +446,7 @@ def _forward_eval_pde_refiner(
 
         # Modify the k value before sending it to the model
         features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
-        features["k"] = features["k"] * (1000 / max_refinement_steps)
+        # features["k"] = features["k"] * (1000 / max_refinement_steps)
 
         pred, state = model_apply(params, state, (features, particle_type))
         # pred is a dictionary with key 'noise'
