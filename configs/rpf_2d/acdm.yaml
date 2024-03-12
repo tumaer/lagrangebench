@@ -1,0 +1,24 @@
+extends: rpf_2d/base.yaml
+
+model: acdm
+num_mp_steps: 10
+latent_dim: 128
+lr_start: 5.e-4
+
+wandb: False
+wandb_project: acdm
+# Change this with your own entity
+wandb_entity: lagrangebench
+
+noise_std: 0.0000
+
+loss_weight:
+  noise: 1.0
+
+is_pde_refiner: False
+num_refinement_steps: 3
+sigma_min: 1.e-5
+
+is_acdm: True
+diffusion_steps: 10
+input_seq_length: 3 #for 2 velocities

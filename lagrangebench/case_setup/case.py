@@ -148,7 +148,7 @@ def case_builder(
 
     def _compute_target(pos_input: jnp.ndarray) -> TargetDict:
         # displacement(r1, r2) = r1-r2  # without PBC
-
+        # returns the target dictionary with the target position, velocity and acc.
         current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
         next_velocity = displacement_fn_set(pos_input[:, 2], pos_input[:, 1])
         current_acceleration = next_velocity - current_velocity
@@ -244,7 +244,7 @@ def case_builder(
     ) -> Union[TrainCaseOut, EvalCaseOut]:
         pos_input = jnp.asarray(
             sample[0], dtype=dtype
-        )  # shape of sample[0] == pos_input = (3200,3,2).
+        )  # shape of sample[0] == pos_input = (3200,7,2).
         particle_type = jnp.asarray(sample[1])
 
         if mode == "train":
@@ -283,9 +283,6 @@ def case_builder(
 
             features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
 
-            # if max_refinement_steps != 0:
-            #     features["k"] = features["k"] * (1000 / max_refinement_steps)
-
             slice_begin = (
                 0,
                 input_seq_length - 2 + unroll_steps,
@@ -298,17 +295,12 @@ def case_builder(
             target_dict = _compute_target(
                 lax.dynamic_slice(pos_input, slice_begin, slice_size)
             )
-
             if is_k_zero:
                 features["u_t_noised"] = jnp.zeros((features["vel_hist"].shape[0], 2))
                 target_dict["noise"] = target_dict["acc"]
 
             else:
                 noise_std = min_noise_std ** (k / max_refinement_steps)
-                # dependingg on value of k select the noise_std
-                # noise_std_list = jnp.array([3e-4, 3e-5, 3e-6])  # hardcoded_stds
-                # noise_std_list = jnp.array([3e-4, 1e-4, 3e-5])
-                # noise_std = noise_std_list[k - 1]
 
                 noise = random.normal(
                     subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
@@ -379,6 +371,187 @@ def case_builder(
     @jit
     def preprocess_eval_pde_refiner_fn(sample, neighbors):
         return _preprocess_pde_refiner(sample, neighbors, mode="eval")
+
+    # Additional functions for ACDM
+
+    def compute_acc_based_on_pos_slice(pos_input: jnp.ndarray):
+        """Compute acceleration based on position slice."""
+        current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
+        next_velocity = displacement_fn_set(pos_input[:, 2], pos_input[:, 1])
+        current_acceleration = next_velocity - current_velocity
+        acc_stats = normalization_stats["acceleration"]
+        return (current_acceleration - acc_stats["mean"]) / acc_stats["std"]
+
+    def extract_conditioning_data(pos_input: jnp.ndarray):
+        slice_size = (pos_input.shape[0], 3, pos_input.shape[2])
+        slice_begin_t_minus_two = (0, input_seq_length - 4, 0)
+
+        acc_t_minus_two = compute_acc_based_on_pos_slice(
+            lax.dynamic_slice(pos_input, slice_begin_t_minus_two, slice_size)
+        )
+        slice_begin_t_minus_one = (0, input_seq_length - 3, 0)
+        acc_t_minus_one = compute_acc_based_on_pos_slice(
+            lax.dynamic_slice(pos_input, slice_begin_t_minus_one, slice_size)
+        )
+
+        return {
+            "acc_t_minus_two": acc_t_minus_two,
+            "acc_t_minus_one": acc_t_minus_one,
+        }
+
+    def linear_beta_schedule(timesteps):
+        if timesteps < 10:
+            raise ValueError(
+                "Warning: Less than 10 timesteps require adjustments \
+                to this schedule!"
+            )
+
+        beta_start = 0.0001 * (
+            500 / timesteps
+        )  # adjust reference values determined for 500 steps
+        beta_end = 0.02 * (500 / timesteps)
+        betas = jnp.linspace(beta_start, beta_end, timesteps)
+        return jnp.clip(betas, 0.0001, 0.9999)
+
+    def _preprocess_acdm(
+        sample: Tuple[jnp.ndarray, jnp.ndarray],
+        neighbors: Optional[NeighborList] = None,
+        is_allocate: bool = False,
+        mode: str = "train",
+        **kwargs,
+    ) -> Union[TrainCaseOut, EvalCaseOut]:
+        pos_input = jnp.asarray(
+            sample[0], dtype=dtype
+        )  # shape of sample[0] == pos_input = (3200,7,2) iff input_seq_length = 6.
+        particle_type = jnp.asarray(sample[1])
+
+        if mode == "train":
+            key, noise_std = kwargs["key"], kwargs["noise_std"]
+            unroll_steps = kwargs["unroll_steps"]
+            if pos_input.shape[1] > 1:  # pos_input.shape[1] = 7
+                key, pos_input = add_gns_noise(
+                    key, pos_input, particle_type, input_seq_length, noise_std, shift_fn
+                )
+
+        # allocate the neighbor list
+        most_recent_position = pos_input[
+            :, input_seq_length - 1
+        ]  # input_seq_length = 6
+        num_particles = (particle_type != -1).sum()
+        if is_allocate:
+            neighbors = neighbor_fn.allocate(
+                most_recent_position, num_particles=num_particles
+            )
+        else:
+            neighbors = neighbors.update(
+                most_recent_position, num_particles=num_particles
+            )
+
+        features = feature_transform(pos_input[:, :input_seq_length], neighbors)
+
+        # For Diffusion
+        betas = linear_beta_schedule(timesteps=kwargs["num_diffusion_steps"])
+        alphas = 1.0 - betas
+        alphasCumprod = jnp.cumprod(alphas, axis=0)
+
+        # Here we create a padding array of ones and concatenate it with alphasCumprod
+        # pad = jnp.ones((1,) + alphasCumprod.shape[1:])
+        # alphasCumprodPrev = jnp.concatenate([pad, alphasCumprod[:-1]], axis=0)
+
+        # sqrtRecipAlphas = jnp.sqrt(1.0 / alphas)
+
+        # calculations for diffusion q(x_t | x_{t-1}) and others
+        sqrtAlphasCumprod = jnp.sqrt(alphasCumprod)
+        sqrtOneMinusAlphasCumprod = jnp.sqrt(1.0 - alphasCumprod)
+
+        # calculations for posterior q(x_{t-1} | x_t, x_0) (ONLY REQ FOR INFERENCE)
+        # posteriorVariance = betas * (1.0 - alphasCumprodPrev) / (1.0 - alphasCumprod)
+        # sqrtPosteriorVariance = jnp.sqrt(posteriorVariance)
+
+        if mode == "train":
+            key = kwargs["key"]
+
+            key, subkey = random.split(key, 2)
+
+            slice_begin = (
+                0,
+                input_seq_length - 2 + unroll_steps,
+                0,
+            )
+            # =(0,0,0) if unroll_steps = 0 and input_seq_length = 2
+            slice_size = (pos_input.shape[0], 3, pos_input.shape[2])
+
+            # target_dict has the target position, velocity and acceleration
+            target_dict = _compute_target(
+                lax.dynamic_slice(pos_input, slice_begin, slice_size)
+            )
+
+            # Compute two previous acceleration and concatenate with the target
+            # acceleration. All values are normalized.
+            prev_acc_dict = extract_conditioning_data(pos_input)
+
+            concatednated_acc = jnp.concatenate(
+                (
+                    prev_acc_dict["acc_t_minus_two"],
+                    prev_acc_dict["acc_t_minus_one"],
+                    target_dict["acc"],
+                ),
+                axis=1,
+            )
+
+            # Sample noise from a normal distribution
+            noise = random.normal(
+                subkey,
+                jnp.zeros(
+                    (concatednated_acc.shape[0], concatednated_acc.shape[1])
+                ).shape,
+            )
+            target_dict["noise"] = noise
+            # Sample a random timestep between 0 and number of diffusion steps
+            features["k"] = random.randint(
+                subkey, shape=(1,), minval=0, maxval=kwargs["num_diffusion_steps"]
+            )[0]
+
+            # Perform Forward Diffusion step to obtain the dNoisy
+            features["noised_acc"] = (
+                sqrtAlphasCumprod[features["k"]] * concatednated_acc
+            )
+            +sqrtOneMinusAlphasCumprod[features["k"]] * noise
+
+            return (
+                key,
+                features,
+                target_dict,
+                neighbors,
+            )
+
+        if mode == "eval":
+            return features, neighbors
+
+    def allocate_acdm_fn(
+        key,
+        sample,
+        num_diffusion_steps,
+        noise_std=0.0,
+        unroll_steps=0,
+    ):
+        return _preprocess_acdm(
+            sample,
+            key=key,
+            num_diffusion_steps=num_diffusion_steps,
+            noise_std=noise_std,
+            unroll_steps=unroll_steps,
+            is_allocate=True,
+        )
+
+    def preprocess_acdm_fn():
+        pass
+
+    def allocate_eval_acdm_fn():
+        pass
+
+    def preprocess_eval_acdm_fn():
+        pass
 
     @jit
     def integrate_fn(normalized_in, position_sequence):
