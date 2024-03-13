@@ -13,6 +13,7 @@ from jax_md.partition import NeighborList, NeighborListFormat
 from lagrangebench.data.utils import get_dataset_stats
 from lagrangebench.defaults import defaults
 from lagrangebench.train.strats import add_gns_noise
+from lagrangebench.utils import ACDMConfig
 
 from .features import FeatureDict, TargetDict, physical_feature_builder
 from .partition import neighbor_list
@@ -28,13 +29,20 @@ PreprocessFn = Callable[[Array, SampleIn, float, NeighborList, int], TrainCaseOu
 PreprocessEvalFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
 # For PDE Refiner
-AllocatePdeRefinerFn = Callable[[random.KeyArray, SampleIn, float, int], TrainCaseOut]
+AllocatePdeRefinerFn = Callable[[Array, SampleIn, int, bool, float, int, float, int], TrainCaseOut]
 AllocateEvalPdeRefinerFn = Callable[[SampleIn], EvalCaseOut]
 PreprocessPdeRefinerFn = Callable[
-    [random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut
+    [Array, SampleIn, float, NeighborList, int, bool, float, int, int], TrainCaseOut
 ]
 PreprocessEvalPdeRefinerFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
+#For ACDM
+AllocateAcdmFn = Callable[[Array, SampleIn, int, ACDMConfig, float, int], TrainCaseOut]
+AllocateEvalAcdmFn = Callable[[SampleIn], EvalCaseOut]
+PreprocessAcdmFn = Callable[
+    [random.KeyArray, SampleIn, float, NeighborList, int], TrainCaseOut
+]
+PreprocessEvalAcdmFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
 IntegrateFn = Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
@@ -68,6 +76,10 @@ class CaseSetupFn:
     preprocess_pde_refiner: PreprocessPdeRefinerFn = static_field()
     allocate_eval_pde_refiner: AllocateEvalPdeRefinerFn = static_field()
     preprocess_eval_pde_refiner: PreprocessEvalPdeRefinerFn = static_field()
+    allocate_acdm: AllocateAcdmFn = static_field()
+    preprocess_acdm: PreprocessAcdmFn = static_field()
+    allocate_eval_acdm: AllocateEvalAcdmFn = static_field()
+    preprocess_eval_acdm: PreprocessEvalAcdmFn = static_field()
     integrate: IntegrateFn = static_field()
     displacement: space.DisplacementFn = static_field()
     normalization_stats: Dict = static_field()
@@ -399,19 +411,6 @@ def case_builder(
             "acc_t_minus_one": acc_t_minus_one,
         }
 
-    def linear_beta_schedule(timesteps):
-        if timesteps < 10:
-            raise ValueError(
-                "Warning: Less than 10 timesteps require adjustments \
-                to this schedule!"
-            )
-
-        beta_start = 0.0001 * (
-            500 / timesteps
-        )  # adjust reference values determined for 500 steps
-        beta_end = 0.02 * (500 / timesteps)
-        betas = jnp.linspace(beta_start, beta_end, timesteps)
-        return jnp.clip(betas, 0.0001, 0.9999)
 
     def _preprocess_acdm(
         sample: Tuple[jnp.ndarray, jnp.ndarray],
@@ -449,28 +448,10 @@ def case_builder(
 
         features = feature_transform(pos_input[:, :input_seq_length], neighbors)
 
-        # For Diffusion
-        betas = linear_beta_schedule(timesteps=kwargs["num_diffusion_steps"])
-        alphas = 1.0 - betas
-        alphasCumprod = jnp.cumprod(alphas, axis=0)
-
-        # Here we create a padding array of ones and concatenate it with alphasCumprod
-        # pad = jnp.ones((1,) + alphasCumprod.shape[1:])
-        # alphasCumprodPrev = jnp.concatenate([pad, alphasCumprod[:-1]], axis=0)
-
-        # sqrtRecipAlphas = jnp.sqrt(1.0 / alphas)
-
-        # calculations for diffusion q(x_t | x_{t-1}) and others
-        sqrtAlphasCumprod = jnp.sqrt(alphasCumprod)
-        sqrtOneMinusAlphasCumprod = jnp.sqrt(1.0 - alphasCumprod)
-
-        # calculations for posterior q(x_{t-1} | x_t, x_0) (ONLY REQ FOR INFERENCE)
-        # posteriorVariance = betas * (1.0 - alphasCumprodPrev) / (1.0 - alphasCumprod)
-        # sqrtPosteriorVariance = jnp.sqrt(posteriorVariance)
-
         if mode == "train":
             key = kwargs["key"]
-
+            acdm_config = kwargs["acdm_config"]
+            
             key, subkey = random.split(key, 2)
 
             slice_begin = (
@@ -508,15 +489,11 @@ def case_builder(
             )
             target_dict["noise"] = noise
             # Sample a random timestep between 0 and number of diffusion steps
-            features["k"] = random.randint(
-                subkey, shape=(1,), minval=0, maxval=kwargs["num_diffusion_steps"]
-            )[0]
-
+            
+            features["k"] = jnp.tile(kwargs["k"], (features["vel_hist"].shape[0],))
             # Perform Forward Diffusion step to obtain the dNoisy
-            features["noised_acc"] = (
-                sqrtAlphasCumprod[features["k"]] * concatednated_acc
-            )
-            +sqrtOneMinusAlphasCumprod[features["k"]] * noise
+            features["noised_acc"] = acdm_config.sqrtAlphasCumprod[kwargs["k"]] * concatednated_acc \
+            + acdm_config.sqrtOneMinusAlphasCumprod[kwargs["k"]] * noise
 
             return (
                 key,
@@ -525,31 +502,49 @@ def case_builder(
                 neighbors,
             )
 
-        if mode == "eval":
+        if mode == "eval": #TO BE CHANGED
             return features, neighbors
 
     def allocate_acdm_fn(
         key,
         sample,
-        num_diffusion_steps,
+        k,
+        acdm_config,
         noise_std=0.0,
         unroll_steps=0,
     ):
         return _preprocess_acdm(
             sample,
             key=key,
-            num_diffusion_steps=num_diffusion_steps,
+            k=k,
+            acdm_config=acdm_config,
             noise_std=noise_std,
             unroll_steps=unroll_steps,
             is_allocate=True,
         )
-
-    def preprocess_acdm_fn():
-        pass
+    @partial(jit, static_argnames=["acdm_config"])
+    def preprocess_acdm_fn(        
+        key,
+        sample,
+        noise_std,
+        neighbors,
+        k,
+        acdm_config,
+        unroll_steps=0,):
+        return _preprocess_acdm(
+            sample,
+            neighbors,
+            key=key,
+            k=k,
+            acdm_config=acdm_config,
+            noise_std=noise_std,
+            unroll_steps=unroll_steps,
+        )
 
     def allocate_eval_acdm_fn():
         pass
 
+    @jit
     def preprocess_eval_acdm_fn():
         pass
 
@@ -593,6 +588,10 @@ def case_builder(
         preprocess_pde_refiner_fn,
         allocate_eval_pde_refiner_fn,
         preprocess_eval_pde_refiner_fn,
+        allocate_acdm_fn,
+        preprocess_acdm_fn,
+        allocate_eval_acdm_fn,
+        preprocess_eval_acdm_fn,
         integrate_fn,
         displacement_fn,
         normalization_stats,
