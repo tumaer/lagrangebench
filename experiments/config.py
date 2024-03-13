@@ -217,6 +217,13 @@ def cli_arguments() -> Dict:
         type=int,
         help="Number of refinement steps for PDE Refiner.",
     )
+    
+    #ACDM Arguments
+    parser.add_argument("--diffusion_steps",
+                        required=False,
+                        type=int,
+                        help="Number of diffusion steps for ACDM.")
+    
 
     parser.add_argument(
         "--wandb",

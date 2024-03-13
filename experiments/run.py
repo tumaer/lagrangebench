@@ -15,7 +15,7 @@ from experiments.utils import setup_data, setup_model
 from lagrangebench import Trainer, infer, infer_pde_refiner
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
-from lagrangebench.utils import PushforwardConfig
+from lagrangebench.utils import PushforwardConfig, ACDMConfig
 
 
 def train_or_infer(args: Namespace):
@@ -98,6 +98,8 @@ def train_or_infer(args: Namespace):
             unrolls=args.config.pushforward["unrolls"],
             probs=args.config.pushforward["probs"],
         )
+        
+        acdm_config = ACDMConfig(diffusionSteps=args.config.diffusion_steps)
 
         trainer = Trainer(
             model,
@@ -127,6 +129,8 @@ def train_or_infer(args: Namespace):
             is_pde_refiner=args.config.is_pde_refiner,
             num_refinement_steps=args.config.num_refinement_steps,
             sigma_min=args.config.sigma_min,
+            is_acdm=args.config.is_acdm,
+            acdm_config=acdm_config,
         )
         _, _, _ = trainer(
             step_max=args.config.step_max,
