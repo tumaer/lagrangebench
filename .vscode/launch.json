@@ -74,6 +74,27 @@
         },
         {
             "args": [
+                "--config=configs/rpf_2d/acdm.yaml",
+                "--data_dir=datasets/2D_RPF_3200_20kevery100",
+                "--ckp_dir=ckp/debug_dump",
+                "--gpu=0",
+                "--no-wandb",
+                "--log_steps=1",
+                "--eval_steps=4",
+                "--step_max=10",
+                "--eval_n_trajs=2",
+                "--eval_n_trajs_infer=10",
+                "--diffusion_steps=10",
+            ],
+            "name": "Debug ACDM",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "args": [
                 "--config=configs/dam_2d/pde_refiner.yaml",
                 "--data_dir=datasets/2D_DAM_5740_20kevery100",
                 "--ckp_dir=ckp/debug_dump",
