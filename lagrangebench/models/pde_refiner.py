@@ -152,5 +152,5 @@ class PDE_Refiner(BaseModel):
 
         noise = self._decoder(
             self._processor(self._encoder(graph))
-        )  # noise.shape = (3200,2)
+        ) 
         return {"noise": noise}

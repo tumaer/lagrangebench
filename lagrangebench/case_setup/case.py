@@ -385,7 +385,6 @@ def case_builder(
         return _preprocess_pde_refiner(sample, neighbors, mode="eval")
 
     # Additional functions for ACDM
-
     def compute_acc_based_on_pos_slice(pos_input: jnp.ndarray):
         """Compute acceleration based on position slice."""
         current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
@@ -395,13 +394,13 @@ def case_builder(
         return (current_acceleration - acc_stats["mean"]) / acc_stats["std"]
 
     def extract_conditioning_data(pos_input: jnp.ndarray):
-        slice_size = (pos_input.shape[0], 3, pos_input.shape[2])
-        slice_begin_t_minus_two = (0, input_seq_length - 4, 0)
+        slice_size = (pos_input.shape[0], 3, pos_input.shape[2]) #(3200,3,2)
+        slice_begin_t_minus_two = (0, input_seq_length - 4, 0) #(0,2,0)
 
         acc_t_minus_two = compute_acc_based_on_pos_slice(
             lax.dynamic_slice(pos_input, slice_begin_t_minus_two, slice_size)
         )
-        slice_begin_t_minus_one = (0, input_seq_length - 3, 0)
+        slice_begin_t_minus_one = (0, input_seq_length - 3, 0) #(0,3,0)
         acc_t_minus_one = compute_acc_based_on_pos_slice(
             lax.dynamic_slice(pos_input, slice_begin_t_minus_one, slice_size)
         )
@@ -410,8 +409,6 @@ def case_builder(
             "acc_t_minus_two": acc_t_minus_two,
             "acc_t_minus_one": acc_t_minus_one,
         }
-
-
     def _preprocess_acdm(
         sample: Tuple[jnp.ndarray, jnp.ndarray],
         neighbors: Optional[NeighborList] = None,
@@ -471,7 +468,7 @@ def case_builder(
             # acceleration. All values are normalized.
             prev_acc_dict = extract_conditioning_data(pos_input)
 
-            concatednated_acc = jnp.concatenate(
+            features["concatednated_acc"] = jnp.concatenate(
                 (
                     prev_acc_dict["acc_t_minus_two"],
                     prev_acc_dict["acc_t_minus_one"],
@@ -484,7 +481,7 @@ def case_builder(
             noise = random.normal(
                 subkey,
                 jnp.zeros(
-                    (concatednated_acc.shape[0], concatednated_acc.shape[1])
+                    (features["concatednated_acc"].shape[0], features["concatednated_acc"].shape[1])
                 ).shape,
             )
             target_dict["noise"] = noise
@@ -492,7 +489,7 @@ def case_builder(
             
             features["k"] = jnp.tile(kwargs["k"], (features["vel_hist"].shape[0],))
             # Perform Forward Diffusion step to obtain the dNoisy
-            features["noised_acc"] = acdm_config.sqrtAlphasCumprod[kwargs["k"]] * concatednated_acc \
+            features["noised_acc"] = acdm_config.sqrtAlphasCumprod[kwargs["k"]] * features["concatednated_acc"] \
             + acdm_config.sqrtOneMinusAlphasCumprod[kwargs["k"]] * noise
 
             return (
@@ -502,7 +499,7 @@ def case_builder(
                 neighbors,
             )
 
-        if mode == "eval": #TO BE CHANGED
+        if mode == "eval":
             return features, neighbors
 
     def allocate_acdm_fn(
@@ -541,12 +538,12 @@ def case_builder(
             unroll_steps=unroll_steps,
         )
 
-    def allocate_eval_acdm_fn():
-        pass
+    def allocate_eval_acdm_fn(sample):
+        return _preprocess_pde_refiner(sample, is_allocate=True, mode="eval")
 
     @jit
-    def preprocess_eval_acdm_fn():
-        pass
+    def preprocess_eval_acdm_fn(sample, neighbors):
+        return _preprocess_pde_refiner(sample, neighbors, mode="eval")
 
     @jit
     def integrate_fn(normalized_in, position_sequence):

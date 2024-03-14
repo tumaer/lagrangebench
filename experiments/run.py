@@ -12,7 +12,7 @@ import yaml
 
 import wandb
 from experiments.utils import setup_data, setup_model
-from lagrangebench import Trainer, infer, infer_pde_refiner
+from lagrangebench import Trainer, infer, infer_pde_refiner, infer_acdm
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
 from lagrangebench.utils import PushforwardConfig, ACDMConfig
@@ -173,6 +173,26 @@ def train_or_infer(args: Namespace):
                 batch_size=args.config.batch_size_infer,
                 num_refinement_steps=args.config.num_refinement_steps,
                 sigma_min=args.config.sigma_min,
+            )
+
+        elif args.config.is_acdm:
+            metrics = infer_acdm(
+                model,
+                case,
+                data_test if args.config.test else data_valid,
+                load_checkpoint=args.config.model_dir,
+                metrics=args.config.metrics_infer,
+                rollout_dir=args.config.rollout_dir,
+                eval_n_trajs=args.config.eval_n_trajs_infer,
+                n_rollout_steps=args.config.n_rollout_steps,
+                out_type=args.config.out_type_infer,
+                n_extrap_steps=args.config.n_extrap_steps,
+                seed=args.config.seed,
+                metrics_stride=args.config.metrics_stride_infer,
+                batch_size=args.config.batch_size_infer,
+                acdm_config=acdm_config,
+                noise_std=args.config.noise_std,
+                input_seq_length=args.config.input_seq_length,
             )
 
         else:

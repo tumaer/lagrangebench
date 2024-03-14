@@ -20,6 +20,7 @@ from lagrangebench.evaluate import (
     averaged_metrics,
     eval_rollout,
     eval_rollout_pde_refiner,
+    eval_rollout_acdm
 )
 from lagrangebench.utils import (
     LossConfig,
@@ -31,6 +32,7 @@ from lagrangebench.utils import (
     load_haiku,
     save_haiku,
     set_seed,
+    ACDMConfig
 )
 from wandb.wandb_run import Run
 
@@ -122,6 +124,8 @@ def Trainer(
     is_pde_refiner: bool = defaults.is_pde_refiner,
     num_refinement_steps: int = defaults.num_refinement_steps,
     sigma_min: float = defaults.sigma_min,
+    is_acdm: bool = defaults.is_acdm,
+    acdm_config: Optional[ACDMConfig] = None,
 ) -> Callable:
     """
     Builds a function that automates model training and evaluation.
@@ -202,7 +206,10 @@ def Trainer(
     # pushforward config
     if pushforward is None:
         pushforward = PushforwardConfig()
-
+        
+    if acdm_config is None:
+        acdm_config = ACDMConfig() #default 20 steps
+        
     # metrics computer config
     metrics_computer = MetricsComputer(
         metrics,
@@ -260,6 +267,7 @@ def Trainer(
         raw_sample = (pos_input_and_target[0], particle_type[0])
 
         if is_pde_refiner:
+            
             key, subkey = jax.random.split(base_key, 2)
             k = random.randint(subkey, (), 0, num_refinement_steps + 1)
             is_k_zero = jnp.where(k == 0, True, False)
@@ -270,7 +278,18 @@ def Trainer(
                 case.preprocess_pde_refiner,
                 in_axes=(0, 0, None, 0, None, None, None, None, None),
             )
-
+        
+        elif is_acdm:
+            key, subkey = jax.random.split(base_key, 2)
+            k = random.randint(subkey, (), 0, acdm_config.diffusionSteps)
+            key, features, _, neighbors = case.allocate_acdm(
+                key, raw_sample, k, acdm_config
+            )
+            preprocess_vmap = jax.vmap(
+                case.preprocess_acdm,
+                in_axes=(0, 0, None, 0, None, None, None),
+            )
+            
         else:
             key, features, _, neighbors = case.allocate(base_key, raw_sample)
             preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
@@ -316,7 +335,7 @@ def Trainer(
 
                 key, unroll_steps = push_forward_sample_steps(key, step, pushforward)
 
-                if is_pde_refiner:  # not yet batched
+                if is_pde_refiner:  
                     key, subkey = jax.random.split(key, 2)
                     k = random.randint(subkey, (), 0, num_refinement_steps + 1)
                     is_k_zero = bool(jnp.where(k == 0, True, False))
@@ -335,6 +354,24 @@ def Trainer(
                         is_k_zero,
                         sigma_min,
                         num_refinement_steps,
+                        unroll_steps,
+                    )
+                    
+                elif is_acdm:
+                    key, subkey = jax.random.split(key, 2)
+                    k = random.randint(subkey, (), 0, acdm_config.diffusionSteps + 1)
+                    (
+                        _keys,
+                        features_batch,
+                        target_batch,
+                        neighbors_batch,
+                    ) = preprocess_vmap(
+                        keys,
+                        raw_batch,
+                        noise_std,
+                        neighbors_batch,
+                        k,
+                        acdm_config,
                         unroll_steps,
                     )
 
@@ -420,7 +457,24 @@ def Trainer(
                             rollout_dir=rollout_dir,
                             out_type=out_type,
                         )
-
+                    elif is_acdm:
+                        eval_metrics = eval_rollout_acdm(
+                            case=case,
+                            metrics_computer=metrics_computer,
+                            model_apply=model_apply,
+                            params=params,
+                            state=state,
+                            neighbors=nbrs,
+                            loader_eval=loader_valid,
+                            n_rollout_steps=n_rollout_steps,
+                            n_trajs=eval_n_trajs,
+                            key=key,
+                            acdm_config=acdm_config,
+                            noise_std=noise_std,
+                            input_seq_length=input_seq_length,
+                            rollout_dir=rollout_dir,
+                            out_type=out_type,
+                        )
                     else:
                         eval_metrics = eval_rollout(
                             case=case,

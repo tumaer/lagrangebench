@@ -198,7 +198,7 @@ class PushforwardConfig:
     def __getitem__(self, item):
         return getattr(self, item)
 
-
+#For PDE Refiner
 def fourier_embedding(timesteps, dim, max_period=10000):
     """Create sinusoidal timestep embeddings.
 
@@ -223,3 +223,45 @@ def fourier_embedding(timesteps, dim, max_period=10000):
             axis=-1,
         )
     return embedding
+
+#For ACDM
+def linear_beta_schedule(timesteps):
+    # if timesteps < 10:
+    #     raise ValueError(
+    #         "Warning: Less than 10 timesteps require adjustments \
+    #         to this schedule!"
+    #     )
+
+    beta_start = 0.0001 * (
+        500 / timesteps
+    )  # adjust reference values determined for 500 steps
+    beta_end = 0.02 * (500 / timesteps)
+    betas = jnp.linspace(beta_start, beta_end, timesteps)
+    return jnp.clip(betas, 0.0001, 0.9999)
+
+
+class ACDMConfig:
+    def __init__(self, diffusionSteps:int=20):
+        # For Diffusion
+        self.diffusionSteps = diffusionSteps
+        self.betas = linear_beta_schedule(timesteps=self.diffusionSteps)
+        self.alphas = 1.0 - self.betas
+        self.alphasCumprod = jnp.cumprod(self.alphas, axis=0)
+
+        # Here we create a padding array of ones and concatenate it with alphasCumprod
+        pad = jnp.ones((1,) + self.alphasCumprod.shape[1:])
+        self.alphasCumprodPrev = jnp.concatenate([pad, self.alphasCumprod[:-1]], axis=0)
+
+        self.sqrtRecipAlphas = jnp.sqrt(1.0 / self.alphas)
+
+        # calculations for diffusion q(x_t | x_{t-1}) and others
+        self.sqrtAlphasCumprod = jnp.sqrt(self.alphasCumprod)
+        self.sqrtOneMinusAlphasCumprod = jnp.sqrt(1.0 - self.alphasCumprod)
+
+        # calculations for posterior q(x_{t-1} | x_t, x_0) (ONLY REQ FOR INFERENCE)
+        self.posteriorVariance = self.betas * (1.0 - self.alphasCumprodPrev) / (1.0 - self.alphasCumprod)
+        self.sqrtPosteriorVariance = jnp.sqrt(self.posteriorVariance)
+
+
+    def __getitem__(self, item):
+        return getattr(self, item)
