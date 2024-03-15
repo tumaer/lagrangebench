@@ -76,4 +76,6 @@ class defaults:
 
     # acdm defaults
     is_acdm: bool = False
-    diffusion_steps = 10
+    diffusion_steps:int = 10
+    num_conditioning_steps:int = 2
+    conditioning_parameter:str = "acc"
