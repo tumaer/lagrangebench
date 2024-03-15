@@ -217,31 +217,39 @@ def cli_arguments() -> Dict:
         type=int,
         help="Number of refinement steps for PDE Refiner.",
     )
-    
-    parser.add_argument("--refinement_parameter",
-                        type=str,
-                        required=False,
-                        choices=["acc", "vel"],
-                        help="Parameter which is refined for PDE Refiner.")
-    
-    #ACDM Arguments
-    parser.add_argument("--diffusion_steps",
-                        required=False,
-                        type=int,
-                        help="Number of diffusion steps for ACDM.")
-    
-    parser.add_argument("--num_conditioning_steps",
-                        required=False,
-                        type=int,
-                        help="Number of conditioning steps for ACDM.")
-    
-    parser.add_argument("--conditioning_parameter",
-                        type=str,
-                        required=False,
-                        choices=["acc", "vel"],
-                        help="Parameter to condition on for ACDM.")
-    
-    #Misc Arguments
+
+    parser.add_argument(
+        "--refinement_parameter",
+        type=str,
+        required=False,
+        choices=["acc", "vel"],
+        help="Parameter which is refined for PDE Refiner.",
+    )
+
+    # ACDM Arguments
+    parser.add_argument(
+        "--diffusion_steps",
+        required=False,
+        type=int,
+        help="Number of diffusion steps for ACDM.",
+    )
+
+    parser.add_argument(
+        "--num_conditioning_steps",
+        required=False,
+        type=int,
+        help="Number of conditioning steps for ACDM.",
+    )
+
+    parser.add_argument(
+        "--conditioning_parameter",
+        type=str,
+        required=False,
+        choices=["acc", "vel"],
+        help="Parameter to condition on for ACDM.",
+    )
+
+    # Misc Arguments
     parser.add_argument(
         "--wandb",
         required=False,

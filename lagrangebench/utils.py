@@ -198,7 +198,8 @@ class PushforwardConfig:
     def __getitem__(self, item):
         return getattr(self, item)
 
-#For PDE Refiner
+
+# For PDE Refiner
 def fourier_embedding(timesteps, dim, max_period=10000):
     """Create sinusoidal timestep embeddings.
 
@@ -224,7 +225,8 @@ def fourier_embedding(timesteps, dim, max_period=10000):
         )
     return embedding
 
-#For ACDM
+
+# For ACDM
 def linear_beta_schedule(timesteps):
     # if timesteps < 10:
     #     raise ValueError(
@@ -246,7 +248,7 @@ class ACDMConfig:
         self.diffusionSteps = diffusionSteps
         self.num_conditioning_steps = num_conditioning_steps
         self.conditioning_parameter = conditioning_parameter
-        
+
         self.betas = linear_beta_schedule(timesteps=self.diffusionSteps)
         self.alphas = 1.0 - self.betas
         self.alphasCumprod = jnp.cumprod(self.alphas, axis=0)
@@ -262,9 +264,10 @@ class ACDMConfig:
         self.sqrtOneMinusAlphasCumprod = jnp.sqrt(1.0 - self.alphasCumprod)
 
         # calculations for posterior q(x_{t-1} | x_t, x_0) (ONLY REQ FOR INFERENCE)
-        self.posteriorVariance = self.betas * (1.0 - self.alphasCumprodPrev) / (1.0 - self.alphasCumprod)
+        self.posteriorVariance = (
+            self.betas * (1.0 - self.alphasCumprodPrev) / (1.0 - self.alphasCumprod)
+        )
         self.sqrtPosteriorVariance = jnp.sqrt(self.posteriorVariance)
-
 
     def __getitem__(self, item):
         return getattr(self, item)

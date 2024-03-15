@@ -1,7 +1,7 @@
 from .case_setup.case import case_builder
 from .data import DAM2D, LDC2D, LDC3D, RPF2D, RPF3D, TGV2D, TGV3D, H5Dataset
-from .evaluate import infer, infer_pde_refiner, infer_acdm
-from .models import EGNN, GNS, SEGNN, PaiNN, PDE_Refiner, ACDM
+from .evaluate import infer, infer_acdm, infer_pde_refiner
+from .models import ACDM, EGNN, GNS, SEGNN, PaiNN, PDE_Refiner
 from .train.trainer import Trainer
 from .utils import PushforwardConfig
 

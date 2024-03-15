@@ -4,29 +4,29 @@ import os
 import pickle
 import time
 from functools import partial
-from typing import Callable, Iterable, List, Optional, Tuple, Dict
+from typing import Callable, Iterable, List, Optional, Tuple
 
 import haiku as hk
 import jax
 import jax.numpy as jnp
 import jax_md.partition as partition
-from jax import jit, random, vmap, lax
+from jax import jit, lax, random, vmap
 from torch.utils.data import DataLoader
 
 from lagrangebench.data import H5Dataset
-from lagrangebench.data.utils import numpy_collate
+from lagrangebench.data.utils import get_dataset_stats, numpy_collate
 from lagrangebench.defaults import defaults
 from lagrangebench.evaluate.metrics import MetricsComputer, MetricsDict
 from lagrangebench.evaluate.utils import write_vtk
 from lagrangebench.utils import (
+    ACDMConfig,
     broadcast_from_batch,
     broadcast_to_batch,
     get_kinematic_mask,
     load_haiku,
     set_seed,
-    ACDMConfig
 )
-from lagrangebench.data.utils import get_dataset_stats
+
 
 @partial(jit, static_argnames=["model_apply", "case_integrate"])
 def _forward_eval(
@@ -399,7 +399,15 @@ def infer(
     return eval_metrics
 
 
-@partial(jit, static_argnames=["model_apply", "case_integrate", "max_refinement_steps", "refinement_parameter"])
+@partial(
+    jit,
+    static_argnames=[
+        "model_apply",
+        "case_integrate",
+        "max_refinement_steps",
+        "refinement_parameter",
+    ],
+)
 def _forward_eval_pde_refiner(
     params: hk.Params,
     state: hk.State,
@@ -439,7 +447,7 @@ def _forward_eval_pde_refiner(
         key, subkey = random.split(key, 2)
 
         noise_std = min_noise_std ** (k / max_refinement_steps)
-       
+
         noise = random.normal(
             subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
         )
@@ -803,7 +811,7 @@ def infer_pde_refiner(
     num_refinement_steps = kwargs["num_refinement_steps"]
     sigma_min = kwargs["sigma_min"]
     refinement_parameter = kwargs["refinement_parameter"]
-    
+
     k = random.randint(subkey, (), 0, num_refinement_steps + 1)
     is_k_zero = jnp.where(k == 0, True, False)
 
@@ -824,15 +832,26 @@ def infer_pde_refiner(
         key=key,
         num_refinement_steps=num_refinement_steps,
         sigma_min=sigma_min,
-        refinement_parameter = refinement_parameter,
+        refinement_parameter=refinement_parameter,
         rollout_dir=rollout_dir,
         out_type=out_type,
         n_extrap_steps=n_extrap_steps,
     )
     return eval_metrics
 
-#For ACDM:
-@partial(jit, static_argnames=["model_apply", "case_integrate", "displacement_fn_set","acdm_config", "input_seq_length", "metrics_computer"])
+
+# For ACDM:
+@partial(
+    jit,
+    static_argnames=[
+        "model_apply",
+        "case_integrate",
+        "displacement_fn_set",
+        "acdm_config",
+        "input_seq_length",
+        "metrics_computer",
+    ],
+)
 def _forward_eval_acdm(
     params: hk.Params,
     state: hk.State,
@@ -848,13 +867,17 @@ def _forward_eval_acdm(
     input_seq_length: int,
     metrics_computer: MetricsComputer,
 ) -> jnp.ndarray:
-    """Run one update of the 'current_state' using the trained model """
+    """Run one update of the 'current_state' using the trained model"""
 
     features, particle_type = sample
-    
-    normalization_stats = get_dataset_stats(metrics_computer.__dict__['_metadata'], is_isotropic_norm=False, noise_std=noise_std)
+
+    normalization_stats = get_dataset_stats(
+        metrics_computer.__dict__["_metadata"],
+        is_isotropic_norm=False,
+        noise_std=noise_std,
+    )
     displacement_fn_set = vmap(displacement_fn_set, in_axes=(0, 0))
-    
+
     def compute_acc_based_on_pos_slice(pos_input: jnp.ndarray):
         """Compute acceleration based on position slice."""
         current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
@@ -868,73 +891,93 @@ def _forward_eval_acdm(
         current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
         vel_stats = normalization_stats["velocity"]
         return (current_velocity - vel_stats["mean"]) / vel_stats["std"]
-    
-    def extract_conditioning_data(pos_input: jnp.ndarray, 
-                                  num_conditioning_steps: int, 
-                                  conditioning_parameter: str):
+
+    def extract_conditioning_data(
+        pos_input: jnp.ndarray, num_conditioning_steps: int, conditioning_parameter: str
+    ):
         """Extract conditioning data for ACDM."""
-        conditioning_data={}
+        conditioning_data = {}
         if conditioning_parameter == "acc":
             assert input_seq_length >= num_conditioning_steps + 2
         elif conditioning_parameter == "vel":
             assert input_seq_length >= num_conditioning_steps + 1
-        
+
         for i in range(num_conditioning_steps):
-            
             if conditioning_parameter == "acc":
-                slice_begin = (0, input_seq_length - num_conditioning_steps -2 + i, 0) #(0,2,0)
-                slice_size = (pos_input.shape[0], 3, pos_input.shape[2]) #(3200,3,2)
+                slice_begin = (
+                    0,
+                    input_seq_length - num_conditioning_steps - 2 + i,
+                    0,
+                )  # (0,2,0)
+                slice_size = (pos_input.shape[0], 3, pos_input.shape[2])  # (3200,3,2)
                 value = compute_acc_based_on_pos_slice(
                     lax.dynamic_slice(pos_input, slice_begin, slice_size)
                 )
                 key = f"acc_t_minus_{num_conditioning_steps - i}"
                 conditioning_data[key] = value
-                
+
             elif conditioning_parameter == "vel":
-                slice_begin = (0, input_seq_length - num_conditioning_steps -1 + i, 0)
-                slice_size = (pos_input.shape[0], 2, pos_input.shape[2]) 
+                slice_begin = (0, input_seq_length - num_conditioning_steps - 1 + i, 0)
+                slice_size = (pos_input.shape[0], 2, pos_input.shape[2])
                 value = compute_vel_based_on_pos_slice(
                     lax.dynamic_slice(pos_input, slice_begin, slice_size)
                 )
                 key = f"vel_t_minus_{num_conditioning_steps - i}"
                 conditioning_data[key] = value
 
-        return conditioning_data 
-    
-    conditioning_data = extract_conditioning_data(features["abs_pos"], 
-                                                      acdm_config.num_conditioning_steps,
-                                                      acdm_config.conditioning_parameter)
-    #concatenates the values of the dictionary, need to convert to list first
+        return conditioning_data
+
+    conditioning_data = extract_conditioning_data(
+        features["abs_pos"],
+        acdm_config.num_conditioning_steps,
+        acdm_config.conditioning_parameter,
+    )
+    # concatenates the values of the dictionary, need to convert to list first
     conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
 
-    #conditioning data only without the target
+    # conditioning data only without the target
     features["prev_concatenated_data"] = conditioning_data
-    
+
     key, subkey = random.split(key, 2)
-    
-    #dNoise has a shape (3200,2)
-    dNoise = random.normal(
-            subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
-        )
-    #cNoise has a shape (3200,4)
-    cNoise = random.normal(subkey, jnp.zeros((features["vel_hist"].shape[0], 2*acdm_config.num_conditioning_steps)).shape)
+
+    # dNoise has a shape (3200,2)
+    dNoise = random.normal(subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape)
+    # cNoise has a shape (3200,4)
+    cNoise = random.normal(
+        subkey,
+        jnp.zeros(
+            (features["vel_hist"].shape[0], 2 * acdm_config.num_conditioning_steps)
+        ).shape,
+    )
 
     for k in reversed(range(0, acdm_config.diffusionSteps)):  # Refinement loop
-        
         # compute conditioned part with normal forward diffusion
-        condNoisy = acdm_config.sqrtAlphasCumprod[k] * features["prev_concatenated_data"] + \
-            acdm_config.sqrtOneMinusAlphasCumprod[k] * cNoise
+        condNoisy = (
+            acdm_config.sqrtAlphasCumprod[k] * features["prev_concatenated_data"]
+            + acdm_config.sqrtOneMinusAlphasCumprod[k] * cNoise
+        )
 
         features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
         features["noised_data"] = jnp.concatenate([condNoisy, dNoise], axis=1)
-        
+
         pred, state = model_apply(params, state, (features, particle_type))
-    
-        modelMean = acdm_config.sqrtRecipAlphas[k] * (features["noised_data"] - \
-            acdm_config.betas[k] * pred['noise'] / acdm_config.sqrtOneMinusAlphasCumprod[k])
-    
-        dNoise = modelMean[:,cNoise.shape[1]:modelMean.shape[1]]
-    
+
+        modelMean = acdm_config.sqrtRecipAlphas[k] * (
+            features["noised_data"]
+            - acdm_config.betas[k]
+            * pred["noise"]
+            / acdm_config.sqrtOneMinusAlphasCumprod[k]
+        )
+
+        dNoise = modelMean[:, cNoise.shape[1] : modelMean.shape[1]]
+
+        if k != 0:
+            # sample randomly (only for non-final prediction),
+            # use mean directly for final prediction
+            dNoise = dNoise + acdm_config.sqrtPosteriorVariance[k] * random.normal(
+                subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
+            )
+
     if acdm_config.conditioning_parameter == "acc":
         refined_value = {"acc": dNoise}
 
@@ -1006,7 +1049,7 @@ def eval_batched_rollout_acdm(
     neighbors_batch = broadcast_to_batch(neighbors, current_batch_size)
 
     step = 0
-    #This is the autoregressive rollout loop
+    # This is the autoregressive rollout loop
     while step < n_rollout_steps + n_extrap_steps:
         sample_batch = (current_positions_batch, particle_type_batch)
 
@@ -1116,7 +1159,7 @@ def eval_rollout_acdm(
         acdm_config=acdm_config,
         noise_std=noise_std,
         input_seq_length=input_seq_length,
-        metrics_computer=metrics_computer
+        metrics_computer=metrics_computer,
     )
     forward_eval_vmap = vmap(forward_eval_acdm, in_axes=(None, None, 0, 0, 0))
     preprocess_eval_vmap = vmap(case.preprocess_eval_acdm, in_axes=(0, 0))
@@ -1206,6 +1249,7 @@ def eval_rollout_acdm(
 
     return eval_metrics
 
+
 def infer_acdm(
     model: hk.TransformedWithState,
     case,
@@ -1285,28 +1329,26 @@ def infer_acdm(
     acdm_config = kwargs["acdm_config"]
     noise_std = kwargs["noise_std"]
     input_seq_length = kwargs["input_seq_length"]
-    
+
     k = random.randint(subkey, (), 0, acdm_config.diffusionSteps)
-    
-    key, _, _, neighbors = case.allocate_acdm(
-                key, sample, k, acdm_config
-            )
+
+    key, _, _, neighbors = case.allocate_acdm(key, sample, k, acdm_config)
 
     eval_metrics = eval_rollout_acdm(
-                            case=case,
-                            metrics_computer=metrics_computer,
-                            model_apply=model_apply,
-                            params=params,
-                            state=state,
-                            neighbors=neighbors,
-                            loader_eval=loader_test,
-                            n_rollout_steps=n_rollout_steps,
-                            n_trajs=eval_n_trajs,
-                            key=key,
-                            acdm_config=acdm_config,
-                            noise_std=noise_std,
-                            input_seq_length=input_seq_length,
-                            rollout_dir=rollout_dir,
-                            out_type=out_type,
-                    )
+        case=case,
+        metrics_computer=metrics_computer,
+        model_apply=model_apply,
+        params=params,
+        state=state,
+        neighbors=neighbors,
+        loader_eval=loader_test,
+        n_rollout_steps=n_rollout_steps,
+        n_trajs=eval_n_trajs,
+        key=key,
+        acdm_config=acdm_config,
+        noise_std=noise_std,
+        input_seq_length=input_seq_length,
+        rollout_dir=rollout_dir,
+        out_type=out_type,
+    )
     return eval_metrics

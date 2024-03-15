@@ -12,10 +12,10 @@ import yaml
 
 import wandb
 from experiments.utils import setup_data, setup_model
-from lagrangebench import Trainer, infer, infer_pde_refiner, infer_acdm
+from lagrangebench import Trainer, infer, infer_acdm, infer_pde_refiner
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
-from lagrangebench.utils import PushforwardConfig, ACDMConfig
+from lagrangebench.utils import ACDMConfig, PushforwardConfig
 
 
 def train_or_infer(args: Namespace):
@@ -98,12 +98,13 @@ def train_or_infer(args: Namespace):
             unrolls=args.config.pushforward["unrolls"],
             probs=args.config.pushforward["probs"],
         )
-        
-       
-        acdm_config = ACDMConfig(diffusionSteps=args.config.diffusion_steps,\
-                num_conditioning_steps=args.config.num_conditioning_steps,\
-                conditioning_parameter=args.config.conditioning_parameter) 
-        
+
+        acdm_config = ACDMConfig(
+            diffusionSteps=args.config.diffusion_steps,
+            num_conditioning_steps=args.config.num_conditioning_steps,
+            conditioning_parameter=args.config.conditioning_parameter,
+        )
+
         trainer = Trainer(
             model,
             case,

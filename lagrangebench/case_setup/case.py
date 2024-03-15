@@ -29,14 +29,16 @@ PreprocessFn = Callable[[Array, SampleIn, float, NeighborList, int], TrainCaseOu
 PreprocessEvalFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
 # For PDE Refiner
-AllocatePdeRefinerFn = Callable[[Array, SampleIn, int, bool, float, int, float, int], TrainCaseOut]
+AllocatePdeRefinerFn = Callable[
+    [Array, SampleIn, int, bool, float, int, float, int], TrainCaseOut
+]
 AllocateEvalPdeRefinerFn = Callable[[SampleIn], EvalCaseOut]
 PreprocessPdeRefinerFn = Callable[
     [Array, SampleIn, float, NeighborList, int, bool, float, int, int], TrainCaseOut
 ]
 PreprocessEvalPdeRefinerFn = Callable[[SampleIn, NeighborList], EvalCaseOut]
 
-#For ACDM
+# For ACDM
 AllocateAcdmFn = Callable[[Array, SampleIn, int, ACDMConfig, float, int], TrainCaseOut]
 AllocateEvalAcdmFn = Callable[[SampleIn], EvalCaseOut]
 PreprocessAcdmFn = Callable[
@@ -287,10 +289,10 @@ def case_builder(
             key = kwargs["key"]
             k = kwargs["k"]
             is_k_zero = kwargs["is_k_zero"]
-            
-            #can be 'acc' or 'vel'
+
+            # can be 'acc' or 'vel'
             refinement_parameter = kwargs["refinement_parameter"]
-            
+
             key, subkey = random.split(key, 2)
 
             min_noise_std = kwargs["sigma_min"]
@@ -320,7 +322,9 @@ def case_builder(
                 noise = random.normal(
                     subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
                 )
-                features["noised_data"] = target_dict[refinement_parameter] + noise_std * noise
+                features["noised_data"] = (
+                    target_dict[refinement_parameter] + noise_std * noise
+                )
                 target_dict["noise"] = noise
 
             #
@@ -358,7 +362,10 @@ def case_builder(
             is_allocate=True,
         )
 
-    @partial(jit, static_argnames=["is_k_zero", "num_refinement_steps", "refinement_parameter"])
+    @partial(
+        jit,
+        static_argnames=["is_k_zero", "num_refinement_steps", "refinement_parameter"],
+    )
     def preprocess_pde_refiner_fn(
         key,
         sample,
@@ -406,37 +413,40 @@ def case_builder(
         vel_stats = normalization_stats["velocity"]
         return (current_velocity - vel_stats["mean"]) / vel_stats["std"]
 
-    def extract_conditioning_data(pos_input: jnp.ndarray, 
-                                  num_conditioning_steps: int, 
-                                  conditioning_parameter: str):
+    def extract_conditioning_data(
+        pos_input: jnp.ndarray, num_conditioning_steps: int, conditioning_parameter: str
+    ):
         """Extract conditioning data for ACDM."""
-        conditioning_data={}
+        conditioning_data = {}
         if conditioning_parameter == "acc":
             assert input_seq_length >= num_conditioning_steps + 2
         elif conditioning_parameter == "vel":
             assert input_seq_length >= num_conditioning_steps + 1
-        
+
         for i in range(num_conditioning_steps):
-            
             if conditioning_parameter == "acc":
-                slice_begin = (0, input_seq_length - num_conditioning_steps -2 + i, 0) #(0,2,0)
-                slice_size = (pos_input.shape[0], 3, pos_input.shape[2]) #(3200,3,2)
+                slice_begin = (
+                    0,
+                    input_seq_length - num_conditioning_steps - 2 + i,
+                    0,
+                )  # (0,2,0)
+                slice_size = (pos_input.shape[0], 3, pos_input.shape[2])  # (3200,3,2)
                 value = compute_acc_based_on_pos_slice(
                     lax.dynamic_slice(pos_input, slice_begin, slice_size)
                 )
                 key = f"acc_t_minus_{num_conditioning_steps - i}"
                 conditioning_data[key] = value
-                
-            elif conditioning_parameter == "vel":
-                slice_begin = (0, input_seq_length - num_conditioning_steps -1 + i, 0)
-                slice_size = (pos_input.shape[0], 2, pos_input.shape[2]) 
+
+            else:
+                slice_begin = (0, input_seq_length - num_conditioning_steps - 1 + i, 0)
+                slice_size = (pos_input.shape[0], 2, pos_input.shape[2])
                 value = compute_vel_based_on_pos_slice(
                     lax.dynamic_slice(pos_input, slice_begin, slice_size)
                 )
                 key = f"vel_t_minus_{num_conditioning_steps - i}"
                 conditioning_data[key] = value
 
-        return conditioning_data 
+        return conditioning_data
 
     def _preprocess_acdm(
         sample: Tuple[jnp.ndarray, jnp.ndarray],
@@ -477,10 +487,10 @@ def case_builder(
         if mode == "train":
             key = kwargs["key"]
             acdm_config = kwargs["acdm_config"]
-            
+
             num_conditioning_steps = acdm_config.num_conditioning_steps
             conditioning_parameter = acdm_config.conditioning_parameter
-            
+
             key, subkey = random.split(key, 2)
 
             slice_begin = (
@@ -498,12 +508,15 @@ def case_builder(
 
             # Compute two previous acceleration and concatenate with the target
             # acceleration. All values are normalized.
-            conditioning_data = extract_conditioning_data(pos_input, 
-                                                      num_conditioning_steps,
-                                                      conditioning_parameter)
+            conditioning_data = extract_conditioning_data(
+                pos_input, num_conditioning_steps, conditioning_parameter
+            )
 
-            conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
-            #dictionary containing the conditioning data and the target which is required for training
+            conditioning_data = jnp.concatenate(
+                list(conditioning_data.values()), axis=1
+            )
+            # dictionary containing the conditioning data and the target
+            # which is required for training
             if conditioning_parameter == "acc":
                 features["concatenated_data"] = jnp.concatenate(
                     (
@@ -512,7 +525,7 @@ def case_builder(
                     ),
                     axis=1,
                 )
-            else:    
+            else:
                 features["concatenated_data"] = jnp.concatenate(
                     (
                         conditioning_data,
@@ -525,16 +538,22 @@ def case_builder(
             noise = random.normal(
                 subkey,
                 jnp.zeros(
-                    (features["concatenated_data"].shape[0], features["concatenated_data"].shape[1])
+                    (
+                        features["concatenated_data"].shape[0],
+                        features["concatenated_data"].shape[1],
+                    )
                 ).shape,
             )
             target_dict["noise"] = noise
             # Sample a random timestep between 0 and number of diffusion steps
-            
+
             features["k"] = jnp.tile(kwargs["k"], (features["vel_hist"].shape[0],))
             # Perform Forward Diffusion step to obtain the dNoisy
-            features["noised_data"] = acdm_config.sqrtAlphasCumprod[kwargs["k"]] * features["concatenated_data"] \
-            + acdm_config.sqrtOneMinusAlphasCumprod[kwargs["k"]] * noise
+            features["noised_data"] = (
+                acdm_config.sqrtAlphasCumprod[kwargs["k"]]
+                * features["concatenated_data"]
+                + acdm_config.sqrtOneMinusAlphasCumprod[kwargs["k"]] * noise
+            )
 
             return (
                 key,
@@ -563,15 +582,17 @@ def case_builder(
             unroll_steps=unroll_steps,
             is_allocate=True,
         )
+
     @partial(jit, static_argnames=["acdm_config"])
-    def preprocess_acdm_fn(        
+    def preprocess_acdm_fn(
         key,
         sample,
         noise_std,
         neighbors,
         k,
         acdm_config,
-        unroll_steps=0,):
+        unroll_steps=0,
+    ):
         return _preprocess_acdm(
             sample,
             neighbors,

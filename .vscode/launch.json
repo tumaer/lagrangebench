@@ -84,7 +84,7 @@
                 "--step_max=10",
                 "--eval_n_trajs=2",
                 "--eval_n_trajs_infer=10",
-                "--diffusion_steps=2",
+                "--diffusion_steps=20",
             ],
             "name": "Debug ACDM",
             "type": "debugpy",

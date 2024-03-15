@@ -9,6 +9,7 @@ from lagrangebench.utils import NodeType, fourier_embedding
 from .base import BaseModel
 from .utils import build_mlp
 
+
 class ACDM(BaseModel):
     def __init__(
         self,
@@ -30,7 +31,7 @@ class ACDM(BaseModel):
         """
         super().__init__()
 
-        self._output_size = problem_dimension*(num_conditioning_steps + 1) 
+        self._output_size = problem_dimension * (num_conditioning_steps + 1)
         self._latent_size = latent_size
         self._number_of_layers = number_of_layers
         self._mp_steps = num_mp_steps
@@ -54,7 +55,7 @@ class ACDM(BaseModel):
                 "vel_mag",
                 "bound",
                 "force",
-            ]  
+            ]
             if k in features
         ]
 
@@ -62,7 +63,7 @@ class ACDM(BaseModel):
 
         graph = jraph.GraphsTuple(
             nodes=jnp.concatenate(node_features, axis=-1),
-            edges=jnp.concatenate(edge_features, axis=-1), 
+            edges=jnp.concatenate(edge_features, axis=-1),
             receivers=features["receivers"],
             senders=features["senders"],
             n_node=jnp.array([n_total_points]),
@@ -150,7 +151,5 @@ class ACDM(BaseModel):
             )
             graph = graph._replace(nodes=new_node_features)
 
-        noise = self._decoder(
-            self._processor(self._encoder(graph))
-        )  
+        noise = self._decoder(self._processor(self._encoder(graph)))
         return {"noise": noise}

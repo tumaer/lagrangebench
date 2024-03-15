@@ -5,8 +5,8 @@ num_mp_steps: 10
 latent_dim: 128
 lr_start: 5.e-4
 
-wandb: False
-wandb_project: acdm
+wandb: True
+wandb_project: acdm_rpf2d
 # Change this with your own entity
 wandb_entity: lagrangebench
 
@@ -20,6 +20,6 @@ num_refinement_steps: 3
 sigma_min: 1.e-5
 
 is_acdm: True
-diffusion_steps: 10
+diffusion_steps: 20
 num_conditioning_steps: 2
-conditioning_parameter: vel
+conditioning_parameter: acc

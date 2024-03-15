@@ -19,10 +19,11 @@ from lagrangebench.evaluate import (
     MetricsComputer,
     averaged_metrics,
     eval_rollout,
+    eval_rollout_acdm,
     eval_rollout_pde_refiner,
-    eval_rollout_acdm
 )
 from lagrangebench.utils import (
+    ACDMConfig,
     LossConfig,
     PushforwardConfig,
     broadcast_from_batch,
@@ -32,7 +33,6 @@ from lagrangebench.utils import (
     load_haiku,
     save_haiku,
     set_seed,
-    ACDMConfig
 )
 from wandb.wandb_run import Run
 
@@ -207,10 +207,10 @@ def Trainer(
     # pushforward config
     if pushforward is None:
         pushforward = PushforwardConfig()
-        
+
     if acdm_config is None:
-        acdm_config = ACDMConfig() #default 20 steps
-        
+        acdm_config = ACDMConfig()  # default 20 steps
+
     # metrics computer config
     metrics_computer = MetricsComputer(
         metrics,
@@ -268,19 +268,23 @@ def Trainer(
         raw_sample = (pos_input_and_target[0], particle_type[0])
 
         if is_pde_refiner:
-            
             key, subkey = jax.random.split(base_key, 2)
             k = random.randint(subkey, (), 0, num_refinement_steps + 1)
             is_k_zero = jnp.where(k == 0, True, False)
             key, features, _, neighbors = case.allocate_pde_refiner(
-                key, raw_sample, k, is_k_zero, sigma_min, num_refinement_steps, \
-                refinement_parameter
+                key,
+                raw_sample,
+                k,
+                is_k_zero,
+                sigma_min,
+                num_refinement_steps,
+                refinement_parameter,
             )
             preprocess_vmap = jax.vmap(
                 case.preprocess_pde_refiner,
                 in_axes=(0, 0, None, 0, None, None, None, None, None, None),
             )
-        
+
         elif is_acdm:
             key, subkey = jax.random.split(base_key, 2)
             k = random.randint(subkey, (), 0, acdm_config.diffusionSteps)
@@ -291,7 +295,7 @@ def Trainer(
                 case.preprocess_acdm,
                 in_axes=(0, 0, None, 0, None, None, None),
             )
-            
+
         else:
             key, features, _, neighbors = case.allocate(base_key, raw_sample)
             preprocess_vmap = jax.vmap(case.preprocess, in_axes=(0, 0, None, 0, None))
@@ -337,7 +341,7 @@ def Trainer(
 
                 key, unroll_steps = push_forward_sample_steps(key, step, pushforward)
 
-                if is_pde_refiner:  
+                if is_pde_refiner:
                     key, subkey = jax.random.split(key, 2)
                     k = random.randint(subkey, (), 0, num_refinement_steps + 1)
                     is_k_zero = bool(jnp.where(k == 0, True, False))
@@ -359,7 +363,7 @@ def Trainer(
                         refinement_parameter,
                         unroll_steps,
                     )
-                    
+
                 elif is_acdm:
                     key, subkey = jax.random.split(key, 2)
                     k = random.randint(subkey, (), 0, acdm_config.diffusionSteps)

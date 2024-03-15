@@ -150,7 +150,5 @@ class PDE_Refiner(BaseModel):
             )
             graph = graph._replace(nodes=new_node_features)
 
-        noise = self._decoder(
-            self._processor(self._encoder(graph))
-        ) 
+        noise = self._decoder(self._processor(self._encoder(graph)))
         return {"noise": noise}
