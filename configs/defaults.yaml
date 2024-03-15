@@ -120,6 +120,7 @@ batch_size_infer: 1
 is_pde_refiner: False
 num_refinement_steps: 3
 sigma_min: 1.e-5
+refinement_parameter: acc
 
 is_acdm: False
 diffusion_steps: 10

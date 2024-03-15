@@ -73,6 +73,7 @@ class defaults:
     is_pde_refiner: bool = False
     num_refinement_steps: int = 4
     sigma_min: float = 1e-3
+    refinement_parameter: str = "acc"
 
     # acdm defaults
     is_acdm: bool = False
