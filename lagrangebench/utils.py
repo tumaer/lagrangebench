@@ -241,9 +241,12 @@ def linear_beta_schedule(timesteps):
 
 
 class ACDMConfig:
-    def __init__(self, diffusionSteps:int=20):
+    def __init__(self, diffusionSteps, num_conditioning_steps, conditioning_parameter):
         # For Diffusion
         self.diffusionSteps = diffusionSteps
+        self.num_conditioning_steps = num_conditioning_steps
+        self.conditioning_parameter = conditioning_parameter
+        
         self.betas = linear_beta_schedule(timesteps=self.diffusionSteps)
         self.alphas = 1.0 - self.betas
         self.alphasCumprod = jnp.cumprod(self.alphas, axis=0)

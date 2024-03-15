@@ -823,7 +823,7 @@ def infer_pde_refiner(
     return eval_metrics
 
 #For ACDM:
-@partial(jit, static_argnames=["model_apply", "case_integrate", "displacement_fn_set","acdm_config", "metrics_computer"])
+@partial(jit, static_argnames=["model_apply", "case_integrate", "displacement_fn_set","acdm_config", "input_seq_length", "metrics_computer"])
 def _forward_eval_acdm(
     params: hk.Params,
     state: hk.State,
@@ -854,36 +854,53 @@ def _forward_eval_acdm(
         acc_stats = normalization_stats["acceleration"]
         return (current_acceleration - acc_stats["mean"]) / acc_stats["std"]
 
-    def extract_conditioning_data(pos_input: jnp.ndarray):
-        slice_size = (pos_input.shape[0], 3, pos_input.shape[2]) #(3200,3,2)
-        slice_begin_t_minus_two = (0, input_seq_length - 4, 0) #(0,2,0)
-
-        acc_t_minus_two = compute_acc_based_on_pos_slice(
-            lax.dynamic_slice(pos_input, slice_begin_t_minus_two, slice_size)
-        )
-        slice_begin_t_minus_one = (0, input_seq_length - 3, 0) #(0,3,0)
-        acc_t_minus_one = compute_acc_based_on_pos_slice(
-            lax.dynamic_slice(pos_input, slice_begin_t_minus_one, slice_size)
-        )
-
-        return {
-            "acc_t_minus_two": acc_t_minus_two,
-            "acc_t_minus_one": acc_t_minus_one,
-        }
+    def compute_vel_based_on_pos_slice(pos_input: jnp.ndarray):
+        """Compute velocity based on position slice."""
+        current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
+        vel_stats = normalization_stats["velocity"]
+        return (current_velocity - vel_stats["mean"]) / vel_stats["std"]
     
+    def extract_conditioning_data(pos_input: jnp.ndarray, 
+                                  num_conditioning_steps: int, 
+                                  conditioning_parameter: str):
+        """Extract conditioning data for ACDM."""
+        conditioning_data={}
+        if conditioning_parameter == "acc":
+            assert input_seq_length >= num_conditioning_steps + 2
+        elif conditioning_parameter == "vel":
+            assert input_seq_length >= num_conditioning_steps + 1
+        
+        for i in range(num_conditioning_steps):
+            
+            if conditioning_parameter == "acc":
+                slice_begin = (0, input_seq_length - num_conditioning_steps -2 + i, 0) #(0,2,0)
+                slice_size = (pos_input.shape[0], 3, pos_input.shape[2]) #(3200,3,2)
+                value = compute_acc_based_on_pos_slice(
+                    lax.dynamic_slice(pos_input, slice_begin, slice_size)
+                )
+                key = f"acc_t_minus_{num_conditioning_steps - i}"
+                conditioning_data[key] = value
+                
+            elif conditioning_parameter == "vel":
+                slice_begin = (0, input_seq_length - num_conditioning_steps -1 + i, 0)
+                slice_size = (pos_input.shape[0], 2, pos_input.shape[2]) 
+                value = compute_vel_based_on_pos_slice(
+                    lax.dynamic_slice(pos_input, slice_begin, slice_size)
+                )
+                key = f"vel_t_minus_{num_conditioning_steps - i}"
+                conditioning_data[key] = value
+
+        return conditioning_data 
     
-    prev_acc_dict = extract_conditioning_data(features['abs_pos'])
+    conditioning_data = extract_conditioning_data(features["abs_pos"], 
+                                                      acdm_config.num_conditioning_steps,
+                                                      acdm_config.conditioning_parameter)
+    #concatenates the values of the dictionary, need to convert to list first
+    conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
 
     #conditioning data only without the target
-    features["prev_concatenated_acc"] = jnp.concatenate(
-        (
-            prev_acc_dict["acc_t_minus_two"],
-            prev_acc_dict["acc_t_minus_one"],
-        ),
-        axis=1,
-    )
+    features["prev_concatenated_data"] = conditioning_data
     
-    num_conditioning_steps = 2 #TODO: make this a parameter
     key, subkey = random.split(key, 2)
     
     #dNoise has a shape (3200,2)
@@ -891,20 +908,20 @@ def _forward_eval_acdm(
             subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
         )
     #cNoise has a shape (3200,4)
-    cNoise = random.normal(subkey, jnp.zeros((features["vel_hist"].shape[0], 2*num_conditioning_steps)).shape)
+    cNoise = random.normal(subkey, jnp.zeros((features["vel_hist"].shape[0], 2*acdm_config.num_conditioning_steps)).shape)
 
     for k in reversed(range(0, acdm_config.diffusionSteps)):  # Refinement loop
         
         # compute conditioned part with normal forward diffusion
-        condNoisy = acdm_config.sqrtAlphasCumprod[k] * features["prev_concatenated_acc"] + \
+        condNoisy = acdm_config.sqrtAlphasCumprod[k] * features["prev_concatenated_data"] + \
             acdm_config.sqrtOneMinusAlphasCumprod[k] * cNoise
 
         features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
-        features["noised_acc"] = jnp.concatenate([condNoisy, dNoise], axis=1)
+        features["noised_data"] = jnp.concatenate([condNoisy, dNoise], axis=1)
         
         pred, state = model_apply(params, state, (features, particle_type))
     
-        modelMean = acdm_config.sqrtRecipAlphas[k] * (features["noised_acc"] - \
+        modelMean = acdm_config.sqrtRecipAlphas[k] * (features["noised_data"] - \
             acdm_config.betas[k] * pred['noise'] / acdm_config.sqrtOneMinusAlphasCumprod[k])
     
         dNoise = modelMean[:,cNoise.shape[1]:modelMean.shape[1]]

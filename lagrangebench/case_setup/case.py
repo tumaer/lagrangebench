@@ -393,22 +393,44 @@ def case_builder(
         acc_stats = normalization_stats["acceleration"]
         return (current_acceleration - acc_stats["mean"]) / acc_stats["std"]
 
-    def extract_conditioning_data(pos_input: jnp.ndarray):
-        slice_size = (pos_input.shape[0], 3, pos_input.shape[2]) #(3200,3,2)
-        slice_begin_t_minus_two = (0, input_seq_length - 4, 0) #(0,2,0)
+    def compute_vel_based_on_pos_slice(pos_input: jnp.ndarray):
+        """Compute velocity based on position slice."""
+        current_velocity = displacement_fn_set(pos_input[:, 1], pos_input[:, 0])
+        vel_stats = normalization_stats["velocity"]
+        return (current_velocity - vel_stats["mean"]) / vel_stats["std"]
 
-        acc_t_minus_two = compute_acc_based_on_pos_slice(
-            lax.dynamic_slice(pos_input, slice_begin_t_minus_two, slice_size)
-        )
-        slice_begin_t_minus_one = (0, input_seq_length - 3, 0) #(0,3,0)
-        acc_t_minus_one = compute_acc_based_on_pos_slice(
-            lax.dynamic_slice(pos_input, slice_begin_t_minus_one, slice_size)
-        )
+    def extract_conditioning_data(pos_input: jnp.ndarray, 
+                                  num_conditioning_steps: int, 
+                                  conditioning_parameter: str):
+        """Extract conditioning data for ACDM."""
+        conditioning_data={}
+        if conditioning_parameter == "acc":
+            assert input_seq_length >= num_conditioning_steps + 2
+        elif conditioning_parameter == "vel":
+            assert input_seq_length >= num_conditioning_steps + 1
+        
+        for i in range(num_conditioning_steps):
+            
+            if conditioning_parameter == "acc":
+                slice_begin = (0, input_seq_length - num_conditioning_steps -2 + i, 0) #(0,2,0)
+                slice_size = (pos_input.shape[0], 3, pos_input.shape[2]) #(3200,3,2)
+                value = compute_acc_based_on_pos_slice(
+                    lax.dynamic_slice(pos_input, slice_begin, slice_size)
+                )
+                key = f"acc_t_minus_{num_conditioning_steps - i}"
+                conditioning_data[key] = value
+                
+            elif conditioning_parameter == "vel":
+                slice_begin = (0, input_seq_length - num_conditioning_steps -1 + i, 0)
+                slice_size = (pos_input.shape[0], 2, pos_input.shape[2]) 
+                value = compute_vel_based_on_pos_slice(
+                    lax.dynamic_slice(pos_input, slice_begin, slice_size)
+                )
+                key = f"vel_t_minus_{num_conditioning_steps - i}"
+                conditioning_data[key] = value
 
-        return {
-            "acc_t_minus_two": acc_t_minus_two,
-            "acc_t_minus_one": acc_t_minus_one,
-        }
+        return conditioning_data 
+
     def _preprocess_acdm(
         sample: Tuple[jnp.ndarray, jnp.ndarray],
         neighbors: Optional[NeighborList] = None,
@@ -449,6 +471,9 @@ def case_builder(
             key = kwargs["key"]
             acdm_config = kwargs["acdm_config"]
             
+            num_conditioning_steps = acdm_config.num_conditioning_steps
+            conditioning_parameter = acdm_config.conditioning_parameter
+            
             key, subkey = random.split(key, 2)
 
             slice_begin = (
@@ -466,22 +491,34 @@ def case_builder(
 
             # Compute two previous acceleration and concatenate with the target
             # acceleration. All values are normalized.
-            prev_acc_dict = extract_conditioning_data(pos_input)
+            conditioning_data = extract_conditioning_data(pos_input, 
+                                                      num_conditioning_steps,
+                                                      conditioning_parameter)
 
-            features["concatednated_acc"] = jnp.concatenate(
-                (
-                    prev_acc_dict["acc_t_minus_two"],
-                    prev_acc_dict["acc_t_minus_one"],
-                    target_dict["acc"],
-                ),
-                axis=1,
-            )
+            conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
+            #dictionary containing the conditioning data and the target which is required for training
+            if conditioning_parameter == "acc":
+                features["concatenated_data"] = jnp.concatenate(
+                    (
+                        conditioning_data,
+                        target_dict["acc"],
+                    ),
+                    axis=1,
+                )
+            else:    
+                features["concatenated_data"] = jnp.concatenate(
+                    (
+                        conditioning_data,
+                        target_dict["vel"],
+                    ),
+                    axis=1,
+                )
 
             # Sample noise from a normal distribution
             noise = random.normal(
                 subkey,
                 jnp.zeros(
-                    (features["concatednated_acc"].shape[0], features["concatednated_acc"].shape[1])
+                    (features["concatenated_data"].shape[0], features["concatenated_data"].shape[1])
                 ).shape,
             )
             target_dict["noise"] = noise
@@ -489,7 +526,7 @@ def case_builder(
             
             features["k"] = jnp.tile(kwargs["k"], (features["vel_hist"].shape[0],))
             # Perform Forward Diffusion step to obtain the dNoisy
-            features["noised_acc"] = acdm_config.sqrtAlphasCumprod[kwargs["k"]] * features["concatednated_acc"] \
+            features["noised_data"] = acdm_config.sqrtAlphasCumprod[kwargs["k"]] * features["concatenated_data"] \
             + acdm_config.sqrtOneMinusAlphasCumprod[kwargs["k"]] * noise
 
             return (

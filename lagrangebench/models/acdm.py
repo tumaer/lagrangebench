@@ -12,6 +12,7 @@ from .utils import build_mlp
 class ACDM(BaseModel):
     def __init__(
         self,
+        num_conditioning_steps: int,
         problem_dimension: int,
         latent_size: int,
         number_of_layers: int,
@@ -29,7 +30,7 @@ class ACDM(BaseModel):
         """
         super().__init__()
 
-        self._output_size = 6 #remove hardcoding later 
+        self._output_size = problem_dimension*(num_conditioning_steps + 1) 
         self._latent_size = latent_size
         self._number_of_layers = number_of_layers
         self._mp_steps = num_mp_steps
@@ -47,13 +48,13 @@ class ACDM(BaseModel):
         node_features = [
             features[k]
             for k in [
-                "noised_acc",
+                "noised_data",
                 "vel_hist",
                 "embedded_k",
                 "vel_mag",
                 "bound",
                 "force",
-            ]  # 1 previous velocity
+            ]  
             if k in features
         ]
 
@@ -61,7 +62,7 @@ class ACDM(BaseModel):
 
         graph = jraph.GraphsTuple(
             nodes=jnp.concatenate(node_features, axis=-1),
-            edges=jnp.concatenate(edge_features, axis=-1),  # no edge features
+            edges=jnp.concatenate(edge_features, axis=-1), 
             receivers=features["receivers"],
             senders=features["senders"],
             n_node=jnp.array([n_total_points]),
@@ -151,5 +152,5 @@ class ACDM(BaseModel):
 
         noise = self._decoder(
             self._processor(self._encoder(graph))
-        )  # noise.shape = (3200,2)
+        )  
         return {"noise": noise}

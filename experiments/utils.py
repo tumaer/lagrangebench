@@ -97,6 +97,7 @@ def setup_model(args: Namespace) -> Tuple[Callable, Type]:
 
         def model_fn(x):
             return models.ACDM(
+                num_conditioning_steps=args.config.num_conditioning_steps,
                 problem_dimension=metadata["dim"],
                 latent_size=args.config.latent_dim,
                 number_of_layers=args.config.num_mlp_layers,

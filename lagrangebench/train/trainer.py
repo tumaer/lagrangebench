@@ -359,7 +359,7 @@ def Trainer(
                     
                 elif is_acdm:
                     key, subkey = jax.random.split(key, 2)
-                    k = random.randint(subkey, (), 0, acdm_config.diffusionSteps + 1)
+                    k = random.randint(subkey, (), 0, acdm_config.diffusionSteps)
                     (
                         _keys,
                         features_batch,

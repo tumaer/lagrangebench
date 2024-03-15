@@ -99,7 +99,9 @@ def train_or_infer(args: Namespace):
             probs=args.config.pushforward["probs"],
         )
         
-        acdm_config = ACDMConfig(diffusionSteps=args.config.diffusion_steps)
+        acdm_config = ACDMConfig(diffusionSteps=args.config.diffusion_steps,\
+            num_conditioning_steps=args.config.num_conditioning_steps,\
+            conditioning_parameter=args.config.conditioning_parameter) 
 
         trainer = Trainer(
             model,

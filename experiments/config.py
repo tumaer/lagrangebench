@@ -224,7 +224,18 @@ def cli_arguments() -> Dict:
                         type=int,
                         help="Number of diffusion steps for ACDM.")
     
-
+    parser.add_argument("--num_conditioning_steps",
+                        required=False,
+                        type=int,
+                        help="Number of conditioning steps for ACDM.")
+    
+    parser.add_argument("--conditioning_parameter",
+                        type=str,
+                        required=False,
+                        choices=["acc", "vel", "both"],
+                        help="Parameters to condition on for ACDM.")
+    
+    #Misc Arguments
     parser.add_argument(
         "--wandb",
         required=False,
