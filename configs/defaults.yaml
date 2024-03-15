@@ -123,3 +123,5 @@ sigma_min: 1.e-5
 
 is_acdm: False
 diffusion_steps: 10
+num_conditioning_steps: 2
+conditioning_parameter: acc
