@@ -218,6 +218,12 @@ def cli_arguments() -> Dict:
         help="Number of refinement steps for PDE Refiner.",
     )
     
+    parser.add_argument("--refinement_parameter",
+                        type=str,
+                        required=False,
+                        choices=["acc", "vel"],
+                        help="Parameter which is refined for PDE Refiner.")
+    
     #ACDM Arguments
     parser.add_argument("--diffusion_steps",
                         required=False,
@@ -232,8 +238,8 @@ def cli_arguments() -> Dict:
     parser.add_argument("--conditioning_parameter",
                         type=str,
                         required=False,
-                        choices=["acc", "vel", "both"],
-                        help="Parameters to condition on for ACDM.")
+                        choices=["acc", "vel"],
+                        help="Parameter to condition on for ACDM.")
     
     #Misc Arguments
     parser.add_argument(

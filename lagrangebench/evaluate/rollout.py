@@ -399,7 +399,7 @@ def infer(
     return eval_metrics
 
 
-@partial(jit, static_argnames=["model_apply", "case_integrate", "max_refinement_steps"])
+@partial(jit, static_argnames=["model_apply", "case_integrate", "max_refinement_steps", "refinement_parameter"])
 def _forward_eval_pde_refiner(
     params: hk.Params,
     state: hk.State,
@@ -411,6 +411,7 @@ def _forward_eval_pde_refiner(
     key: int,
     min_noise_std: float,
     max_refinement_steps: int,
+    refinement_parameter: str,
 ) -> jnp.ndarray:
     """Run one update of the 'current_state' using the trained model
 
@@ -429,7 +430,7 @@ def _forward_eval_pde_refiner(
     """
     features, particle_type = sample
 
-    features["u_t_noised"] = jnp.zeros((features["vel_hist"].shape[0], 2))  # 0's
+    features["noised_data"] = jnp.zeros((features["vel_hist"].shape[0], 2))  # 0's
     features["k"] = jnp.tile(0, (features["vel_hist"].shape[0],))
     # predict acceleration and integrate
     u_hat_t, state = model_apply(params, state, sample)
@@ -443,18 +444,21 @@ def _forward_eval_pde_refiner(
             subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
         )
 
-        features["u_t_noised"] = u_hat_t["noise"] + noise_std * noise
+        features["noised_data"] = u_hat_t["noise"] + noise_std * noise
 
         # Modify the k value before sending it to the model
         features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
 
         pred, state = model_apply(params, state, (features, particle_type))
         # pred is a dictionary with key 'noise'
-        u_hat_t["noise"] = features["u_t_noised"] - pred["noise"] * noise_std
+        u_hat_t["noise"] = features["noised_data"] - pred["noise"] * noise_std
 
-    refined_acc = {"acc": u_hat_t["noise"]}
+    if refinement_parameter == "acc":
+        refined_data = {"acc": u_hat_t["noise"]}
+    elif refinement_parameter == "vel":
+        refined_data = {"vel": u_hat_t["noise"]}
 
-    next_position = case_integrate(refined_acc, current_positions)
+    next_position = case_integrate(refined_data, current_positions)
 
     # update only the positions of non-boundary particles
     kinematic_mask = get_kinematic_mask(particle_type)
@@ -592,6 +596,7 @@ def eval_rollout_pde_refiner(
     key: int,
     num_refinement_steps: int,
     sigma_min: float,
+    refinement_parameter: str,
     rollout_dir: str,
     out_type: str = "none",
     n_extrap_steps: int = 0,
@@ -629,6 +634,7 @@ def eval_rollout_pde_refiner(
         key=key,
         min_noise_std=sigma_min,
         max_refinement_steps=num_refinement_steps,
+        refinement_parameter=refinement_parameter,
     )
     forward_eval_vmap = vmap(forward_eval_pde_refiner, in_axes=(None, None, 0, 0, 0))
     preprocess_eval_vmap = vmap(case.preprocess_eval_pde_refiner, in_axes=(0, 0))
@@ -796,11 +802,13 @@ def infer_pde_refiner(
     key, subkey = jax.random.split(key, 2)
     num_refinement_steps = kwargs["num_refinement_steps"]
     sigma_min = kwargs["sigma_min"]
+    refinement_parameter = kwargs["refinement_parameter"]
+    
     k = random.randint(subkey, (), 0, num_refinement_steps + 1)
     is_k_zero = jnp.where(k == 0, True, False)
 
     key, _, _, neighbors = case.allocate_pde_refiner(
-        key, sample, k, is_k_zero, sigma_min, num_refinement_steps
+        key, sample, k, is_k_zero, sigma_min, num_refinement_steps, refinement_parameter
     )
 
     eval_metrics = eval_rollout_pde_refiner(
@@ -816,6 +824,7 @@ def infer_pde_refiner(
         key=key,
         num_refinement_steps=num_refinement_steps,
         sigma_min=sigma_min,
+        refinement_parameter = refinement_parameter,
         rollout_dir=rollout_dir,
         out_type=out_type,
         n_extrap_steps=n_extrap_steps,
@@ -926,9 +935,13 @@ def _forward_eval_acdm(
     
         dNoise = modelMean[:,cNoise.shape[1]:modelMean.shape[1]]
     
-    refined_acc = {"acc": dNoise}
+    if acdm_config.conditioning_parameter == "acc":
+        refined_value = {"acc": dNoise}
 
-    next_position = case_integrate(refined_acc, current_positions)
+    elif acdm_config.conditioning_parameter == "vel":
+        refined_value = {"vel": dNoise}
+
+    next_position = case_integrate(refined_value, current_positions)
 
     # update only the positions of non-boundary particles
     kinematic_mask = get_kinematic_mask(particle_type)
@@ -993,6 +1006,7 @@ def eval_batched_rollout_acdm(
     neighbors_batch = broadcast_to_batch(neighbors, current_batch_size)
 
     step = 0
+    #This is the autoregressive rollout loop
     while step < n_rollout_steps + n_extrap_steps:
         sample_batch = (current_positions_batch, particle_type_batch)
 

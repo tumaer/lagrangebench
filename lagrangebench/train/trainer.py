@@ -124,6 +124,7 @@ def Trainer(
     is_pde_refiner: bool = defaults.is_pde_refiner,
     num_refinement_steps: int = defaults.num_refinement_steps,
     sigma_min: float = defaults.sigma_min,
+    refinement_parameter: str = defaults.refinement_parameter,
     is_acdm: bool = defaults.is_acdm,
     acdm_config: Optional[ACDMConfig] = None,
 ) -> Callable:
@@ -272,11 +273,12 @@ def Trainer(
             k = random.randint(subkey, (), 0, num_refinement_steps + 1)
             is_k_zero = jnp.where(k == 0, True, False)
             key, features, _, neighbors = case.allocate_pde_refiner(
-                key, raw_sample, k, is_k_zero, sigma_min, num_refinement_steps
+                key, raw_sample, k, is_k_zero, sigma_min, num_refinement_steps, \
+                refinement_parameter
             )
             preprocess_vmap = jax.vmap(
                 case.preprocess_pde_refiner,
-                in_axes=(0, 0, None, 0, None, None, None, None, None),
+                in_axes=(0, 0, None, 0, None, None, None, None, None, None),
             )
         
         elif is_acdm:
@@ -354,6 +356,7 @@ def Trainer(
                         is_k_zero,
                         sigma_min,
                         num_refinement_steps,
+                        refinement_parameter,
                         unroll_steps,
                     )
                     
@@ -454,6 +457,7 @@ def Trainer(
                             key=key,
                             num_refinement_steps=num_refinement_steps,
                             sigma_min=sigma_min,
+                            refinement_parameter=refinement_parameter,
                             rollout_dir=rollout_dir,
                             out_type=out_type,
                         )

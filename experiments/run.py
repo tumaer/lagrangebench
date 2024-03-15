@@ -99,10 +99,11 @@ def train_or_infer(args: Namespace):
             probs=args.config.pushforward["probs"],
         )
         
+       
         acdm_config = ACDMConfig(diffusionSteps=args.config.diffusion_steps,\
-            num_conditioning_steps=args.config.num_conditioning_steps,\
-            conditioning_parameter=args.config.conditioning_parameter) 
-
+                num_conditioning_steps=args.config.num_conditioning_steps,\
+                conditioning_parameter=args.config.conditioning_parameter) 
+        
         trainer = Trainer(
             model,
             case,
@@ -131,6 +132,7 @@ def train_or_infer(args: Namespace):
             is_pde_refiner=args.config.is_pde_refiner,
             num_refinement_steps=args.config.num_refinement_steps,
             sigma_min=args.config.sigma_min,
+            refinement_parameter=args.config.refinement_parameter,
             is_acdm=args.config.is_acdm,
             acdm_config=acdm_config,
         )
@@ -175,6 +177,7 @@ def train_or_infer(args: Namespace):
                 batch_size=args.config.batch_size_infer,
                 num_refinement_steps=args.config.num_refinement_steps,
                 sigma_min=args.config.sigma_min,
+                refinement_parameter=args.config.refinement_parameter,
             )
 
         elif args.config.is_acdm:

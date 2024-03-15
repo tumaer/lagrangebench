@@ -48,7 +48,7 @@ class PDE_Refiner(BaseModel):
         node_features = [
             features[k]
             for k in [
-                "u_t_noised",
+                "noised_data",
                 "vel_hist",
                 "embedded_k",
                 "vel_mag",

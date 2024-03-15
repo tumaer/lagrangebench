@@ -287,7 +287,10 @@ def case_builder(
             key = kwargs["key"]
             k = kwargs["k"]
             is_k_zero = kwargs["is_k_zero"]
-
+            
+            #can be 'acc' or 'vel'
+            refinement_parameter = kwargs["refinement_parameter"]
+            
             key, subkey = random.split(key, 2)
 
             min_noise_std = kwargs["sigma_min"]
@@ -308,8 +311,8 @@ def case_builder(
                 lax.dynamic_slice(pos_input, slice_begin, slice_size)
             )
             if is_k_zero:
-                features["u_t_noised"] = jnp.zeros((features["vel_hist"].shape[0], 2))
-                target_dict["noise"] = target_dict["acc"]
+                features["noised_data"] = jnp.zeros((features["vel_hist"].shape[0], 2))
+                target_dict["noise"] = target_dict[refinement_parameter]
 
             else:
                 noise_std = min_noise_std ** (k / max_refinement_steps)
@@ -317,7 +320,7 @@ def case_builder(
                 noise = random.normal(
                     subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
                 )
-                features["u_t_noised"] = target_dict["acc"] + noise_std * noise
+                features["noised_data"] = target_dict[refinement_parameter] + noise_std * noise
                 target_dict["noise"] = noise
 
             #
@@ -338,6 +341,7 @@ def case_builder(
         is_k_zero,
         sigma_min,
         num_refinement_steps,
+        refinement_parameter,
         noise_std=0.0,
         unroll_steps=0,
     ):
@@ -349,11 +353,12 @@ def case_builder(
             sigma_min=sigma_min,
             num_refinement_steps=num_refinement_steps,
             noise_std=noise_std,
+            refinement_parameter=refinement_parameter,
             unroll_steps=unroll_steps,
             is_allocate=True,
         )
 
-    @partial(jit, static_argnames=["is_k_zero", "num_refinement_steps"])
+    @partial(jit, static_argnames=["is_k_zero", "num_refinement_steps", "refinement_parameter"])
     def preprocess_pde_refiner_fn(
         key,
         sample,
@@ -363,6 +368,7 @@ def case_builder(
         is_k_zero,
         sigma_min,
         num_refinement_steps,
+        refinement_parameter,
         unroll_steps=0,
     ):
         return _preprocess_pde_refiner(
@@ -374,6 +380,7 @@ def case_builder(
             sigma_min=sigma_min,
             num_refinement_steps=num_refinement_steps,
             noise_std=noise_std,
+            refinement_parameter=refinement_parameter,
             unroll_steps=unroll_steps,
         )
 
