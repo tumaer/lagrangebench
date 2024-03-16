@@ -942,6 +942,9 @@ def _forward_eval_acdm(
 
     # dNoise has a shape (3200,2)
     dNoise = random.normal(subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape)
+    
+    key, subkey = random.split(key,2)
+    
     # cNoise has a shape (3200,4)
     cNoise = random.normal(
         subkey,
@@ -974,6 +977,7 @@ def _forward_eval_acdm(
         if k != 0:
             # sample randomly (only for non-final prediction),
             # use mean directly for final prediction
+            key, subkey = random.split(key,2)
             dNoise = dNoise + acdm_config.sqrtPosteriorVariance[k] * random.normal(
                 subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
             )
