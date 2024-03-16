@@ -12,7 +12,7 @@ import yaml
 
 import wandb
 from experiments.utils import setup_data, setup_model
-from lagrangebench import Trainer, infer, infer_acdm, infer_pde_refiner
+from lagrangebench import Trainer, infer, infer_acdm, infer_pde_refiner, infer_with_state_avg_at_every_step
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
 from lagrangebench.utils import ACDMConfig, PushforwardConfig
@@ -58,6 +58,12 @@ def train_or_infer(args: Namespace):
     policy = jmp.get_policy("params=float32,compute=float32,output=float32")
     hk.mixed_precision.set_policy(MODEL, policy)
 
+    acdm_config = ACDMConfig(
+            diffusionSteps=args.config.diffusion_steps,
+            num_conditioning_steps=args.config.num_conditioning_steps,
+            conditioning_parameter=args.config.conditioning_parameter,
+        )
+
     if args.config.mode == "train" or args.config.mode == "all":
         print("Start training...")
         # save config file
@@ -97,12 +103,6 @@ def train_or_infer(args: Namespace):
             steps=args.config.pushforward["steps"],
             unrolls=args.config.pushforward["unrolls"],
             probs=args.config.pushforward["probs"],
-        )
-
-        acdm_config = ACDMConfig(
-            diffusionSteps=args.config.diffusion_steps,
-            num_conditioning_steps=args.config.num_conditioning_steps,
-            conditioning_parameter=args.config.conditioning_parameter,
         )
 
         trainer = Trainer(
@@ -181,7 +181,7 @@ def train_or_infer(args: Namespace):
                 refinement_parameter=args.config.refinement_parameter,
             )
 
-        elif args.config.is_acdm:
+        elif args.config.is_acdm and not args.config.state_avg_at_every_step:
             metrics = infer_acdm(
                 model,
                 case,
@@ -200,7 +200,27 @@ def train_or_infer(args: Namespace):
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
             )
-
+        
+        elif args.config.is_acdm and args.config.state_avg_at_every_step:
+            metrics = infer_with_state_avg_at_every_step(
+                model,
+                case,
+                data_test if args.config.test else data_valid,
+                load_checkpoint=args.config.model_dir,
+                metrics=args.config.metrics_infer,
+                rollout_dir=args.config.rollout_dir,
+                eval_n_trajs=args.config.eval_n_trajs_infer,
+                n_rollout_steps=args.config.n_rollout_steps,
+                out_type=args.config.out_type_infer,
+                n_extrap_steps=args.config.n_extrap_steps,
+                seed=args.config.seed,
+                metrics_stride=args.config.metrics_stride_infer,
+                batch_size=args.config.batch_size_infer,
+                acdm_config=acdm_config,
+                noise_std=args.config.noise_std,
+                input_seq_length=args.config.input_seq_length,
+            )
+        
         else:
             metrics = infer(
                 model,

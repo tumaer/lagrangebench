@@ -41,7 +41,23 @@
                 "--input_seq_length=6",
                 "--num_refinement_steps=0",
             ],
-            "name": "Debug after loading a model from checkpoint",
+            "name": "Debug PDE_Ref after loading a model from checkpoint",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "args": [
+                "--model_dir=ckp/rpf_2d_acdm/acdm_rpf2d_20240316-000844",
+                "--mode=infer",
+                "--gpu=0",
+                "--no-wandb",
+                "--state_avg_at_every_step",
+                "--data_dir=/home/harish/Desktop/lagrangebench/datasets/2D_RPF_3200_20kevery100"
+            ],
+            "name": "Debug ACDM with state avg",
             "type": "debugpy",
             "request": "launch",
             "program": "main.py",

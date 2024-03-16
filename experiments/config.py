@@ -278,6 +278,14 @@ def cli_arguments() -> Dict:
         help="To define the maximum number of steps for training",
     )
 
+    parser.add_argument(
+        "--state_avg_at_every_step",
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="To store data on weights and biases",
+    )
+
+
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
 
