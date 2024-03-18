@@ -24,8 +24,4 @@ diffusion_steps: 20
 num_conditioning_steps: 2
 conditioning_parameter: acc
 
-#option to avergae the state at every step
 state_avg_at_every_step: False
-
-#option to use different samples for the rollout
-different_samples_rollout: True
