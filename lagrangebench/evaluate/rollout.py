@@ -933,10 +933,11 @@ def _forward_eval_acdm(
         acdm_config.conditioning_parameter,
     )
     # concatenates the values of the dictionary, need to convert to list first
-    conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
+    if acdm_config.num_conditioning_steps > 0:
+        conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
 
-    # conditioning data only without the target
-    features["prev_concatenated_data"] = conditioning_data
+        # conditioning data only without the target
+        features["prev_concatenated_data"] = conditioning_data
 
     key, subkey = random.split(key, 2)
 
@@ -955,13 +956,19 @@ def _forward_eval_acdm(
 
     for k in reversed(range(0, acdm_config.diffusionSteps)):  # Refinement loop
         # compute conditioned part with normal forward diffusion
-        condNoisy = (
-            acdm_config.sqrtAlphasCumprod[k] * features["prev_concatenated_data"]
-            + acdm_config.sqrtOneMinusAlphasCumprod[k] * cNoise
-        )
+        
+        if acdm_config.num_conditioning_steps > 0:
+            condNoisy = (
+                acdm_config.sqrtAlphasCumprod[k] * features["prev_concatenated_data"]
+                + acdm_config.sqrtOneMinusAlphasCumprod[k] * cNoise
+            )
+            features["noised_data"] = jnp.concatenate([condNoisy, dNoise], axis=1)
+
+        else:
+            features["noised_data"] = dNoise
 
         features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
-        features["noised_data"] = jnp.concatenate([condNoisy, dNoise], axis=1)
+        
 
         pred, state = model_apply(params, state, (features, particle_type))
 

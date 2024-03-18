@@ -511,28 +511,35 @@ def case_builder(
             conditioning_data = extract_conditioning_data(
                 pos_input, num_conditioning_steps, conditioning_parameter
             )
-
-            conditioning_data = jnp.concatenate(
-                list(conditioning_data.values()), axis=1
-            )
-            # dictionary containing the conditioning data and the target
-            # which is required for training
-            if conditioning_parameter == "acc":
-                features["concatenated_data"] = jnp.concatenate(
-                    (
-                        conditioning_data,
-                        target_dict["acc"],
-                    ),
-                    axis=1,
+            if num_conditioning_steps > 0:
+                conditioning_data = jnp.concatenate(
+                    list(conditioning_data.values()), axis=1
                 )
+                # dictionary containing the conditioning data and the target
+                # which is required for training
+                if conditioning_parameter == "acc":
+                    features["concatenated_data"] = jnp.concatenate(
+                        (
+                            conditioning_data,
+                            target_dict["acc"],
+                        ),
+                        axis=1,
+                    )
+                else:
+                    features["concatenated_data"] = jnp.concatenate(
+                        (
+                            conditioning_data,
+                            target_dict["vel"],
+                        ),
+                        axis=1,
+                    )
             else:
-                features["concatenated_data"] = jnp.concatenate(
-                    (
-                        conditioning_data,
-                        target_dict["vel"],
-                    ),
-                    axis=1,
-                )
+                if conditioning_parameter == "acc":
+                    features["concatenated_data"] = target_dict["acc"]
+                    
+                else:
+                    features["concatenated_data"] = target_dict["vel"],
+     
 
             # Sample noise from a normal distribution
             noise = random.normal(
