@@ -1,5 +1,4 @@
-"""Evaluation and inference functions for generating rollouts."""
-"""
+"""Evaluation and inference functions for generating rollouts.
 Here, for every initial condition, we compute 5 different random initial 
 purely noised state and then denoise them to find the acc/vel and then 
 average them before performing the time integration. 
@@ -23,7 +22,6 @@ from lagrangebench.data.utils import get_dataset_stats, numpy_collate
 from lagrangebench.defaults import defaults
 from lagrangebench.evaluate.metrics import MetricsComputer, MetricsDict
 from lagrangebench.evaluate.utils import write_vtk
-import os
 from lagrangebench.utils import (
     ACDMConfig,
     broadcast_from_batch,
@@ -131,14 +129,17 @@ def _forward_eval_acdm(
 
     # conditioning data only without the target
     features["prev_concatenated_data"] = conditioning_data
-    de_Noised = jnp.zeros((key_s.shape[0],features["vel_hist"].shape[0], 2))
-    
-    for i in range(key_s.shape[0]): #loop over different keys (seeds) and then find the average
+    de_Noised = jnp.zeros((key_s.shape[0], features["vel_hist"].shape[0], 2))
 
+    for i in range(
+        key_s.shape[0]
+    ):  # loop over different keys (seeds) and then find the average
         # dNoise has a shape (3200,2)
-        dNoise = random.normal(key_s[i], jnp.zeros((features["vel_hist"].shape[0], 2)).shape)
-        
-        key, subkey = random.split(key_s[i],2)
+        dNoise = random.normal(
+            key_s[i], jnp.zeros((features["vel_hist"].shape[0], 2)).shape
+        )
+
+        key, subkey = random.split(key_s[i], 2)
         # cNoise has a shape (3200,4)
         cNoise = random.normal(
             subkey,
@@ -171,18 +172,18 @@ def _forward_eval_acdm(
             if k != 0:
                 # sample randomly (only for non-final prediction),
                 # use mean directly for final prediction
-                key, subkey = random.split(key,2)
+                key, subkey = random.split(key, 2)
                 dNoise = dNoise + acdm_config.sqrtPosteriorVariance[k] * random.normal(
                     subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
                 )
-        
-        #replace the zeros in d_Noised with the dNoise which is supposed to be close 
-        #to the ground truth acceleration 
+
+        # replace the zeros in d_Noised with the dNoise which is supposed to be close
+        # to the ground truth acceleration
         de_Noised = de_Noised.at[i].set(dNoise)
-    
-    #calculate the average across the batch
+
+    # calculate the average across the batch
     dNoise = jnp.mean(de_Noised, axis=0)
-        
+
     if acdm_config.conditioning_parameter == "acc":
         avg_refined_value = {"acc": dNoise}
 
@@ -206,7 +207,6 @@ def _forward_eval_acdm(
     return current_positions, state
 
 
-
 def eval_batched_rollout_acdm(
     forward_eval_vmap: Callable,
     preprocess_eval_vmap: Callable,
@@ -218,9 +218,8 @@ def eval_batched_rollout_acdm(
     metrics_computer_vmap: Callable,
     n_rollout_steps: int,
     t_window: int,
-    key_s:int,
+    key_s: int,
     n_extrap_steps: int = 0,
-    
 ) -> Tuple[jnp.ndarray, MetricsDict, jnp.ndarray]:
     """Compute the rollout on a single trajectory.
 
@@ -293,7 +292,7 @@ def eval_batched_rollout_acdm(
             state,
             (features_batch, particle_type_batch),
             current_positions_batch,
-            target_positions_batch[:, :, step], 
+            target_positions_batch[:, :, step],
         )
         # the state is not passed out of this loop, so no not really relevant
         state = broadcast_from_batch(state_batch, 0)
@@ -383,7 +382,7 @@ def eval_rollout_acdm_state_avg(
         traj_batch_i = jax.tree_map(lambda x: jnp.array(x), traj_batch_i)
         # (pos_input_batch, particle_type_batch) = traj_batch_i
         # pos_input_batch.shape = (batch, num_particles, seq_length, dim)
-        
+
         (
             example_rollout_batch,
             metrics_batch,
@@ -399,7 +398,7 @@ def eval_rollout_acdm_state_avg(
             metrics_computer_vmap=metrics_computer_vmap,
             n_rollout_steps=n_rollout_steps,
             t_window=t_window,
-            key_s=key, #(batch, key)
+            key_s=key,  # (batch, key)
             n_extrap_steps=n_extrap_steps,
         )
 
@@ -537,7 +536,7 @@ def infer_with_state_avg_at_every_step(
     noise_std = kwargs["noise_std"]
     input_seq_length = kwargs["input_seq_length"]
 
-    k = 0 #just used for initialization (allocation)
+    k = 0  # just used for initialization (allocation)
     key, _, _, neighbors = case.allocate_acdm(base_key, sample, k, acdm_config)
     
     #number of samples = 5 (hardcoded)
@@ -560,5 +559,3 @@ def infer_with_state_avg_at_every_step(
         out_type=out_type,
     )
     return eval_metrics
-
-

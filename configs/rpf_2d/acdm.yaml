@@ -6,7 +6,7 @@ latent_dim: 128
 lr_start: 5.e-4
 
 wandb: True
-wandb_project: acdm_rpf2d
+wandb_project: acdm_rpf2d_with_noise
 # Change this with your own entity
 wandb_entity: lagrangebench
 

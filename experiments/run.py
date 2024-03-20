@@ -12,8 +12,13 @@ import yaml
 
 import wandb
 from experiments.utils import setup_data, setup_model
-from lagrangebench import Trainer, infer, infer_acdm, infer_pde_refiner, \
-    infer_with_state_avg_at_every_step, infer_with_multiple_samples
+from lagrangebench import (
+    Trainer,
+    infer,
+    infer_acdm,
+    infer_pde_refiner,
+    infer_with_state_avg_at_every_step,
+)
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
 from lagrangebench.utils import ACDMConfig, PushforwardConfig
@@ -60,10 +65,10 @@ def train_or_infer(args: Namespace):
     hk.mixed_precision.set_policy(MODEL, policy)
 
     acdm_config = ACDMConfig(
-            diffusionSteps=args.config.diffusion_steps,
-            num_conditioning_steps=args.config.num_conditioning_steps,
-            conditioning_parameter=args.config.conditioning_parameter,
-        )
+        diffusionSteps=args.config.diffusion_steps,
+        num_conditioning_steps=args.config.num_conditioning_steps,
+        conditioning_parameter=args.config.conditioning_parameter,
+    )
 
     if args.config.mode == "train" or args.config.mode == "all":
         print("Start training...")
@@ -201,7 +206,7 @@ def train_or_infer(args: Namespace):
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
             )
-        
+
         elif args.config.is_acdm and args.config.state_avg_at_every_step:
             metrics = infer_with_state_avg_at_every_step(
                 model,
