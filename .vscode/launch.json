@@ -100,7 +100,9 @@
                 "--step_max=10",
                 "--eval_n_trajs=2",
                 "--eval_n_trajs_infer=10",
-                "--diffusion_steps=20",
+                "--diffusion_steps=2",
+                "--num_conditioning_steps=0",
+                "--conditioning_parameter=vel"
             ],
             "name": "Debug ACDM",
             "type": "debugpy",

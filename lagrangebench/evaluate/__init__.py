@@ -9,7 +9,7 @@ from .rollout import (
     infer_acdm,
     infer_pde_refiner,
 )
-from .state_avg_rollout import (infer_with_state_avg_at_every_step)
+from .state_avg_rollout import infer_with_state_avg_at_every_step
 
 __all__ = [
     "MetricsComputer",
@@ -21,5 +21,5 @@ __all__ = [
     "eval_rollout",
     "eval_rollout_pde_refiner",
     "eval_rollout_acdm",
-    "infer_with_state_avg_at_every_step"
+    "infer_with_state_avg_at_every_step",
 ]

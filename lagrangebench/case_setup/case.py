@@ -536,10 +536,9 @@ def case_builder(
             else:
                 if conditioning_parameter == "acc":
                     features["concatenated_data"] = target_dict["acc"]
-                    
+
                 else:
-                    features["concatenated_data"] = target_dict["vel"],
-     
+                    features["concatenated_data"] = target_dict["vel"]
 
             # Sample noise from a normal distribution
             noise = random.normal(
