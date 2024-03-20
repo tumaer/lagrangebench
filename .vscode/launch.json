@@ -66,6 +66,22 @@
         },
         {
             "args": [
+                "--model_dir=ckp/rpf_2d_acdm/acdm_rpf2d_20240316-000844",
+                "--mode=infer",
+                "--gpu=0",
+                "--no-wandb",
+                "--different_samples_rollout",
+                "--data_dir=/home/harish/Desktop/lagrangebench/datasets/2D_RPF_3200_20kevery100"
+            ],
+            "name": "Debug ACDM with different samples rollout dir",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "main.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "args": [
                 "--config=configs/rpf_2d/pde_refiner.yaml",
                 "--data_dir=datasets/2D_RPF_3200_20kevery100",
                 "--ckp_dir=ckp/debug_dump",
@@ -100,7 +116,9 @@
                 "--step_max=10",
                 "--eval_n_trajs=2",
                 "--eval_n_trajs_infer=10",
-                "--diffusion_steps=20",
+                "--diffusion_steps=0",
+                "--conditioning_parameter=acc",
+                "--num_conditioning_steps=0",
             ],
             "name": "Debug ACDM",
             "type": "debugpy",

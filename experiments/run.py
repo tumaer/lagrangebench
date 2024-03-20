@@ -12,7 +12,8 @@ import yaml
 
 import wandb
 from experiments.utils import setup_data, setup_model
-from lagrangebench import Trainer, infer, infer_acdm, infer_pde_refiner, infer_with_state_avg_at_every_step
+from lagrangebench import Trainer, infer, infer_acdm, infer_pde_refiner, \
+    infer_with_state_avg_at_every_step, infer_with_multiple_samples
 from lagrangebench.case_setup import case_builder
 from lagrangebench.evaluate import averaged_metrics
 from lagrangebench.utils import ACDMConfig, PushforwardConfig
@@ -203,6 +204,26 @@ def train_or_infer(args: Namespace):
         
         elif args.config.is_acdm and args.config.state_avg_at_every_step:
             metrics = infer_with_state_avg_at_every_step(
+                model,
+                case,
+                data_test if args.config.test else data_valid,
+                load_checkpoint=args.config.model_dir,
+                metrics=args.config.metrics_infer,
+                rollout_dir=args.config.rollout_dir,
+                eval_n_trajs=args.config.eval_n_trajs_infer,
+                n_rollout_steps=args.config.n_rollout_steps,
+                out_type=args.config.out_type_infer,
+                n_extrap_steps=args.config.n_extrap_steps,
+                seed=args.config.seed,
+                metrics_stride=args.config.metrics_stride_infer,
+                batch_size=args.config.batch_size_infer,
+                acdm_config=acdm_config,
+                noise_std=args.config.noise_std,
+                input_seq_length=args.config.input_seq_length,
+            )
+        
+        elif args.config.is_acdm and args.config.different_samples_rollout:
+            metrics = infer_with_multiple_samples(
                 model,
                 case,
                 data_test if args.config.test else data_valid,

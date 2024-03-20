@@ -282,9 +282,15 @@ def cli_arguments() -> Dict:
         "--state_avg_at_every_step",
         required=False,
         action=argparse.BooleanOptionalAction,
-        help="To store data on weights and biases",
+        help="To average state after every step",
     )
 
+    parser.add_argument(
+        "--different_samples_rollout",
+        required=False,
+        action=argparse.BooleanOptionalAction,
+        help="Sample different trajectories for rollouts for plotting mean and std",
+    )
 
     # only keep passed arguments to avoid overwriting config
     return {k: v for k, v in vars(parser.parse_args()).items() if v is not None}
