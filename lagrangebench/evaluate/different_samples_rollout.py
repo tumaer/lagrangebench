@@ -1,5 +1,4 @@
-"""Evaluation and inference functions for generating rollouts."""
-"""
+"""Evaluation and inference functions for generating rollouts
 Here, for every initial condition, we use different seeds and then  
 """
 
@@ -21,7 +20,6 @@ from lagrangebench.data.utils import get_dataset_stats, numpy_collate
 from lagrangebench.defaults import defaults
 from lagrangebench.evaluate.metrics import MetricsComputer, MetricsDict
 from lagrangebench.evaluate.utils import write_vtk
-import os
 from lagrangebench.utils import (
     ACDMConfig,
     broadcast_from_batch,
@@ -30,6 +28,7 @@ from lagrangebench.utils import (
     load_haiku,
     set_seed,
 )
+
 
 # For ACDM:
 @partial(
@@ -44,7 +43,7 @@ from lagrangebench.utils import (
     ],
 )
 def _forward_eval_acdm(
-    key_s:int,
+    key_s: int,
     params: hk.Params,
     state: hk.State,
     sample: Tuple[jnp.ndarray, jnp.ndarray],
@@ -134,9 +133,9 @@ def _forward_eval_acdm(
 
     # dNoise has a shape (3200,2)
     dNoise = random.normal(subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape)
-    
-    key, subkey = random.split(key,2)
-    
+
+    key, subkey = random.split(key, 2)
+
     # cNoise has a shape (3200,4)
     cNoise = random.normal(
         subkey,
@@ -169,7 +168,7 @@ def _forward_eval_acdm(
         if k != 0:
             # sample randomly (only for non-final prediction),
             # use mean directly for final prediction
-            key, subkey = random.split(key,2)
+            key, subkey = random.split(key, 2)
             dNoise = dNoise + acdm_config.sqrtPosteriorVariance[k] * random.normal(
                 subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape
             )
@@ -208,7 +207,7 @@ def eval_batched_rollout_acdm(
     metrics_computer_vmap: Callable,
     n_rollout_steps: int,
     t_window: int,
-    key_s:int,
+    key_s: int,
     n_extrap_steps: int = 0,
 ) -> Tuple[jnp.ndarray, MetricsDict, jnp.ndarray]:
     """Compute the rollout on a single trajectory.
@@ -528,10 +527,10 @@ def infer_with_multiple_samples(
     noise_std = kwargs["noise_std"]
     input_seq_length = kwargs["input_seq_length"]
 
-    k = 0 #just used for initialization (allocation)
+    k = 0  # just used for initialization (allocation)
     key, _, _, neighbors = case.allocate_acdm(key, sample, k, acdm_config)
 
-    #number of samples = 5 (hardcoded)
+    # number of samples = 5 (hardcoded)
     keys = random.split(key, 5)[None, :, :]
     eval_metrics = eval_rollout_acdm_multiple_samples(
         case=case,

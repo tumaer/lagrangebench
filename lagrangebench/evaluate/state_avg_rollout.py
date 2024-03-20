@@ -372,7 +372,7 @@ def eval_rollout_acdm_state_avg(
     preprocess_eval_vmap = vmap(case.preprocess_eval_acdm, in_axes=(0, 0))
     metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
 
-    for i, traj_batch_i in enumerate(loader_eval): #len(loader_eval) = 384
+    for i, traj_batch_i in enumerate(loader_eval):  # len(loader_eval) = 384
         # if n_trajs is not a multiple of batch_size, we slice from the last batch
         n_traj_left = n_trajs - i * batch_size
         if n_traj_left < batch_size:
@@ -538,8 +538,8 @@ def infer_with_state_avg_at_every_step(
 
     k = 0  # just used for initialization (allocation)
     key, _, _, neighbors = case.allocate_acdm(base_key, sample, k, acdm_config)
-    
-    #number of samples = 5 (hardcoded)
+
+    # number of samples = 5 (hardcoded)
     keys = random.split(key, 5)[None, :, :]
     eval_metrics = eval_rollout_acdm_state_avg(
         case=case,
@@ -550,7 +550,7 @@ def infer_with_state_avg_at_every_step(
         neighbors=neighbors,
         loader_eval=loader_test,
         n_rollout_steps=n_rollout_steps,
-        n_trajs=eval_n_trajs, #384
+        n_trajs=eval_n_trajs,  # 384
         key=keys,
         acdm_config=acdm_config,
         noise_std=noise_std,

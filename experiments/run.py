@@ -17,6 +17,7 @@ from lagrangebench import (
     infer,
     infer_acdm,
     infer_pde_refiner,
+    infer_with_multiple_samples,
     infer_with_state_avg_at_every_step,
 )
 from lagrangebench.case_setup import case_builder
@@ -226,7 +227,7 @@ def train_or_infer(args: Namespace):
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
             )
-        
+
         elif args.config.is_acdm and args.config.different_samples_rollout:
             metrics = infer_with_multiple_samples(
                 model,
@@ -246,7 +247,7 @@ def train_or_infer(args: Namespace):
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
             )
-        
+
         else:
             metrics = infer(
                 model,

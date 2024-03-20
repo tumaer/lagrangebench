@@ -1,5 +1,6 @@
 """Evaluation and rollout generation tools."""
 
+from .different_samples_rollout import infer_with_multiple_samples
 from .metrics import MetricsComputer, MetricsDict, averaged_metrics
 from .rollout import (
     eval_rollout,
@@ -9,8 +10,7 @@ from .rollout import (
     infer_acdm,
     infer_pde_refiner,
 )
-from .state_avg_rollout import (infer_with_state_avg_at_every_step)
-from .different_samples_rollout import (infer_with_multiple_samples)
+from .state_avg_rollout import infer_with_state_avg_at_every_step
 
 __all__ = [
     "MetricsComputer",
@@ -23,5 +23,5 @@ __all__ = [
     "eval_rollout_pde_refiner",
     "eval_rollout_acdm",
     "infer_with_state_avg_at_every_step",
-    "infer_with_multiple_samples"
+    "infer_with_multiple_samples",
 ]
