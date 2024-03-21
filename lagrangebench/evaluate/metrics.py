@@ -90,7 +90,7 @@ class MetricsComputer:
                     metrics[metric_name] = jax.vmap(metric_fn)(
                         pred_rollout, target_rollout
                     )
-                    # shorter horizon losses
+                    # shorter horizon losses (here is where mse1,mse5..etc created)
                     for i in self._loss_ranges:
                         if i < metrics[metric_name].shape[0]:
                             metrics[f"{metric_name}{i}"] = metrics[metric_name][:i]
@@ -250,3 +250,9 @@ def averaged_metrics(eval_metrics: MetricsDict) -> Dict[str, float]:
         small_metrics[f"val/std{k}"] = float(np.std(v))
 
     return small_metrics
+
+    # eval_metrics has 10 rollouts, 2 evaluation trajectories and each 5 keys.
+    # trajectory_averages.keys()
+    # dict_keys(['e_kin', 'loss', 'mse1', 'mse10', 'mse5', 'sinkhorn', 'mse'])
+    # 'loss' is the mse_20,
+    # each key has an entry of 10.

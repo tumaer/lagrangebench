@@ -1,6 +1,7 @@
 import copy
 import os
 import os.path as osp
+import pickle
 from argparse import Namespace
 from datetime import datetime
 
@@ -236,6 +237,14 @@ def train_or_infer(args: Namespace):
                 input_seq_length=args.config.input_seq_length,
             )
 
+            # write metrics to a pickle file
+            path = args.config.model_dir
+            name_of_model = path.split("/")[2] + "_metrics_state_avg.pkl"
+            with open(
+                os.path.join("./thesis_results/state_avg", name_of_model), "wb"
+            ) as f:
+                pickle.dump(metrics, f)
+
         elif (
             args.config.is_acdm
             and args.config.different_samples_rollout
@@ -259,6 +268,14 @@ def train_or_infer(args: Namespace):
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
             )
+
+            # write metrics to a pickle file
+            path = args.config.model_dir
+            name_of_model = path.split("/")[2] + "_metrics_ms.pkl"
+            with open(
+                os.path.join("./thesis_results/multiple_samples", name_of_model), "wb"
+            ) as f:
+                pickle.dump(metrics, f)
 
         else:
             metrics = infer(
