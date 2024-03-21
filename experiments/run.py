@@ -188,7 +188,8 @@ def train_or_infer(args: Namespace):
                 refinement_parameter=args.config.refinement_parameter,
             )
 
-        elif args.config.is_acdm and not args.config.state_avg_at_every_step:
+        elif args.config.is_acdm and not args.config.state_avg_at_every_step \
+            and not args.config.different_samples_rollout:
             metrics = infer_acdm(
                 model,
                 case,
@@ -208,7 +209,8 @@ def train_or_infer(args: Namespace):
                 input_seq_length=args.config.input_seq_length,
             )
 
-        elif args.config.is_acdm and args.config.state_avg_at_every_step:
+        elif args.config.is_acdm and args.config.state_avg_at_every_step \
+            and not args.config.different_samples_rollout:
             metrics = infer_with_state_avg_at_every_step(
                 model,
                 case,
@@ -228,7 +230,7 @@ def train_or_infer(args: Namespace):
                 input_seq_length=args.config.input_seq_length,
             )
 
-        elif args.config.is_acdm and args.config.different_samples_rollout:
+        elif args.config.is_acdm and args.config.different_samples_rollout and not args.config.state_avg_at_every_step:
             metrics = infer_with_multiple_samples(
                 model,
                 case,

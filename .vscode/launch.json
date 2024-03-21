@@ -70,7 +70,9 @@
                 "--mode=infer",
                 "--gpu=0",
                 "--no-wandb",
-                "--different_samples_rollout",
+                "--no-different_samples_rollout",
+                "--state_avg_at_every_step",
+                "--eval_n_trajs_infer=4",
                 "--data_dir=/home/harish/Desktop/lagrangebench/datasets/2D_RPF_3200_20kevery100"
             ],
             "name": "Debug ACDM with different samples rollout dir",

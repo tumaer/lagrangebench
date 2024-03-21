@@ -129,10 +129,9 @@ def _forward_eval_acdm(
     # conditioning data only without the target
     features["prev_concatenated_data"] = conditioning_data
 
-    key, subkey = random.split(key, 2)
-
+    key, subkey = random.split(key_s, 2)
     # dNoise has a shape (3200,2)
-    dNoise = random.normal(subkey, jnp.zeros((features["vel_hist"].shape[0], 2)).shape)
+    dNoise = random.normal(key, jnp.zeros((features["vel_hist"].shape[0], 2)).shape)
 
     key, subkey = random.split(key, 2)
 
@@ -245,60 +244,63 @@ def eval_batched_rollout_acdm(
     neighbors_batch = broadcast_to_batch(neighbors, current_batch_size)
 
     step = 0
+    
     # This is the autoregressive rollout loop
-    while step < n_rollout_steps + n_extrap_steps:
-        sample_batch = (current_positions_batch, particle_type_batch)
+    for i in range(key_s.shape[0]): #every sample is exposed to 5 different keys
+        
+        while step < n_rollout_steps + n_extrap_steps:
+            sample_batch = (current_positions_batch, particle_type_batch)
 
-        # 1. preprocess features
-        features_batch, neighbors_batch = preprocess_eval_vmap(
-            sample_batch, neighbors_batch
-        )
-
-        # 2. check whether list overflowed and fix it if so
-        if neighbors_batch.did_buffer_overflow.sum() > 0:
-            # check if the neighbor list is too small for any of the samples
-            # if so, reallocate the neighbor list
-
-            print(f"(eval) Reallocate neighbors list at step {step}")
-            ind = jnp.argmax(neighbors_batch.did_buffer_overflow)
-            sample = broadcast_from_batch(sample_batch, index=ind)
-
-            _, nbrs_temp = case.allocate_eval(sample)
-            print(
-                f"(eval) From {neighbors_batch.idx[ind].shape} to {nbrs_temp.idx.shape}"
+            # 1. preprocess features
+            features_batch, neighbors_batch = preprocess_eval_vmap(
+                sample_batch, neighbors_batch
             )
-            neighbors_batch = broadcast_to_batch(nbrs_temp, current_batch_size)
 
-            # To run the loop N times even if sometimes
-            # did_buffer_overflow > 0 we directly return to the beginning
-            continue
+            # 2. check whether list overflowed and fix it if so
+            if neighbors_batch.did_buffer_overflow.sum() > 0:
+                # check if the neighbor list is too small for any of the samples
+                # if so, reallocate the neighbor list
 
-        # 3. run forward model
+                print(f"(eval) Reallocate neighbors list at step {step}")
+                ind = jnp.argmax(neighbors_batch.did_buffer_overflow)
+                sample = broadcast_from_batch(sample_batch, index=ind)
 
-        current_positions_batch, state_batch = forward_eval_vmap(
-            key_s,
-            params,
-            state,
-            (features_batch, particle_type_batch),
-            current_positions_batch,
-            target_positions_batch[:, :, step],
+                _, nbrs_temp = case.allocate_eval(sample)
+                print(
+                    f"(eval) From {neighbors_batch.idx[ind].shape} to {nbrs_temp.idx.shape}"
+                )
+                neighbors_batch = broadcast_to_batch(nbrs_temp, current_batch_size)
+
+                # To run the loop N times even if sometimes
+                # did_buffer_overflow > 0 we directly return to the beginning
+                continue
+
+            # 3. run forward model
+
+            current_positions_batch, state_batch = forward_eval_vmap(
+                key_s[i],
+                params,
+                state,
+                (features_batch, particle_type_batch),
+                current_positions_batch,
+                target_positions_batch[:, :, step],
+            )
+            # the state is not passed out of this loop, so no not really relevant
+            state = broadcast_from_batch(state_batch, 0)
+
+            # 4. write predicted next position to output array
+            predictions_batch = predictions_batch.at[:, step].set(
+                current_positions_batch[:, :, -1]  # most recently predicted positions
+            )
+            step += 1
+        
+
+        # (batch, n_nodes, time, dim) -> (batch, time, n_nodes, dim)
+        target_positions_batch = target_positions_batch.transpose(0, 2, 1, 3)
+        # slice out extrapolation steps
+        metrics_batch = metrics_computer_vmap(
+            predictions_batch[:, :n_rollout_steps, :, :], target_positions_batch
         )
-        # the state is not passed out of this loop, so no not really relevant
-        state = broadcast_from_batch(state_batch, 0)
-
-        # 4. write predicted next position to output array
-        predictions_batch = predictions_batch.at[:, step].set(
-            current_positions_batch[:, :, -1]  # most recently predicted positions
-        )
-
-        step += 1
-
-    # (batch, n_nodes, time, dim) -> (batch, time, n_nodes, dim)
-    target_positions_batch = target_positions_batch.transpose(0, 2, 1, 3)
-    # slice out extrapolation steps
-    metrics_batch = metrics_computer_vmap(
-        predictions_batch[:, :n_rollout_steps, :, :], target_positions_batch
-    )
 
     return (predictions_batch, metrics_batch, broadcast_from_batch(neighbors_batch, 0))
 
@@ -357,7 +359,7 @@ def eval_rollout_acdm_multiple_samples(
         input_seq_length=input_seq_length,
         metrics_computer=metrics_computer,
     )
-    forward_eval_vmap = vmap(forward_eval_acdm, in_axes=(0, None, None, 0, 0, 0))
+    forward_eval_vmap = vmap(forward_eval_acdm, in_axes=(None, None, None, 0, 0, 0))
     preprocess_eval_vmap = vmap(case.preprocess_eval_acdm, in_axes=(0, 0))
     metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
 
