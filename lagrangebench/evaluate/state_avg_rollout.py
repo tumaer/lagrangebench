@@ -44,7 +44,7 @@ from lagrangebench.utils import (
         "metrics_computer",
     ],
 )
-def _forward_eval_acdm(
+def _forward_eval_acdm_with_state_avg(
     key_s: int,
     params: hk.Params,
     state: hk.State,
@@ -207,7 +207,7 @@ def _forward_eval_acdm(
     return current_positions, state
 
 
-def eval_batched_rollout_acdm(
+def eval_batched_rollout_acdm_with_state_avg(
     forward_eval_vmap: Callable,
     preprocess_eval_vmap: Callable,
     case,
@@ -359,7 +359,7 @@ def eval_rollout_acdm_state_avg(
         os.makedirs(rollout_dir, exist_ok=True)
 
     forward_eval_acdm = partial(
-        _forward_eval_acdm,
+        _forward_eval_acdm_with_state_avg,
         model_apply=model_apply,
         case_integrate=case.integrate,
         displacement_fn_set=case.displacement,
@@ -387,7 +387,7 @@ def eval_rollout_acdm_state_avg(
             example_rollout_batch,
             metrics_batch,
             neighbors,
-        ) = eval_batched_rollout_acdm(
+        ) = eval_batched_rollout_acdm_with_state_avg(
             forward_eval_vmap=forward_eval_vmap,
             preprocess_eval_vmap=preprocess_eval_vmap,
             case=case,

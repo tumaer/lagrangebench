@@ -42,8 +42,8 @@ from lagrangebench.utils import (
         "metrics_computer",
     ],
 )
-def _forward_eval_acdm(
-    key_s: int,
+def _forward_eval_acdm_multiple_samples(
+    key: int,
     params: hk.Params,
     state: hk.State,
     sample: Tuple[jnp.ndarray, jnp.ndarray],
@@ -52,7 +52,6 @@ def _forward_eval_acdm(
     model_apply: Callable,
     case_integrate: Callable,
     displacement_fn_set: Callable,
-    key: int,
     acdm_config: ACDMConfig,
     noise_std: float,
     input_seq_length: int,
@@ -129,12 +128,11 @@ def _forward_eval_acdm(
     # conditioning data only without the target
     features["prev_concatenated_data"] = conditioning_data
 
-    key, subkey = random.split(key_s, 2)
+    key, subkey = random.split(key, 2)
     # dNoise has a shape (3200,2)
     dNoise = random.normal(key, jnp.zeros((features["vel_hist"].shape[0], 2)).shape)
 
     key, subkey = random.split(key, 2)
-
     # cNoise has a shape (3200,4)
     cNoise = random.normal(
         subkey,
@@ -195,7 +193,7 @@ def _forward_eval_acdm(
     return current_positions, state
 
 
-def eval_batched_rollout_acdm(
+def eval_batched_rollout_acdm_multiple_samples(
     forward_eval_vmap: Callable,
     preprocess_eval_vmap: Callable,
     case,
@@ -206,7 +204,7 @@ def eval_batched_rollout_acdm(
     metrics_computer_vmap: Callable,
     n_rollout_steps: int,
     t_window: int,
-    key_s: int,
+    key: int,
     n_extrap_steps: int = 0,
 ) -> Tuple[jnp.ndarray, MetricsDict, jnp.ndarray]:
     """Compute the rollout on a single trajectory.
@@ -244,63 +242,60 @@ def eval_batched_rollout_acdm(
     neighbors_batch = broadcast_to_batch(neighbors, current_batch_size)
 
     step = 0
-    
+
     # This is the autoregressive rollout loop
-    for i in range(key_s.shape[0]): #every sample is exposed to 5 different keys
-        
-        while step < n_rollout_steps + n_extrap_steps:
-            sample_batch = (current_positions_batch, particle_type_batch)
+    while step < n_rollout_steps + n_extrap_steps:
+        sample_batch = (current_positions_batch, particle_type_batch)
 
-            # 1. preprocess features
-            features_batch, neighbors_batch = preprocess_eval_vmap(
-                sample_batch, neighbors_batch
-            )
-
-            # 2. check whether list overflowed and fix it if so
-            if neighbors_batch.did_buffer_overflow.sum() > 0:
-                # check if the neighbor list is too small for any of the samples
-                # if so, reallocate the neighbor list
-
-                print(f"(eval) Reallocate neighbors list at step {step}")
-                ind = jnp.argmax(neighbors_batch.did_buffer_overflow)
-                sample = broadcast_from_batch(sample_batch, index=ind)
-
-                _, nbrs_temp = case.allocate_eval(sample)
-                print(
-                    f"(eval) From {neighbors_batch.idx[ind].shape} to {nbrs_temp.idx.shape}"
-                )
-                neighbors_batch = broadcast_to_batch(nbrs_temp, current_batch_size)
-
-                # To run the loop N times even if sometimes
-                # did_buffer_overflow > 0 we directly return to the beginning
-                continue
-
-            # 3. run forward model
-
-            current_positions_batch, state_batch = forward_eval_vmap(
-                key_s[i],
-                params,
-                state,
-                (features_batch, particle_type_batch),
-                current_positions_batch,
-                target_positions_batch[:, :, step],
-            )
-            # the state is not passed out of this loop, so no not really relevant
-            state = broadcast_from_batch(state_batch, 0)
-
-            # 4. write predicted next position to output array
-            predictions_batch = predictions_batch.at[:, step].set(
-                current_positions_batch[:, :, -1]  # most recently predicted positions
-            )
-            step += 1
-        
-
-        # (batch, n_nodes, time, dim) -> (batch, time, n_nodes, dim)
-        target_positions_batch = target_positions_batch.transpose(0, 2, 1, 3)
-        # slice out extrapolation steps
-        metrics_batch = metrics_computer_vmap(
-            predictions_batch[:, :n_rollout_steps, :, :], target_positions_batch
+        # 1. preprocess features
+        features_batch, neighbors_batch = preprocess_eval_vmap(
+            sample_batch, neighbors_batch
         )
+
+        # 2. check whether list overflowed and fix it if so
+        if neighbors_batch.did_buffer_overflow.sum() > 0:
+            # check if the neighbor list is too small for any of the samples
+            # if so, reallocate the neighbor list
+
+            print(f"(eval) Reallocate neighbors list at step {step}")
+            ind = jnp.argmax(neighbors_batch.did_buffer_overflow)
+            sample = broadcast_from_batch(sample_batch, index=ind)
+
+            _, nbrs_temp = case.allocate_eval(sample)
+            print(
+                f"(eval) From {neighbors_batch.idx[ind].shape} to {nbrs_temp.idx.shape}"
+            )
+            neighbors_batch = broadcast_to_batch(nbrs_temp, current_batch_size)
+
+            # To run the loop N times even if sometimes
+            # did_buffer_overflow > 0 we directly return to the beginning
+            continue
+
+        # 3. run forward model
+
+        current_positions_batch, state_batch = forward_eval_vmap(
+            key,
+            params,
+            state,
+            (features_batch, particle_type_batch),
+            current_positions_batch,
+            target_positions_batch[:, :, step],
+        )
+        # the state is not passed out of this loop, so no not really relevant
+        state = broadcast_from_batch(state_batch, 0)
+
+        # 4. write predicted next position to output array
+        predictions_batch = predictions_batch.at[:, step].set(
+            current_positions_batch[:, :, -1]  # most recently predicted positions
+        )
+        step += 1
+
+    # (batch, n_nodes, time, dim) -> (batch, time, n_nodes, dim)
+    target_positions_batch = target_positions_batch.transpose(0, 2, 1, 3)
+    # slice out extrapolation steps
+    metrics_batch = metrics_computer_vmap(
+        predictions_batch[:, :n_rollout_steps, :, :], target_positions_batch
+    )
 
     return (predictions_batch, metrics_batch, broadcast_from_batch(neighbors_batch, 0))
 
@@ -315,7 +310,7 @@ def eval_rollout_acdm_multiple_samples(
     metrics_computer: MetricsComputer,
     n_rollout_steps: int,
     n_trajs: int,
-    key: int,
+    key_s: int,
     acdm_config: ACDMConfig,
     noise_std: float,
     input_seq_length: int,
@@ -350,7 +345,7 @@ def eval_rollout_acdm_multiple_samples(
         os.makedirs(rollout_dir, exist_ok=True)
 
     forward_eval_acdm = partial(
-        _forward_eval_acdm,
+        _forward_eval_acdm_multiple_samples,
         model_apply=model_apply,
         case_integrate=case.integrate,
         displacement_fn_set=case.displacement,
@@ -363,79 +358,88 @@ def eval_rollout_acdm_multiple_samples(
     preprocess_eval_vmap = vmap(case.preprocess_eval_acdm, in_axes=(0, 0))
     metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
 
-    for i, traj_batch_i in enumerate(loader_eval):
+    for i, traj_batch_i_original in enumerate(loader_eval):
         # if n_trajs is not a multiple of batch_size, we slice from the last batch
         n_traj_left = n_trajs - i * batch_size
         if n_traj_left < batch_size:
-            traj_batch_i = jax.tree_map(lambda x: x[:n_traj_left], traj_batch_i)
+            traj_batch_i_original = jax.tree_map(
+                lambda x: x[:n_traj_left], traj_batch_i_original
+            )
 
-        # numpy to jax
-        traj_batch_i = jax.tree_map(lambda x: jnp.array(x), traj_batch_i)
-        # (pos_input_batch, particle_type_batch) = traj_batch_i
-        # pos_input_batch.shape = (batch, num_particles, seq_length, dim)
+        for k in range(
+            key_s.shape[1]
+        ):  # for 5 keys and same trajectory (same initial cond)
+            # numpy to jax
+            traj_batch_i = jax.tree_map(lambda x: jnp.array(x), traj_batch_i_original)
+            # (pos_input_batch, particle_type_batch) = traj_batch_i
+            # pos_input_batch.shape = (batch, num_particles, seq_length, dim)
 
-        (
-            example_rollout_batch,
-            metrics_batch,
-            neighbors,
-        ) = eval_batched_rollout_acdm(
-            forward_eval_vmap=forward_eval_vmap,
-            preprocess_eval_vmap=preprocess_eval_vmap,
-            case=case,
-            params=params,
-            state=state,
-            traj_batch_i=traj_batch_i,  # (batch, nodes, t, dim)
-            neighbors=neighbors,
-            metrics_computer_vmap=metrics_computer_vmap,
-            n_rollout_steps=n_rollout_steps,
-            t_window=t_window,
-            key_s=key,
-            n_extrap_steps=n_extrap_steps,
-        )
+            (
+                example_rollout_batch,
+                metrics_batch,
+                neighbors,
+            ) = eval_batched_rollout_acdm_multiple_samples(
+                forward_eval_vmap=forward_eval_vmap,
+                preprocess_eval_vmap=preprocess_eval_vmap,
+                case=case,
+                params=params,
+                state=state,
+                traj_batch_i=traj_batch_i,  # (batch, nodes, t, dim)
+                neighbors=neighbors,
+                metrics_computer_vmap=metrics_computer_vmap,
+                n_rollout_steps=n_rollout_steps,
+                t_window=t_window,
+                key=key_s[0][k],
+                n_extrap_steps=n_extrap_steps,
+            )
 
-        current_batch_size = traj_batch_i[0].shape[0]
-        for j in range(current_batch_size):
-            # write metrics to output dictionary
-            ind = i * batch_size + j
-            eval_metrics[f"rollout_{ind}"] = broadcast_from_batch(metrics_batch, j)
+            current_batch_size = traj_batch_i[0].shape[0]
+            for j in range(current_batch_size):
+                # write metrics to output dictionary
+                ind = i * batch_size + j
+                eval_metrics[f"rollout_{ind}_key_{k}"] = broadcast_from_batch(
+                    metrics_batch, j
+                )
 
-        if rollout_dir is not None:
-            # (batch, nodes, t, dim) -> (batch, t, nodes, dim)
-            pos_input_batch = traj_batch_i[0].transpose(0, 2, 1, 3)
+            if rollout_dir is not None:
+                # (batch, nodes, t, dim) -> (batch, t, nodes, dim)
+                pos_input_batch = traj_batch_i[0].transpose(0, 2, 1, 3)
 
-            for j in range(current_batch_size):  # write every trajectory to file
-                pos_input = pos_input_batch[j]
-                example_rollout = example_rollout_batch[j]
+                for j in range(current_batch_size):  # write every trajectory to file
+                    pos_input = pos_input_batch[j]
+                    example_rollout = example_rollout_batch[j]
 
-                initial_positions = pos_input[:t_window]
-                example_full = jnp.concatenate([initial_positions, example_rollout])
-                example_rollout = {
-                    "predicted_rollout": example_full,  # (t + extrap, nodes, dim)
-                    "ground_truth_rollout": pos_input,  # (t, nodes, dim),
-                    "particle_type": traj_batch_i[1][j],  # (nodes,)
-                }
+                    initial_positions = pos_input[:t_window]
+                    example_full = jnp.concatenate([initial_positions, example_rollout])
+                    example_rollout = {
+                        "predicted_rollout": example_full,  # (t + extrap, nodes, dim)
+                        "ground_truth_rollout": pos_input,  # (t, nodes, dim),
+                        "particle_type": traj_batch_i[1][j],  # (nodes,)
+                    }
 
-                file_prefix = os.path.join(rollout_dir, f"rollout_{i*batch_size+j}")
-                if out_type == "vtk":  # write vtk files for each time step
-                    for k in range(example_full.shape[0]):
-                        # predictions
-                        state_vtk = {
-                            "r": example_rollout["predicted_rollout"][k],
-                            "tag": example_rollout["particle_type"],
-                        }
-                        write_vtk(state_vtk, f"{file_prefix}_{k}.vtk")
-                    for k in range(pos_input.shape[0]):
-                        # ground truth reference
-                        ref_state_vtk = {
-                            "r": example_rollout["ground_truth_rollout"][k],
-                            "tag": example_rollout["particle_type"],
-                        }
-                        write_vtk(ref_state_vtk, f"{file_prefix}_ref_{k}.vtk")
-                if out_type == "pkl":
-                    filename = f"{file_prefix}.pkl"
+                    file_prefix = os.path.join(
+                        rollout_dir, f"rollout_{i*batch_size+j}_key_{k}"
+                    )
+                    if out_type == "vtk":  # write vtk files for each time step
+                        for k in range(example_full.shape[0]):
+                            # predictions
+                            state_vtk = {
+                                "r": example_rollout["predicted_rollout"][k],
+                                "tag": example_rollout["particle_type"],
+                            }
+                            write_vtk(state_vtk, f"{file_prefix}_{k}.vtk")
+                        for k in range(pos_input.shape[0]):
+                            # ground truth reference
+                            ref_state_vtk = {
+                                "r": example_rollout["ground_truth_rollout"][k],
+                                "tag": example_rollout["particle_type"],
+                            }
+                            write_vtk(ref_state_vtk, f"{file_prefix}_ref_{k}.vtk")
+                    if out_type == "pkl":
+                        filename = f"{file_prefix}.pkl"
 
-                    with open(filename, "wb") as f:
-                        pickle.dump(example_rollout, f)
+                        with open(filename, "wb") as f:
+                            pickle.dump(example_rollout, f)
 
         if (i * batch_size + j + 1) >= n_trajs:
             break
@@ -544,7 +548,7 @@ def infer_with_multiple_samples(
         loader_eval=loader_test,
         n_rollout_steps=n_rollout_steps,
         n_trajs=eval_n_trajs,
-        key=keys,
+        key_s=keys,
         acdm_config=acdm_config,
         noise_std=noise_std,
         input_seq_length=input_seq_length,
