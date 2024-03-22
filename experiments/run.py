@@ -169,7 +169,9 @@ def train_or_infer(args: Namespace):
 
         assert args.config.model_dir, "model_dir must be specified for inference."
 
-        if args.config.is_pde_refiner:
+        if (args.config.is_pde_refiner
+            and not args.config.state_avg_at_every_step
+            and not args.config.different_samples_rollout):
             metrics = infer_pde_refiner(
                 model,
                 case,
@@ -183,7 +185,7 @@ def train_or_infer(args: Namespace):
                 n_extrap_steps=args.config.n_extrap_steps,  # =0
                 seed=args.config.seed,
                 metrics_stride=args.config.metrics_stride_infer,  # =1
-                batch_size=args.config.batch_size_infer,
+                batch_size=1,
                 num_refinement_steps=args.config.num_refinement_steps,
                 sigma_min=args.config.sigma_min,
                 refinement_parameter=args.config.refinement_parameter,
@@ -214,7 +216,7 @@ def train_or_infer(args: Namespace):
             )
 
         elif (
-            args.config.is_acdm
+            args.config.is_acdm or args.config.is_pde_refiner
             and args.config.state_avg_at_every_step
             and not args.config.different_samples_rollout
         ):
@@ -231,10 +233,15 @@ def train_or_infer(args: Namespace):
                 n_extrap_steps=args.config.n_extrap_steps,
                 seed=args.config.seed,
                 metrics_stride=args.config.metrics_stride_infer,
-                batch_size=args.config.batch_size_infer,
+                batch_size=1,
                 acdm_config=acdm_config,
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
+                is_pde_refiner=args.config.is_pde_refiner,
+                is_acdm=args.config.is_acdm,
+                refinement_parameter=args.config.refinement_parameter,
+                num_refinement_steps=args.config.num_refinement_steps,
+                sigma_min=args.config.sigma_min
             )
 
             # write metrics to a pickle file
@@ -246,7 +253,7 @@ def train_or_infer(args: Namespace):
                 pickle.dump(metrics, f)
 
         elif (
-            args.config.is_acdm
+            args.config.is_acdm or args.config.is_pde_refiner
             and args.config.different_samples_rollout
             and not args.config.state_avg_at_every_step
         ):
@@ -267,6 +274,8 @@ def train_or_infer(args: Namespace):
                 acdm_config=acdm_config,
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
+                is_pde_refiner=args.config.is_pde_refiner,
+                is_acdm=args.config.is_acdm,
             )
 
             # write metrics to a pickle file

@@ -441,7 +441,7 @@ def _forward_eval_pde_refiner(
     features["noised_data"] = jnp.zeros((features["vel_hist"].shape[0], 2))  # 0's
     features["k"] = jnp.tile(0, (features["vel_hist"].shape[0],))
     # predict acceleration and integrate
-    u_hat_t, state = model_apply(params, state, sample)
+    u_hat_t, state = model_apply(params, state, (features, particle_type))
 
     for k in range(1, max_refinement_steps + 1):  # Refinement loop
         key, subkey = random.split(key, 2)
