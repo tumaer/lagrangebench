@@ -246,7 +246,7 @@ def train_or_infer(args: Namespace):
 
             # write metrics to a pickle file
             path = args.config.model_dir
-            name_of_model = path.split("/")[2] + "_metrics_sa.pkl"
+            name_of_model = path.split("/")[2] + "_metrics.pkl"
             with open(
                 os.path.join("./thesis_results/state_avg", name_of_model), "wb"
             ) as f:
@@ -270,17 +270,20 @@ def train_or_infer(args: Namespace):
                 n_extrap_steps=args.config.n_extrap_steps,
                 seed=args.config.seed,
                 metrics_stride=args.config.metrics_stride_infer,
-                batch_size=args.config.batch_size_infer,
+                batch_size=1,
                 acdm_config=acdm_config,
                 noise_std=args.config.noise_std,
                 input_seq_length=args.config.input_seq_length,
                 is_pde_refiner=args.config.is_pde_refiner,
                 is_acdm=args.config.is_acdm,
+                refinement_parameter=args.config.refinement_parameter,
+                num_refinement_steps=args.config.num_refinement_steps,
+                sigma_min=args.config.sigma_min
             )
 
             # write metrics to a pickle file
             path = args.config.model_dir
-            name_of_model = path.split("/")[2] + "_metrics_ms.pkl"
+            name_of_model = path.split("/")[2] + "_metrics.pkl"
             with open(
                 os.path.join("./thesis_results/multiple_samples", name_of_model), "wb"
             ) as f:
