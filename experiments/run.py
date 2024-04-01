@@ -249,7 +249,7 @@ def train_or_infer(args: Namespace):
 
             # write metrics to a pickle file
             path = args.config.model_dir
-            name_of_model = path.split("/")[2] + "_metrics.pkl"
+            name_of_model = path.split("/")[-2] + "_metrics.pkl"
             with open(
                 os.path.join("./thesis_results/state_avg", name_of_model), "wb"
             ) as f:
@@ -287,7 +287,7 @@ def train_or_infer(args: Namespace):
 
             # write metrics to a pickle file
             path = args.config.model_dir
-            name_of_model = path.split("/")[2] + "_metrics.pkl"
+            name_of_model = path.split("/")[-2] + "_metrics.pkl"
             with open(
                 os.path.join("./thesis_results/multiple_samples", name_of_model), "wb"
             ) as f:
