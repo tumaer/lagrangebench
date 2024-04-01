@@ -124,11 +124,13 @@ def _forward_eval_acdm_with_state_avg(
         acdm_config.num_conditioning_steps,
         acdm_config.conditioning_parameter,
     )
-    # concatenates the values of the dictionary, need to convert to list first
-    conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
+    if acdm_config.num_conditioning_steps > 0:
+        # concatenates the values of the dictionary, need to convert to list first
+        conditioning_data = jnp.concatenate(list(conditioning_data.values()), axis=1)
 
-    # conditioning data only without the target
-    features["prev_concatenated_data"] = conditioning_data
+        # conditioning data only without the target
+        features["prev_concatenated_data"] = conditioning_data
+
     de_Noised = jnp.zeros((key_s.shape[0], features["vel_hist"].shape[0], 2))
 
     for i in range(
@@ -150,13 +152,20 @@ def _forward_eval_acdm_with_state_avg(
 
         for k in reversed(range(0, acdm_config.diffusionSteps)):  # Refinement loop
             # compute conditioned part with normal forward diffusion
-            condNoisy = (
-                acdm_config.sqrtAlphasCumprod[k] * features["prev_concatenated_data"]
-                + acdm_config.sqrtOneMinusAlphasCumprod[k] * cNoise
-            )
+
+            if acdm_config.num_conditioning_steps > 0:
+                condNoisy = (
+                    acdm_config.sqrtAlphasCumprod[k]
+                    * features["prev_concatenated_data"]
+                    + acdm_config.sqrtOneMinusAlphasCumprod[k] * cNoise
+                )
+
+                features["noised_data"] = jnp.concatenate([condNoisy, dNoise], axis=1)
+
+            else:
+                features["noised_data"] = dNoise
 
             features["k"] = jnp.tile(k, (features["vel_hist"].shape[0],))
-            features["noised_data"] = jnp.concatenate([condNoisy, dNoise], axis=1)
 
             pred, state = model_apply(params, state, (features, particle_type))
 
@@ -457,7 +466,8 @@ def eval_rollout_acdm_state_avg(
 
     return eval_metrics
 
-#For PDE_Refiner
+
+# For PDE_Refiner
 @partial(
     jit,
     static_argnames=[
@@ -497,18 +507,17 @@ def _forward_eval_pde_ref_with_state_avg(
             the newly computed most recent position
     """
     features, particle_type = sample
-    
+
     de_Noised = jnp.zeros((key_s.shape[0], features["vel_hist"].shape[0], 2))
-    
+
     for i in range(key_s.shape[0]):
-        
         features["noised_data"] = jnp.zeros((features["vel_hist"].shape[0], 2))  # 0's
         features["k"] = jnp.tile(0, (features["vel_hist"].shape[0],))
 
         u_hat_t, state = model_apply(params, state, sample)
 
         key = key_s[i]
-        
+
         for k in range(1, max_refinement_steps + 1):  # Refinement loop
             key, subkey = random.split(key, 2)
 
@@ -526,7 +535,7 @@ def _forward_eval_pde_ref_with_state_avg(
             pred, state = model_apply(params, state, (features, particle_type))
             # pred is a dictionary with key 'noise'
             u_hat_t["noise"] = features["noised_data"] - pred["noise"] * noise_std
-        
+
         de_Noised = de_Noised.at[i].set(u_hat_t["noise"])
 
     # calculate the average across the batch
@@ -744,10 +753,9 @@ def eval_rollout_pde_ref_state_avg(
             metrics_computer_vmap=metrics_computer_vmap,
             n_rollout_steps=n_rollout_steps,
             t_window=t_window,
-            key_s=key,  
+            key_s=key,
             n_extrap_steps=n_extrap_steps,
         )
-
 
         current_batch_size = traj_batch_i[0].shape[0]
         for j in range(current_batch_size):
@@ -888,11 +896,10 @@ def infer_with_state_avg_at_every_step(
 
     # number of samples = 5 (hardcoded)
     keys = random.split(key, 5)[None, :, :]
-    
+
     is_acdm = kwargs["is_acdm"]
     is_pde_refiner = kwargs["is_pde_refiner"]
-    
-    
+
     if is_acdm:
         eval_metrics = eval_rollout_acdm_state_avg(
             case=case,
@@ -903,14 +910,14 @@ def infer_with_state_avg_at_every_step(
             neighbors=neighbors,
             loader_eval=loader_test,
             n_rollout_steps=n_rollout_steps,
-            n_trajs=eval_n_trajs,  
+            n_trajs=eval_n_trajs,
             key=keys,
             acdm_config=acdm_config,
             noise_std=noise_std,
             input_seq_length=input_seq_length,
             rollout_dir=rollout_dir,
             out_type=out_type,
-    )
+        )
     elif is_pde_refiner:
         eval_metrics = eval_rollout_pde_ref_state_avg(
             case=case,
@@ -921,7 +928,7 @@ def infer_with_state_avg_at_every_step(
             neighbors=neighbors,
             loader_eval=loader_test,
             n_rollout_steps=n_rollout_steps,
-            n_trajs=eval_n_trajs,  
+            n_trajs=eval_n_trajs,
             key=keys,
             num_refinement_steps=kwargs["num_refinement_steps"],
             sigma_min=kwargs["sigma_min"],
@@ -930,5 +937,5 @@ def infer_with_state_avg_at_every_step(
             out_type=out_type,
             n_extrap_steps=n_extrap_steps,
         )
-    
+
     return eval_metrics

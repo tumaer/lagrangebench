@@ -453,7 +453,8 @@ def eval_rollout_acdm_multiple_samples(
     return eval_metrics
 
 
-#For PDE Refiner:
+# For PDE Refiner:
+
 
 @partial(
     jit,
@@ -698,7 +699,9 @@ def eval_rollout_pde_ref_multiple_samples(
         max_refinement_steps=num_refinement_steps,
         refinement_parameter=refinement_parameter,
     )
-    forward_eval_vmap = vmap(forward_eval_pde_refiner, in_axes=(None, None, None, 0, 0, 0))
+    forward_eval_vmap = vmap(
+        forward_eval_pde_refiner, in_axes=(None, None, None, 0, 0, 0)
+    )
     preprocess_eval_vmap = vmap(case.preprocess_eval_pde_refiner, in_axes=(0, 0))
     metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
 
@@ -706,10 +709,13 @@ def eval_rollout_pde_ref_multiple_samples(
         # if n_trajs is not a multiple of batch_size, we slice from the last batch
         n_traj_left = n_trajs - i * batch_size
         if n_traj_left < batch_size:
-            traj_batch_i_original = jax.tree_map(lambda x: x[:n_traj_left], traj_batch_i_original)
+            traj_batch_i_original = jax.tree_map(
+                lambda x: x[:n_traj_left], traj_batch_i_original
+            )
 
-        
-        for ki in range(key_s.shape[1]):  # for 5 keys and same trajectory (same initial cond
+        for ki in range(
+            key_s.shape[1]
+        ):  # for 5 keys and same trajectory (same initial cond
             # numpy to jax
             traj_batch_i = jax.tree_map(lambda x: jnp.array(x), traj_batch_i_original)
             # (pos_input_batch, particle_type_batch) = traj_batch_i
@@ -730,16 +736,17 @@ def eval_rollout_pde_ref_multiple_samples(
                 metrics_computer_vmap=metrics_computer_vmap,
                 n_rollout_steps=n_rollout_steps,
                 t_window=t_window,
-                key=key_s[0][ki],  
+                key=key_s[0][ki],
                 n_extrap_steps=n_extrap_steps,
             )
-
 
             current_batch_size = traj_batch_i[0].shape[0]
             for j in range(current_batch_size):
                 # write metrics to output dictionary
                 ind = i * batch_size + j
-                eval_metrics[f"rollout_{ind}_key_{ki}"] = broadcast_from_batch(metrics_batch, j)
+                eval_metrics[f"rollout_{ind}_key_{ki}"] = broadcast_from_batch(
+                    metrics_batch, j
+                )
 
             if rollout_dir is not None:
                 # (batch, nodes, t, dim) -> (batch, t, nodes, dim)
@@ -757,7 +764,9 @@ def eval_rollout_pde_ref_multiple_samples(
                         "particle_type": traj_batch_i[1][j],  # (nodes,)
                     }
 
-                    file_prefix = os.path.join(rollout_dir, f"rollout_{i*batch_size+j}_key_{ki}")
+                    file_prefix = os.path.join(
+                        rollout_dir, f"rollout_{i*batch_size+j}_key_{ki}"
+                    )
                     if out_type == "vtk":  # write vtk files for each time step
                         for k in range(example_full.shape[0]):
                             # predictions
@@ -878,7 +887,7 @@ def infer_with_multiple_samples(
 
     # number of samples = 5 (hardcoded)
     keys = random.split(key, 5)[None, :, :]
-    
+
     if is_acdm:
         eval_metrics = eval_rollout_acdm_multiple_samples(
             case=case,
@@ -897,7 +906,7 @@ def infer_with_multiple_samples(
             rollout_dir=rollout_dir,
             out_type=out_type,
         )
-        
+
     elif is_pde_refiner:
         eval_metrics = eval_rollout_pde_ref_multiple_samples(
             case=case,
@@ -908,7 +917,7 @@ def infer_with_multiple_samples(
             neighbors=neighbors,
             loader_eval=loader_test,
             n_rollout_steps=n_rollout_steps,
-            n_trajs=eval_n_trajs,  
+            n_trajs=eval_n_trajs,
             key_s=keys,
             num_refinement_steps=kwargs["num_refinement_steps"],
             sigma_min=kwargs["sigma_min"],
@@ -916,6 +925,6 @@ def infer_with_multiple_samples(
             rollout_dir=rollout_dir,
             out_type=out_type,
             n_extrap_steps=n_extrap_steps,
-        )    
-    
+        )
+
     return eval_metrics

@@ -227,14 +227,14 @@ def cli_arguments() -> Dict:
     )
 
     # ACDM Arguments
-    
+
     parser.add_argument(
         "--is_acdm",
         required=False,
         action=argparse.BooleanOptionalAction,
         help="To average state after every step",
     )
-    
+
     parser.add_argument(
         "--diffusion_steps",
         required=False,
