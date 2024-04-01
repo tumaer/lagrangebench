@@ -218,8 +218,7 @@ def train_or_infer(args: Namespace):
             )
 
         elif (
-            args.config.is_acdm
-            or args.config.is_pde_refiner
+            (args.config.is_acdm or args.config.is_pde_refiner)
             and args.config.state_avg_at_every_step
             and not args.config.different_samples_rollout
         ):
@@ -256,8 +255,7 @@ def train_or_infer(args: Namespace):
                 pickle.dump(metrics, f)
 
         elif (
-            args.config.is_acdm
-            or args.config.is_pde_refiner
+            (args.config.is_acdm or args.config.is_pde_refiner)
             and args.config.different_samples_rollout
             and not args.config.state_avg_at_every_step
         ):
