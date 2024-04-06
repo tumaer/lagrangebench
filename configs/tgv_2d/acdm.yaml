@@ -1,0 +1,25 @@
+extends: tgv_2d/base.yaml
+
+model: acdm
+num_mp_steps: 10
+latent_dim: 128
+lr_start: 5.e-4
+
+wandb: True
+wandb_project: acdm_tgv2d_for_comparison
+# Change this with your own entity
+wandb_entity: lagrangebench
+
+noise_std: 0.0000
+
+loss_weight:
+  noise: 1.0
+
+is_pde_refiner: False
+num_refinement_steps: 3
+sigma_min: 1.e-5
+
+is_acdm: True
+diffusion_steps: 20
+num_conditioning_steps: 2
+conditioning_parameter: acc
