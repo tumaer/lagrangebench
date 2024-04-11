@@ -4,3 +4,8 @@ model: gns
 num_mp_steps: 10
 latent_dim: 128
 lr_start: 5.e-4
+
+wandb: False
+wandb_project: acdm_ldc2d_for_comparison
+# Change this with your own entity
+wandb_entity: lagrangebench
