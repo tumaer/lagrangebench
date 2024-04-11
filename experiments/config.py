@@ -257,6 +257,13 @@ def cli_arguments() -> Dict:
         help="Parameter to condition on for ACDM.",
     )
 
+    parser.add_argument(
+        "--noise_prefactor",
+        required=False,
+        type=float,
+        help="Prefactor multiplying the betas for ACDM.",
+    )
+
     # Misc Arguments
     parser.add_argument(
         "--wandb",

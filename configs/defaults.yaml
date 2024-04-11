@@ -126,6 +126,7 @@ is_acdm: False
 diffusion_steps: 10
 num_conditioning_steps: 2
 conditioning_parameter: acc
+noise_prefactor: 1.0
 
 state_avg_at_every_step: False
 different_samples_rollout: False

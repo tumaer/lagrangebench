@@ -80,6 +80,7 @@ class defaults:
     diffusion_steps: int = 10
     num_conditioning_steps: int = 2
     conditioning_parameter: str = "acc"
+    noise_prefactor: float = 1.0
 
     state_avg_at_every_step: bool = False
     different_samples_rollout: bool = False

@@ -70,6 +70,7 @@ def train_or_infer(args: Namespace):
         diffusionSteps=args.config.diffusion_steps,
         num_conditioning_steps=args.config.num_conditioning_steps,
         conditioning_parameter=args.config.conditioning_parameter,
+        noise_prefactor=args.config.noise_prefactor,
     )
 
     if args.config.mode == "train" or args.config.mode == "all":

@@ -227,7 +227,7 @@ def fourier_embedding(timesteps, dim, max_period=10000):
 
 
 # For ACDM
-def linear_beta_schedule(timesteps):
+def linear_beta_schedule(timesteps, noise_prefactor):
     # if timesteps < 10:
     #     raise ValueError(
     #         "Warning: Less than 10 timesteps require adjustments \
@@ -238,18 +238,27 @@ def linear_beta_schedule(timesteps):
         500 / timesteps
     )  # adjust reference values determined for 500 steps
     beta_end = 0.02 * (500 / timesteps)
-    betas = jnp.linspace(beta_start, beta_end, timesteps)
+    betas = noise_prefactor * jnp.linspace(beta_start, beta_end, timesteps)
     return jnp.clip(betas, 0.0001, 0.9999)
 
 
 class ACDMConfig:
-    def __init__(self, diffusionSteps, num_conditioning_steps, conditioning_parameter):
+    def __init__(
+        self,
+        diffusionSteps,
+        num_conditioning_steps,
+        conditioning_parameter,
+        noise_prefactor,
+    ):
         # For Diffusion
         self.diffusionSteps = diffusionSteps
         self.num_conditioning_steps = num_conditioning_steps
         self.conditioning_parameter = conditioning_parameter
+        self.noise_prefactor = noise_prefactor
 
-        self.betas = linear_beta_schedule(timesteps=self.diffusionSteps)
+        self.betas = linear_beta_schedule(
+            timesteps=self.diffusionSteps, noise_prefactor=self.noise_prefactor
+        )
         self.alphas = 1.0 - self.betas
         self.alphasCumprod = jnp.cumprod(self.alphas, axis=0)
 
