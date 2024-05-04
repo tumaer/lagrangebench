@@ -242,26 +242,25 @@ LagrangeBench can be installed by cloning the repository or as a standalone libr
 ## Citation
 The paper (at NeurIPS 2023 Datasets and Benchmarks) can be cited as:
 ```bibtex
-@inproceedings{toshev2023lagrangebench,
-    title      = {LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite},
-    author     = {Artur P. Toshev and Gianluca Galletti and Fabian Fritz and Stefan Adami and Nikolaus A. Adams},
-    year       = {2023},
-    url        = {https://arxiv.org/abs/2309.16342},
-    booktitle  = {37th Conference on Neural Information Processing Systems (NeurIPS 2023) Track on Datasets and Benchmarks},
+@article{toshev2024lagrangebench,
+  title={Lagrangebench: A lagrangian fluid mechanics benchmarking suite},
+  author={Toshev, Artur and Galletti, Gianluca and Fritz, Fabian and Adami, Stefan and Adams, Nikolaus},
+  journal={Advances in Neural Information Processing Systems},
+  volume={36},
+  year={2024}
 }
 ```
 
 The associated datasets can be cited as:
 ```bibtex
-@dataset{toshev_2023_10021926,
+@dataset{toshev_2024_10491868,
   author       = {Toshev, Artur P. and Adams, Nikolaus A.},
   title        = {LagrangeBench Datasets},
-  month        = oct,
-  year         = 2023,
+  month        = jan,
+  year         = 2024,
   publisher    = {Zenodo},
-  version      = {0.0.1},
-  url          = {https://zenodo.org/doi/10.5281/zenodo.10021925},
-  doi          = {10.5281/zenodo.10021925},
+  doi          = {10.5281/zenodo.10491868},
+  url          = {https://doi.org/10.5281/zenodo.10491868}
 }
 ```
 
@@ -270,4 +269,4 @@ The associated datasets can be cited as:
 The following further publications are based on the LagrangeBench codebase:
 
 1. [Learning Lagrangian Fluid Mechanics with E(3)-Equivariant Graph Neural Networks (GSI 2023)](https://arxiv.org/abs/2305.15603), A. P. Toshev, G. Galletti, J. Brandstetter, S. Adami, N. A. Adams
-2. [Neural SPH: Improved Neural Modeling of Lagrangian Fluid Dynamics](https://arxiv.org/abs/2402.06275), A. P. Toshev, J. A. Erbesdobler, N. A. Adams, J. Brandstetter
+2. [Neural SPH: Improved Neural Modeling of Lagrangian Fluid Dynamics (ICML 2024)](https://arxiv.org/abs/2402.06275), A. P. Toshev, J. A. Erbesdobler, N. A. Adams, J. Brandstetter
