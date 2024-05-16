@@ -4,6 +4,7 @@ from argparse import Namespace
 from datetime import datetime
 from typing import Callable, Dict, Optional, Tuple, Type, Union
 
+import flax.linen as flax_nn
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -65,12 +66,15 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
         has_external_force=data_train.external_force_fn is not None,
         normalization_stats=case.normalization_stats,
     )
-    model = hk.without_apply_rng(hk.transform_with_state(model))
 
-    # mixed precision training based on this reference:
-    # https://github.com/deepmind/dm-haiku/blob/main/examples/imagenet/train.py
-    policy = jmp.get_policy("params=float32,compute=float32,output=float32")
-    hk.mixed_precision.set_policy(MODEL, policy)
+    # check if the model is haiku
+    if not isinstance(model, flax_nn.Module):
+        model = hk.without_apply_rng(hk.transform_with_state(model))
+        # mixed precision training based on this reference:
+        # https://github.com/deepmind/dm-haiku/blob/main/examples/imagenet/train.py
+        policy = jmp.get_policy("params=float32,compute=float32,output=float32")
+        hk.mixed_precision.set_policy(MODEL, policy)
+        # TODO mixed precision in flax?
 
     if mode == "train" or mode == "all":
         print("Start training...")
@@ -285,5 +289,20 @@ def setup_model(
             return models.Linear(dim_out=metadata["dim"])(x)
 
         MODEL = models.Linear
+
+    elif model_name == "gcn":
+        # NOTE: GCN is in flax
+        model_fn = models.GCN(
+            output_size=metadata["dim"],
+            latent_size=cfg.model.latent_dim,
+            blocks_per_step=cfg.model.num_mlp_layers,
+            layers_pre_mp=0,
+            layers_post_mp=cfg.model.num_mlp_layers,
+            num_mp_steps=cfg.model.num_mp_steps,
+            num_particle_types=NodeType.SIZE,
+            particle_type_embedding_size=16,
+        )
+
+        MODEL = models.GCN
 
     return model_fn, MODEL

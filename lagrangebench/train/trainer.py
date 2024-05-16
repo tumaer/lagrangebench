@@ -5,6 +5,7 @@ from collections import namedtuple
 from functools import partial
 from typing import Callable, Dict, Optional, Tuple, Union
 
+import flax.linen as flax_nn
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -31,18 +32,36 @@ from lagrangebench.utils import (
 
 from .strats import push_forward_build, push_forward_sample_steps
 
+ModelType = Union[hk.TransformedWithState, flax_nn.Module]
+ParamsType = hk.Params
+StateType = hk.State
+
 
 @partial(jax.jit, static_argnames=["model_fn", "loss_weight"])
 def _mse(
-    params: hk.Params,
-    state: hk.State,
+    params: ParamsType,
+    state: StateType,
     features: Dict[str, jnp.ndarray],
     particle_type: jnp.ndarray,
     target: jnp.ndarray,
     model_fn: Callable,
     loss_weight: Dict[str, float],
 ):
-    pred, state = model_fn(params, state, (features, particle_type))
+    if not hasattr(model_fn._fun, "__self__"):
+        pred, state = model_fn(params, state, (features, particle_type))
+    elif isinstance(model_fn._fun.__self__, flax_nn.Module):
+        kwargs = {}
+        if state:
+            kwargs["mutables"] = state.keys()
+        pred = model_fn(
+            {"params": params, "batch_stats": state},
+            (features, particle_type),
+            **kwargs,
+        )
+        if state:
+            pred, updates = pred
+            state = updates["batch_stats"]
+
     # check active (non zero) output shapes
     assert all(target[k].shape == pred[k].shape for k in pred)
     # particle mask
@@ -62,15 +81,15 @@ def _mse(
 
 @partial(jax.jit, static_argnames=["loss_fn", "opt_update"])
 def _update(
-    params: hk.Params,
-    state: hk.State,
+    params: ParamsType,
+    state: StateType,
     features_batch: Tuple[jraph.GraphsTuple, ...],
     target_batch: Tuple[jnp.ndarray, ...],
     particle_type_batch: Tuple[jnp.ndarray, ...],
     opt_state: optax.OptState,
     loss_fn: Callable,
     opt_update: Callable,
-) -> Tuple[float, hk.Params, hk.State, optax.OptState]:
+) -> Tuple[float, ParamsType, StateType, optax.OptState]:
     value_and_grad_vmap = vmap(
         jax.value_and_grad(loss_fn, has_aux=True), in_axes=(None, None, 0, 0, 0)
     )
@@ -103,7 +122,7 @@ class Trainer:
 
     def __init__(
         self,
-        model: hk.TransformedWithState,
+        model: ModelType,
         case,
         data_train: H5Dataset,
         data_valid: H5Dataset,
@@ -143,8 +162,8 @@ class Trainer:
         self.cfg_logging = OmegaConf.merge(defaults.logging, cfg_logging)
 
         assert isinstance(
-            model, hk.TransformedWithState
-        ), "Model must be passed as an Haiku transformed function."
+            model, ModelType
+        ), "Model must be passed as a Flax model or an Haiku transformed function."
 
         available_rollout_length = data_valid.subseq_length - input_seq_length
         assert cfg_eval.n_rollout_steps <= available_rollout_length, (
@@ -209,13 +228,13 @@ class Trainer:
     def train(
         self,
         step_max: int = defaults.train.step_max,
-        params: Optional[hk.Params] = None,
-        state: Optional[hk.State] = None,
+        params: Optional[ParamsType] = None,
+        state: Optional[StateType] = None,
         opt_state: Optional[optax.OptState] = None,
         store_ckp: Optional[str] = None,
         load_ckp: Optional[str] = None,
         wandb_config: Optional[Dict] = None,
-    ) -> Tuple[hk.Params, hk.State, optax.OptState]:
+    ) -> Tuple[ParamsType, StateType, optax.OptState]:
         """
         Training loop.
 
@@ -264,11 +283,20 @@ class Trainer:
                 state = {}
         elif load_ckp:
             # continue training from checkpoint
-            params, state, opt_state, step = load_haiku(load_ckp)
+            # TODO model loading with flax using orbax https://flax.readthedocs.io/en/latest/guides/training_techniques/use_checkpointing.html
+            if isinstance(model, flax_nn.Module):
+                pass
+            else:
+                params, state, opt_state, step = load_haiku(load_ckp)
         else:
             # initialize new model
             key, subkey = jax.random.split(key, 2)
-            params, state = model.init(subkey, (features, particle_type[0]))
+            vars = model.init(subkey, (features, particle_type[0]))
+            if isinstance(model, flax_nn.Module):
+                params = vars["params"]
+                state = vars.get("batch_stats", {})
+            else:
+                params, state = vars
 
         # start logging
         if cfg_logging.wandb:

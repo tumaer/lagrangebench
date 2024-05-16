@@ -1,6 +1,7 @@
 from typing import Callable, Dict, Iterable, NamedTuple, Optional
 
 import e3nn_jax as e3nn
+import flax.linen as flax_nn
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -51,6 +52,20 @@ class MLPXav(hk.nets.MLP):
             activate_final,
             name,
         )
+
+
+class FlaxMLP(flax_nn.Module):
+    output_size: int
+    latent_size: int
+    num_layers: int
+
+    @flax_nn.compact
+    def __call__(self, x):
+        for _ in range(self.num_layers):
+            x = flax_nn.Dense(self.latent_size)(x)
+            x = flax_nn.relu(x)
+        x = flax_nn.Dense(self.output_size)(x)
+        return x
 
 
 class SteerableGraphsTuple(NamedTuple):
