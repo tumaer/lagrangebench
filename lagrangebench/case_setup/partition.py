@@ -18,10 +18,10 @@ from jax_md.partition import (
     PartitionErrorCode,
     _displacement_or_metric_to_metric_sq,
     _neighboring_cells,
-    _shift_array,
     cell_list,
     is_format_valid,
     is_sparse,
+    shift_array,
 )
 from jax_md.partition import neighbor_list as vmap_neighbor_list
 
@@ -196,7 +196,7 @@ def _scan_neighbor_list(
             for dindex in _neighboring_cells(dim):
                 if onp.all(dindex == 0):
                     continue
-                cell_idx += [_shift_array(idx, dindex)]
+                cell_idx += [shift_array(idx, dindex)]
 
             cell_idx = jnp.concatenate(cell_idx, axis=-2)
             cell_idx = jnp.reshape(cell_idx, (-1, cell_idx.shape[-2]))

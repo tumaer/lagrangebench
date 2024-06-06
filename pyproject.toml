@@ -42,11 +42,11 @@ PyYAML = ">=6.0"
 numpy = ">=1.24.4"
 wandb = ">=0.15.11"
 pyvista = ">=0.42.2"
-jax = "0.4.20"
-jaxlib = "0.4.20"
+jax = {version = "0.4.28", extras = ["cpu"]}
+jaxlib = "0.4.28"
 dm-haiku = ">=0.0.10"
 e3nn-jax = "0.20.3"
-jax-md = "0.2.8"
+jax-md = {git = "https://github.com/jax-md/jax-md.git", rev = "c451353f6ddcab031f660befda256d8a4f657855"}
 jmp = "^0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.7"
@@ -106,6 +106,8 @@ filterwarnings = [
     "ignore::DeprecationWarning:^(?!.*lagrangebench).*"
 ]
 
+# Install bumpversion with: pip install -U poetry-bumpversion
+# Use: poetry version {major|minor|patch}
 [tool.poetry_bumpversion.file."lagrangebench/__init__.py"]
 [build-system]
 requires = ["poetry-core"]
