@@ -16,6 +16,7 @@
 [![Docs](https://img.shields.io/readthedocs/lagrangebench/latest)](https://lagrangebench.readthedocs.io/en/latest/index.html)
 [![PyPI - Version](https://img.shields.io/pypi/v/lagrangebench)](https://pypi.org/project/lagrangebench/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb)
+[![Discord](https://img.shields.io/badge/Discord-%235865F2?logo=discord&logoColor=white)](https://discord.gg/Ds8jRZ78hU)
 
 [![Tests](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml)
 [![CodeCov](https://codecov.io/gh/tumaer/lagrangebench/graph/badge.svg?token=ULMGSY71R1)](https://codecov.io/gh/tumaer/lagrangebench)
@@ -65,11 +66,9 @@ pip install -r requirements_cuda.txt
 For a CPU version of the requirements file, one could use `docs/requirements.txt`.
 
 ### GPU support
-To run JAX on GPU, follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
+To run JAX on GPU, follow [Installing JAX](https://jax.readthedocs.io/en/latest/installation.html), or in general run
 ```bash
-pip install --upgrade jax[cuda11_pip]==0.4.20 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-# or, for cuda 12
-pip install --upgrade jax[cuda12_pip]==0.4.20 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install -U "jax[cuda12]"
 ```
 
 ### MacOS
