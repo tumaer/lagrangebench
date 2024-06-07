@@ -1,12 +1,10 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
---find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-
 cloudpickle
 dm_haiku>=0.0.10
 e3nn_jax==0.20.3
 h5py
-jax[cuda12_pip]==0.4.20
+jax[cuda12]
 jax_md>=0.2.8
 jmp>=0.0.4
 jraph>=0.0.6.dev0
