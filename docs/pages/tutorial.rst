@@ -1,4 +1,4 @@
-Tutorial
+Tutorials
 ===================================
 
 - Basics of LagrangeBench: `Training GNS on the 2D Taylor Green vortex <https://github.com/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb>`_ |tutorial|
