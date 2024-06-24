@@ -6,7 +6,7 @@
 
 ```bash
 mkdir -p /tmp/datasets
-bash ./gns_data/download_dataset.sh WaterDrop /tmp/datasets
+bash data_gen/gns_data/download_dataset.sh WaterDrop /tmp/datasets
 ```
 
 ## Transform data from .tfrecord to .h5
@@ -21,7 +21,7 @@ venv_tf/bin/pip install tensorflow tensorflow-datasets
 Then, transform the data via
 
 ```bash
-./venv_tf/bin/python gns_data/tfrecord_to_h5.py --dataset-path=/tmp/datasets/WaterDrop
+./venv_tf/bin/python data_gen/gns_data/tfrecord_to_h5.py --dataset-path=/tmp/datasets/WaterDrop
 ```
 
 and train the usual way.
