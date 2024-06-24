@@ -14,7 +14,7 @@ import jax
 import jax.numpy as jnp
 import jraph
 from jax.tree_util import Partial
-from jax_md import space
+from jax_sph.jax_md import space
 
 from lagrangebench.utils import NodeType
 

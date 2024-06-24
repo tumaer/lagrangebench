@@ -42,32 +42,32 @@ PyYAML = ">=6.0"
 numpy = ">=1.24.4"
 wandb = ">=0.15.11"
 pyvista = ">=0.42.2"
-jax = {version = "0.4.28", extras = ["cpu"]}
-jaxlib = "0.4.28"
+jax = {version = "0.4.29", extras = ["cpu"]}
+jaxlib = "0.4.29"
 dm-haiku = ">=0.0.10"
 e3nn-jax = "0.20.3"
-jax-md = {git = "https://github.com/jax-md/jax-md.git", rev = "c451353f6ddcab031f660befda256d8a4f657855"}
-jmp = "^0.0.4"
+jmp = ">=0.0.4"
 jraph = "0.0.6.dev0"
 optax = "0.1.7"
-ott-jax = "^0.4.2"
-matscipy = "^0.8.0"
-torch = {version = "2.1.0+cpu", source = "torchcpu"}
-wget = "^3.2"
-omegaconf = "^2.3.0"
+ott-jax = ">=0.4.2"
+matscipy = ">=0.8.0"
+torch = {version = "2.3.1+cpu", source = "torchcpu"}
+wget = ">=3.2"
+omegaconf = ">=2.3.0"
+jax-sph = ">=0.0.3"
 
 [tool.poetry.group.dev.dependencies]
 # mypy = ">=1.8.0" - consider in the future
 pre-commit = ">=3.3.1"
 pytest = ">=7.3.1"
 pytest-cov = ">=4.1.0"
-ruff = "0.1.8"
+ruff = "0.2.2"
 ipykernel = ">=6.25.1"
 
 [tool.poetry.group.docs.dependencies]
-sphinx = "^7.2.6"
-sphinx-rtd-theme = "^1.3.0"
-toml = "^0.10.2"
+sphinx = "7.2.6"
+sphinx-rtd-theme = "1.3.0"
+toml = ">=0.10.2"
 
 [[tool.poetry.source]]
 name = "torchcpu"

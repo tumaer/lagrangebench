@@ -10,8 +10,3 @@ Featurizer
 ----------
 .. automodule:: lagrangebench.case_setup.features
     :members:
-
-Partition
----------
-.. automodule:: lagrangebench.case_setup.partition
-    :members:

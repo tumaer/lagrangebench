@@ -5,7 +5,7 @@ from typing import Callable, Dict, List, Optional
 import jax
 import jax.numpy as jnp
 from jax import lax, vmap
-from jax_md import partition, space
+from jax_sph.jax_md import partition, space
 
 FeatureDict = Dict[str, jnp.ndarray]
 TargetDict = Dict[str, jnp.ndarray]

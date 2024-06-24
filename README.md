@@ -68,7 +68,7 @@ For a CPU version of the requirements file, one could use `docs/requirements.txt
 ### GPU support
 To run JAX on GPU, follow [Installing JAX](https://jax.readthedocs.io/en/latest/installation.html), or in general run
 ```bash
-pip install -U "jax[cuda12]"
+pip install -U "jax[cuda12]==0.4.29"
 ```
 
 ### MacOS
@@ -167,8 +167,7 @@ python main.py gpu=$GPU_ID mode=infer eval.test=True load_ckp=gns_tgv2d/best
 📦lagrangebench
  ┣ 📂case_setup     # Case setup manager
  ┃ ┣ 📜case.py      # CaseSetupFn class
- ┃ ┣ 📜features.py  # Feature extraction
- ┃ ┗ 📜partition.py # Alternative neighbor list implementations
+ ┃ ┗ 📜features.py  # Feature extraction
  ┣ 📂data           # Datasets and dataloading utils
  ┃ ┣ 📜data.py      # H5Dataset class and specific datasets
  ┃ ┗ 📜utils.py
