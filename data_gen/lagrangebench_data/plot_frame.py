@@ -1,9 +1,9 @@
 """Print a frame for visual inspection of the data."""
 
-import matplotlib.pyplot as plt
-import numpy as np
-import h5py
 import argparse
+
+import h5py
+import matplotlib.pyplot as plt
 
 
 def plot_frame(src_dir, frame):
@@ -11,13 +11,11 @@ def plot_frame(src_dir, frame):
         tag = f["00000/particle_type"][:]
         r = f["00000/position"][frame]
 
-    fig = plt.figure()
-    plt.scatter(r[:,0], r[:,1], c=tag)
+    plt.scatter(r[:, 0], r[:, 1], c=tag)
     plt.savefig(f"frame_{frame}.png")
-    
-    
+
+
 if __name__ == "__main__":
-    
     parser = argparse.ArgumentParser(
         description="Print a frame for visual inspection of the data."
     )
