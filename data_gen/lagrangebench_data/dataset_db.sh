@@ -8,11 +8,11 @@ for seed in {0..114}  # 15 trajectories blew up and were discarded
 do
     echo "Run with seed = $seed"
     python main.py config=cases/db.yaml seed=$seed case.mode=rlx solver.tvf=1.0 case.r0_noise_factor=0.25 io.data_path=$DATA_ROOT/relaxed/
-    python main.py config=cases/db.yaml seed=$seed case.state0_path=$DATA_ROOT/relaxed/db_2_0.02_${seed}.h5 io.data_path=$DATA_ROOT/raw/2D_DB_5740_20kevery100/
+    python main.py config=cases/db.yaml seed=$seed case.state0_path=$DATA_ROOT/relaxed/db_2_0.02_$seed.h5 io.data_path=$DATA_ROOT/raw/2D_DB_5740_20kevery100/
 done
 # 15 blowing up runs were removed from the dataset, and 100 were kept
 # use `count_files_db.py` to detect defect runs
-python scripts/gen_dataset.py --src_dir=$DATA_ROOT/raw/2D_DB_5740_20kevery100/ --dst_dir=$DATA_ROOT/datasets/2D_DB_5740_20kevery100/ --split=2_1_1
+python gen_dataset.py --src_dir=$DATA_ROOT/raw/2D_DB_5740_20kevery100/ --dst_dir=$DATA_ROOT/datasets/2D_DB_5740_20kevery100/ --split=2_1_1
 
 
 ### Number of particles

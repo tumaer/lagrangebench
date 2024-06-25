@@ -36,3 +36,13 @@ Inspect that the simulated trajectories are of the configured length, e.g.
 ```bash
 python count_files.py --src_dir="/tmp/lagrangebench_data/raw/2D_TGV_2500_10kevery100/" --target_count=127
 ```
+
+## Errata
+1. For dam break, one would need to replace lines 182-184 in `jax-sph/case_setup.py` with:
+```python
+mask, _mask = state["tag"]==Tag.FLUID, _state["tag"]==Tag.FLUID
+assert state[k][mask].shape == _state[k][_mask].shape, ValueError(
+    f"Shape mismatch for key {k} in state0 file."
+)
+state[k][mask] = _state[k][_mask]
+```
