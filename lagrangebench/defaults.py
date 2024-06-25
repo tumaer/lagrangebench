@@ -16,8 +16,6 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
     cfg.load_ckp = None
     # One of "train", "infer" or "all" (= both)
     cfg.mode = "all"
-    # path to data directory
-    cfg.dataset_path = None
     # random seed
     cfg.seed = 0
     # data type for preprocessing. One of "float32" or "float64"
@@ -27,6 +25,14 @@ def set_defaults(cfg: DictConfig = OmegaConf.create({})) -> DictConfig:
     # XLA memory fraction to be preallocated. The JAX default is 0.75.
     # Should be specified before importing the library.
     cfg.xla_mem_fraction = None
+
+    ### dataset
+    cfg.dataset = OmegaConf.create({})
+
+    # path to data directory
+    cfg.dataset.src = None
+    # dataset name
+    cfg.dataset.name = None
 
     ### model
     cfg.model = OmegaConf.create({})
@@ -178,7 +184,7 @@ def check_cfg(cfg: DictConfig):
 
     assert cfg.mode in ["train", "infer", "all"]
     assert cfg.dtype in ["float32", "float64"]
-    assert cfg.dataset_path is not None, "dataset_path must be specified."
+    assert cfg.dataset.src is not None, "dataset.src must be specified."
 
     assert cfg.model.input_seq_length >= 2, "At least two positions for one past vel."
 

@@ -1,6 +1,7 @@
 extends: LAGRANGEBENCH_DEFAULTS
 
-dataset_path: datasets/2D_LDC_2708_10kevery100
+dataset:
+  src: datasets/2D_LDC_2708_10kevery100
 
 logging:
   wandb_project: ldc_2d

@@ -27,7 +27,9 @@ class TestInferBuilder(unittest.TestCase):
     def setUp(self):
         self.cfg = OmegaConf.create(
             {
-                "dataset_path": "tests/3D_LJ_3_1214every1",  # Lennard-Jones dataset
+                "dataset": {
+                    "src": "tests/3D_LJ_3_1214every1",  # Lennard-Jones dataset
+                },
                 "model": {
                     "input_seq_length": 3,  # two past velocities
                     "isotropic_norm": False,
@@ -42,7 +44,7 @@ class TestInferBuilder(unittest.TestCase):
 
         data_valid = H5Dataset(
             split="valid",
-            dataset_path=self.cfg.dataset_path,
+            dataset_path=self.cfg.dataset.src,
             name="lj3d",
             input_seq_length=self.cfg.model.input_seq_length,
             extra_seq_length=self.cfg.eval.n_rollout_steps,

@@ -4,8 +4,8 @@ cloudpickle
 dm_haiku>=0.0.10
 e3nn_jax==0.20.3
 h5py
-jax[cpu]==0.4.29
 jax-sph>=0.0.3
+jax[cpu]==0.4.29
 jmp>=0.0.4
 jraph>=0.0.6.dev0
 matscipy>=0.8.0

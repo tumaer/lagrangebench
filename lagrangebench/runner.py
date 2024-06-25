@@ -1,6 +1,5 @@
 import os
 import os.path as osp
-from argparse import Namespace
 from datetime import datetime
 from typing import Callable, Dict, Optional, Tuple, Type, Union
 
@@ -144,8 +143,9 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
     return 0
 
 
-def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
-    dataset_path = cfg.dataset_path
+def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, H5Dataset]:
+    dataset_path = cfg.dataset.src
+    dataset_name = cfg.dataset.name
     ckp_dir = cfg.logging.ckp_dir
     rollout_dir = cfg.eval.rollout_dir
     input_seq_length = cfg.model.input_seq_length
@@ -164,6 +164,7 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     data_train = H5Dataset(
         "train",
         dataset_path=dataset_path,
+        name=dataset_name,
         input_seq_length=input_seq_length,
         extra_seq_length=cfg.train.pushforward.unrolls[-1],
         nl_backend=nl_backend,
@@ -171,6 +172,7 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     data_valid = H5Dataset(
         "valid",
         dataset_path=dataset_path,
+        name=dataset_name,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
         nl_backend=nl_backend,
@@ -178,6 +180,7 @@ def setup_data(cfg) -> Tuple[H5Dataset, H5Dataset, Namespace]:
     data_test = H5Dataset(
         "test",
         dataset_path=dataset_path,
+        name=dataset_name,
         input_seq_length=input_seq_length,
         extra_seq_length=n_rollout_steps,
         nl_backend=nl_backend,

@@ -121,7 +121,7 @@ We provide three notebooks that show LagrangeBench functionalities, namely:
 - [`gns_data.ipynb`](notebooks/gns_data.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/gns_data.ipynb), showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
 
 ## Datasets
-The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https://zenodo.org/doi/10.5281/zenodo.10021925). If a dataset is not found in `dataset_path`, the data is automatically downloaded. Alternatively, to manually download the datasets use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
+The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https://zenodo.org/doi/10.5281/zenodo.10021925). If a dataset is not found in `dataset.src`, the data is automatically downloaded. Alternatively, to manually download the datasets use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
 - __Taylor Green Vortex 2D__: `bash download_data.sh tgv_2d datasets/`
 - __Reverse Poiseuille Flow 2D__: `bash download_data.sh rpf_2d datasets/`
 - __Lid Driven Cavity 2D__: `bash download_data.sh ldc_2d datasets/`

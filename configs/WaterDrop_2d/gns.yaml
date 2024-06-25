@@ -1,7 +1,7 @@
 extends: LAGRANGEBENCH_DEFAULTS
 
-main:
-  dataset_path: /tmp/datasets/WaterDrop
+dataset:
+  src: /tmp/datasets/WaterDrop
 
 model: 
   name: gns
