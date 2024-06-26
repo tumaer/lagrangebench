@@ -4,7 +4,7 @@ from typing import Tuple
 
 import jax
 import jax.numpy as jnp
-from jax_md.partition import space
+from jax_sph.jax_md.partition import space
 
 from lagrangebench.utils import get_kinematic_mask
 

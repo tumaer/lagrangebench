@@ -5,9 +5,9 @@ from typing import Callable, Dict, Optional, Tuple, Union
 
 import jax.numpy as jnp
 from jax import Array, jit, lax, vmap
-from jax_md import space
-from jax_md.dataclasses import dataclass, static_field
-from jax_md.partition import NeighborList, NeighborListFormat
+from jax_sph.jax_md import space
+from jax_sph.jax_md.dataclasses import dataclass, static_field
+from jax_sph.jax_md.partition import NeighborList, NeighborListFormat, neighbor_list
 from omegaconf import DictConfig, OmegaConf
 
 from lagrangebench.data.utils import get_dataset_stats
@@ -15,7 +15,6 @@ from lagrangebench.defaults import defaults
 from lagrangebench.train.strats import add_gns_noise
 
 from .features import FeatureDict, TargetDict, physical_feature_builder
-from .partition import neighbor_list
 
 TrainCaseOut = Tuple[Array, FeatureDict, TargetDict, NeighborList]
 EvalCaseOut = Tuple[FeatureDict, NeighborList]

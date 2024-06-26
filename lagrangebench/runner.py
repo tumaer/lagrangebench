@@ -11,7 +11,7 @@ import jmp
 import numpy as np
 from e3nn_jax import Irreps
 from jax import config
-from jax_md import space
+from jax_sph.jax_md import space
 from omegaconf import DictConfig, OmegaConf
 
 from lagrangebench import Trainer, infer, models

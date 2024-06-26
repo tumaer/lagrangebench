@@ -7,7 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 from jax import config as jax_config
 from jax import jit, vmap
-from jax_md import space
+from jax_sph.jax_md import space
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
 

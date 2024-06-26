@@ -9,7 +9,7 @@ from typing import Callable, Dict, Iterable, Optional, Tuple, Union
 import haiku as hk
 import jax
 import jax.numpy as jnp
-import jax_md.partition as partition
+import jax_sph.jax_md.partition as partition
 from jax import jit, vmap
 from omegaconf import DictConfig, OmegaConf
 from torch.utils.data import DataLoader

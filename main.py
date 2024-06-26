@@ -59,6 +59,8 @@ if __name__ == "__main__":
     # specify cuda device
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"  # see issue #152 from TensorFlow
     os.environ["CUDA_VISIBLE_DEVICES"] = str(cli_args.gpu)
+    if cli_args.gpu == -1:
+        os.environ["JAX_PLATFORMS"] = "cpu"
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(cli_args.xla_mem_fraction)
 
     cfg = load_embedded_configs(config_path, cli_args)

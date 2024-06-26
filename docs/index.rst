@@ -124,18 +124,21 @@ When training is done, we can evaluate the model on the test set.
    )
 
 
-Contents
---------
+.. toctree::
+   :maxdepth: 2
+   :caption: Getting Started
+
+   pages/tutorial
+   pages/defaults
+   pages/baselines
 
 .. toctree::
    :maxdepth: 2
+   :caption: API
 
-   pages/defaults
    pages/data
    pages/case_setup
    pages/models
    pages/train
    pages/evaluate
    pages/utils
-   pages/tutorial
-   pages/baselines

@@ -16,9 +16,10 @@
 [![Docs](https://img.shields.io/readthedocs/lagrangebench/latest)](https://lagrangebench.readthedocs.io/en/latest/index.html)
 [![PyPI - Version](https://img.shields.io/pypi/v/lagrangebench)](https://pypi.org/project/lagrangebench/)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/tutorial.ipynb)
+[![Discord](https://img.shields.io/badge/Discord-%235865F2?logo=discord&logoColor=white)](https://discord.gg/Ds8jRZ78hU)
 
-[![Unit Tests](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml)
-[![codecov](https://codecov.io/gh/tumaer/lagrangebench/graph/badge.svg?token=ULMGSY71R1)](https://codecov.io/gh/tumaer/lagrangebench)
+[![Tests](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml/badge.svg)](https://github.com/tumaer/lagrangebench/actions/workflows/tests.yml)
+[![CodeCov](https://codecov.io/gh/tumaer/lagrangebench/graph/badge.svg?token=ULMGSY71R1)](https://codecov.io/gh/tumaer/lagrangebench)
 [![License](https://img.shields.io/pypi/l/lagrangebench)](https://github.com/tumaer/lagrangebench/blob/main/LICENSE)
 
 </div>
@@ -65,11 +66,9 @@ pip install -r requirements_cuda.txt
 For a CPU version of the requirements file, one could use `docs/requirements.txt`.
 
 ### GPU support
-To run JAX on GPU, follow the [Jax CUDA guide](https://github.com/google/jax#pip-installation-gpu-cuda-installed-via-pip-easier), or in general run
+To run JAX on GPU, follow [Installing JAX](https://jax.readthedocs.io/en/latest/installation.html), or in general run
 ```bash
-pip install --upgrade jax[cuda11_pip]==0.4.20 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
-# or, for cuda 12
-pip install --upgrade jax[cuda12_pip]==0.4.20 -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install -U "jax[cuda12]==0.4.29"
 ```
 
 ### MacOS
@@ -168,8 +167,7 @@ python main.py gpu=$GPU_ID mode=infer eval.test=True load_ckp=gns_tgv2d/best
 📦lagrangebench
  ┣ 📂case_setup     # Case setup manager
  ┃ ┣ 📜case.py      # CaseSetupFn class
- ┃ ┣ 📜features.py  # Feature extraction
- ┃ ┗ 📜partition.py # Alternative neighbor list implementations
+ ┃ ┗ 📜features.py  # Feature extraction
  ┣ 📂data           # Datasets and dataloading utils
  ┃ ┣ 📜data.py      # H5Dataset class and specific datasets
  ┃ ┗ 📜utils.py
@@ -223,7 +221,7 @@ poetry version patch  # or minor/major
 After you have run `git add <FILE>` and try to `git commit`, the pre-commit hook will
 fix the linting and formatting of `<FILE>` before you are allowed to commit.
 
-You should also run the unit tests locally before creating a PR. Do this simply by:
+You should also run the tests locally before creating a PR. Do this simply by:
 
 ```bash
 # pytest is configured in pyproject.toml
