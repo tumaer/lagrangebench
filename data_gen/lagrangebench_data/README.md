@@ -32,9 +32,12 @@ bash dataset_tgv.sh
 rm -rf jax-sph/ cases/ main.py
 ```
 
-Inspect that the simulated trajectories are of the configured length, e.g.
+To inspect whether the simulated trajectories are of the desired length, we can use
 ```bash
-python count_files.py --src_dir="/tmp/lagrangebench_data/raw/2D_TGV_2500_10kevery100/" --target_count=127
+count_and_check() { find "$1" -type f | sed 's%/[^/]*$%%' | uniq -c | awk -v target="$2" '{if ($1 != target) $1=$1" - Failed!"; n=split($2, a, /[/]/); print a[n]" - "$1}'; }
+
+# and apply it e.g. to TGV with the arguments: 1. dataset directory and 2. target count
+count_and_check "/tmp/lagrangebench_data/raw/2D_TGV_2500_10kevery100/" 127
 ```
 
 ## Errata
