@@ -92,6 +92,11 @@ class H5Dataset(Dataset):
 
             self.external_force_fn = force_module.force_fn
         else:
+            if self.name in ["dam2d", "rpf2d", "rpf3d"]:
+                raise FileNotFoundError(
+                    f"External force function not found in {dataset_path}. "
+                    "Download the latest LagrangeBench dataset from Zenodo."
+                )
             self.external_force_fn = None
 
         # load dataset metadata
