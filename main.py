@@ -63,6 +63,9 @@ if __name__ == "__main__":
         os.environ["JAX_PLATFORMS"] = "cpu"
     os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(cli_args.xla_mem_fraction)
 
+    # The following line makes the code deterministic on GPUs, but also extremely slow.
+    # os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"
+
     cfg = load_embedded_configs(config_path, cli_args)
 
     print("#" * 79, "\nStarting a LagrangeBench run with the following configs:")

@@ -71,6 +71,9 @@ To run JAX on GPU, follow [Installing JAX](https://jax.readthedocs.io/en/latest/
 pip install -U "jax[cuda12]==0.4.29"
 ```
 
+> Note: as of 27.06.2024, to make our GNN models **deterministic** on GPUs, you need to set `os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"`. However, all current models rely of `scatter_sum`, and this operation seems to be slower than running a normal for-loop in Python, when executed in deterministic mode, see [#17844](https://github.com/google/jax/issues/17844) and [#10674](https://github.com/google/jax/discussions/10674).
+
+
 ### MacOS
 Currently, only the CPU installation works. You will need to change a few small things to get it going:
 - Clone installation: in `pyproject.toml` change the torch version from `2.1.0+cpu` to `2.1.0`. Then, remove the `poetry.lock` file and run `poetry install --only main`.
