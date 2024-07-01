@@ -71,6 +71,9 @@ To run JAX on GPU, follow [Installing JAX](https://jax.readthedocs.io/en/latest/
 pip install -U "jax[cuda12]==0.4.29"
 ```
 
+> Note: as of 27.06.2024, to make our GNN models **deterministic** on GPUs, you need to set `os.environ["XLA_FLAGS"] = "--xla_gpu_deterministic_ops=true"`. However, all current models rely of `scatter_sum`, and this operation seems to be slower than running a normal for-loop in Python, when executed in deterministic mode, see [#17844](https://github.com/google/jax/issues/17844) and [#10674](https://github.com/google/jax/discussions/10674).
+
+
 ### MacOS
 Currently, only the CPU installation works. You will need to change a few small things to get it going:
 - Clone installation: in `pyproject.toml` change the torch version from `2.1.0+cpu` to `2.1.0`. Then, remove the `poetry.lock` file and run `poetry install --only main`.
@@ -121,7 +124,7 @@ We provide three notebooks that show LagrangeBench functionalities, namely:
 - [`gns_data.ipynb`](notebooks/gns_data.ipynb) [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/tumaer/lagrangebench/blob/main/notebooks/gns_data.ipynb), showing how to train models within LagrangeBench on the datasets from the paper [Learning to Simulate Complex Physics with Graph Networks](https://arxiv.org/abs/2002.09405).
 
 ## Datasets
-The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https://zenodo.org/doi/10.5281/zenodo.10021925). If a dataset is not found in `dataset_path`, the data is automatically downloaded. Alternatively, to manually download the datasets use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
+The datasets are hosted on Zenodo under the DOI: [10.5281/zenodo.10021925](https://zenodo.org/doi/10.5281/zenodo.10021925). If a dataset is not found in `dataset.src`, the data is automatically downloaded. Alternatively, to manually download the datasets use the `download_data.sh` shell script, either with a specific dataset name or "all". Namely
 - __Taylor Green Vortex 2D__: `bash download_data.sh tgv_2d datasets/`
 - __Reverse Poiseuille Flow 2D__: `bash download_data.sh rpf_2d datasets/`
 - __Lid Driven Cavity 2D__: `bash download_data.sh ldc_2d datasets/`

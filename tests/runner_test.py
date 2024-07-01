@@ -15,7 +15,9 @@ class TestRunner(unittest.TestCase):
         self.cfg = OmegaConf.create(
             {
                 "mode": "all",
-                "dataset_path": "tests/3D_LJ_3_1214every1",
+                "dataset": {
+                    "src": "tests/3D_LJ_3_1214every1",
+                },
                 "model": {
                     "name": "linear",
                     "input_seq_length": 3,

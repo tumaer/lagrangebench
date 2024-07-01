@@ -3,18 +3,14 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-.. ![rpf2d.gif](https://s11.gifyu.com/images/Sce92.gif)
-..  ![rpf3d.gif](https://s11.gifyu.com/images/Sce3X.gif)
-.. <img src="https://s11.gifyu.com/images/Sce92.gif" width="40" height="40" />
-
 LagrangeBench
 =============
 
-.. image:: https://s11.gifyu.com/images/Sce92.gif
-   :alt: Funny GIF
+.. image:: https://drive.google.com/thumbnail?id=1rP0pf1KL8iGbly0tA0qthUE_tMDv_9Jp&sz=w1000
+   :alt: rpf2d.gif
 
-.. image:: https://s11.gifyu.com/images/Sce3X.gif
-   :alt: Funny GIF2
+.. image:: https://drive.google.com/thumbnail?id=1BMGkHj9EYMGUOdsE5QwiJWCTvDNqveHc&sz=w1000
+   :alt: rpf3d.gif
 
 
 What is ``LagrangeBench``?

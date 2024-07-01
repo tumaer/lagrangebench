@@ -1,6 +1,7 @@
 extends: LAGRANGEBENCH_DEFAULTS
 
-dataset_path: datasets/3D_TGV_8000_10kevery100
+dataset:
+  src: datasets/3D_TGV_8000_10kevery100
 
 logging:
   wandb_project: tgv_3d

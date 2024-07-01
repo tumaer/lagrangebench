@@ -53,7 +53,8 @@ class H5Dataset(Dataset):
 
         Args:
             split: "train", "valid", or "test"
-            dataset_path: Path to the dataset
+            dataset_path: Path to the dataset. Download will start automatically if
+                dataset_path does not exist.
             name: Name of the dataset. If None, it is inferred from the path.
             input_seq_length: Length of the input sequence. The number of historic
                 velocities is input_seq_length - 1. And during training, the returned
@@ -92,6 +93,11 @@ class H5Dataset(Dataset):
 
             self.external_force_fn = force_module.force_fn
         else:
+            if self.name in ["dam2d", "rpf2d", "rpf3d"]:
+                raise FileNotFoundError(
+                    f"External force function not found in {dataset_path}. "
+                    "Download the latest LagrangeBench dataset from Zenodo."
+                )
             self.external_force_fn = None
 
         # load dataset metadata

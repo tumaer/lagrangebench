@@ -253,7 +253,9 @@ class Trainer:
         update_fn = partial(_update, loss_fn=loss_fn, opt_update=self.opt_update)
 
         # init values
-        pos_input_and_target, particle_type = next(iter(loader_train))
+        raw_batch = next(iter(loader_train))
+        raw_batch = jax.tree_map(lambda x: jnp.array(x), raw_batch)  # numpy to jax
+        pos_input_and_target, particle_type = raw_batch
         raw_sample = (pos_input_and_target[0], particle_type[0])
         key, features, _, neighbors = case.allocate(self.base_key, raw_sample)
 
