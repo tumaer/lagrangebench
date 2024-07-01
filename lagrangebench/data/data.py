@@ -53,7 +53,8 @@ class H5Dataset(Dataset):
 
         Args:
             split: "train", "valid", or "test"
-            dataset_path: Path to the dataset
+            dataset_path: Path to the dataset. Download will start automatically if
+                dataset_path does not exist.
             name: Name of the dataset. If None, it is inferred from the path.
             input_seq_length: Length of the input sequence. The number of historic
                 velocities is input_seq_length - 1. And during training, the returned
