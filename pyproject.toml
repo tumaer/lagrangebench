@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "lagrangebench"
-version = "0.1.2"
+version = "0.2.0"
 description = "LagrangeBench: A Lagrangian Fluid Mechanics Benchmarking Suite"
 authors = [
     "Artur Toshev, Gianluca Galletti <artur.toshev@tum.de>"
