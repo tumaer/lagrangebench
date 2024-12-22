@@ -1,9 +1,9 @@
 <div align="center">
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://svgshare.com/i/11hG.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://svgshare.com/i/11hG.svg">
-<img alt="LagrangeBench Logo: Lagrangian Fluid Mechanics Benchmarking Suite" src="https://svgshare.com/i/11hG.svg" width=550pt>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/lagrangebench_logo.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/lagrangebench_logo.svg">
+<img alt="LagrangeBench Logo: Lagrangian Fluid Mechanics Benchmarking Suite" src="docs/lagrangebench_logo.svg" width=550pt>
 </picture>
 <!-- [![Static Badge](https://img.shields.io/badge/docs-red?style=for-the-badge&logo=readthedocs)](https://lagrangebench.readthedocs.io/en/latest/index.html)
 [![Static Badge](https://img.shields.io/badge/arxiv-blue?style=for-the-badge&logo=arxiv)](https://arxiv.org/abs/2309.16342)
