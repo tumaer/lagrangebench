@@ -80,7 +80,8 @@ exclude = [
     ".venv",
     "venv",
     "docs/_build",
-    "dist"
+    "dist",
+    "notebooks",
 ]
 show-fixes = true
 line-length = 88
