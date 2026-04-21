@@ -109,7 +109,7 @@ def push_forward_sample_steps(key, step, pushforward):
     return key, unroll_steps
 
 
-def push_forward_build(model_apply, case):
+def push_forward_build(case):
     r"""Build the push forward function, introduced by
     `Brandstetter et al. <https://arxiv.org/abs/2202.03376>`_.
 
@@ -130,24 +130,23 @@ def push_forward_build(model_apply, case):
     running gradients through the last unroll step.
 
     Args:
-        model_apply: Model apply function
         case: Case setup function
     """
+    import equinox as eqx  # local import to avoid circular dep on package init
 
-    @jax.jit
-    def push_forward_fn(features, current_pos, particle_type, neighbors, params, state):
+    @eqx.filter_jit
+    def push_forward_fn(model, features, current_pos, particle_type, neighbors):
         """Push forward function.
 
         Args:
+            model: Equinox model.
             features: Input features
             current_pos: Current position
             particle_type: Particle type vector
             neighbors: Neighbor list
-            params: Model parameters
-            state: Model state
         """
         # no buffer overflow check here, since push forward acts on later epochs
-        pred, _ = model_apply(params, state, (features, particle_type))
+        pred = model((features, particle_type))
         next_pos = case.integrate(pred, current_pos)
         current_pos = jnp.concatenate(
             [current_pos[:, 1:], next_pos[:, None, :]], axis=1

@@ -20,6 +20,7 @@ rollouts
 profile
 dist
 .coverage
+.claude
 
 # Sphinx documentation
 docs/_build/

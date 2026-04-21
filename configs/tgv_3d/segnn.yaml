@@ -1,4 +1,7 @@
-extends: configs/tgv_3d/base.yaml
+# @package _global_
+defaults:
+  - base
+  - _self_
 
 model:
   name: segnn

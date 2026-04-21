@@ -1,42 +1,42 @@
-"""Simple baseline linear model."""
+"""Simple baseline linear model (Equinox)."""
 
 from typing import Dict, Tuple
 
-import haiku as hk
 import jax.numpy as jnp
 import numpy as np
-from jax import vmap
 
 from .base import BaseModel
+from .utils import LinearXav
 
 
 class Linear(BaseModel):
-    r"""Model defining linear relation between input nodes and targets.
+    r"""Linear relation between input scalar features and targets.
 
-    :math:`\mathbf{a}_i = \mathbf{W} \mathbf{x}_i` where :math:`\mathbf{a}_i` are the
-    output accelerations, :math:`\mathbf{W}` is a learnable weight matrix and
-    :math:`\mathbf{x}_i` are input features.
+    :math:`\mathbf{a}_i = \mathbf{W} \mathbf{x}_i`.
     """
 
-    def __init__(self, dim_out):
+    mlp: LinearXav
+
+    def __init__(self, in_features: int, dim_out: int, *, key):
         """Initialize the model.
 
         Args:
+            in_features: Total number of scalar input features per node (sum of the
+                dimensionalities of ``vel_hist``, ``vel_mag``, ``bound``, ``force``
+                plus 1 for the particle type).
             dim_out: Output dimensionality.
+            key: PRNG key for init.
         """
-        super().__init__()
-        self.mlp = hk.Linear(dim_out)
+        self.mlp = LinearXav(in_features, dim_out, key=key)
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], np.ndarray]
     ) -> Dict[str, jnp.ndarray]:
-        # transform
         features, particle_type = sample
         x = [
             features[k]
             for k in ["vel_hist", "vel_mag", "bound", "force"]
             if k in features
         ] + [particle_type[:, None]]
-        # call
-        acc = vmap(self.mlp)(jnp.concatenate(x, axis=-1))
+        acc = self.mlp(jnp.concatenate(x, axis=-1))
         return {"acc": acc}

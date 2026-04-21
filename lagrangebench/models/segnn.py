@@ -11,15 +11,16 @@ Standalone implementation + validation: https://github.com/gerkone/segnn-jax
 
 import warnings
 from math import prod
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import e3nn_jax as e3nn
-import haiku as hk
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jraph
 from e3nn_jax import Irreps, IrrepsArray
-from jax.tree_util import Partial, tree_map
+from e3nn_jax._src.linear import FunctionalLinear
+from jax.tree_util import tree_map
 
 from lagrangebench.utils import NodeType
 
@@ -27,21 +28,21 @@ from .base import BaseModel
 from .utils import SteerableGraphsTuple, features_2d_to_3d
 
 
-def uniform_init(
-    name: str,
-    path_shape: Tuple[int, ...],
-    weight_std: float,
-    dtype: jnp.dtype = jnp.float32,
-) -> jnp.ndarray:
-    return hk.get_parameter(
-        name,
-        shape=path_shape,
-        dtype=dtype,
-        init=hk.initializers.RandomUniform(minval=-weight_std, maxval=weight_std),
-    )
+def _resolve_irreps_io(
+    irreps_in: Irreps, irreps_out: Irreps, simplify: bool = True
+) -> Tuple[Irreps, Irreps]:
+    """Match ``e3nn.flax.Linear``'s irreps-in/out simplification and filtering."""
+    irreps_in = Irreps(irreps_in)
+    irreps_out = Irreps(irreps_out)
+    if simplify:
+        irreps_in = irreps_in.simplify()
+        irreps_out = irreps_out.simplify()
+    # only keep outputs that are reachable from the input
+    irreps_out = irreps_out.filter(keep=irreps_in)
+    return irreps_in, irreps_out
 
 
-class O3TensorProduct(hk.Module):
+class O3TensorProduct(eqx.Module):
     r"""
     O(3) equivariant linear parametrized tensor product layer.
 
@@ -59,60 +60,82 @@ class O3TensorProduct(hk.Module):
     as fast as FullyConnectedTensorProduct.
     """
 
+    weights: List[jnp.ndarray]
+    _linear: FunctionalLinear = eqx.field(static=True)
+    output_irreps: Irreps = eqx.field(static=True)
+
     def __init__(
         self,
-        output_irreps: e3nn.Irreps,
+        x_irreps: Irreps,
+        output_irreps: Irreps,
+        y_irreps: Optional[Irreps] = None,
         *,
         biases: bool = True,
-        name: Optional[str] = None,
-        init_fn: Callable = uniform_init,
+        init_scale: float = 1.0,
         gradient_normalization: Union[str, float] = "element",
         path_normalization: Union[str, float] = "element",
+        key,
     ):
         """Initialize the tensor product.
 
         Args:
+            x_irreps: Irreps of the left input ``x``.
             output_irreps: Output representation
+            y_irreps: Irreps of the right input ``y``. Defaults to the scalar
+                ``1x0e`` placeholder used when ``y`` is omitted at call time.
             biases: If set ot true will add biases
-            name: Name of the linear layer params
-            init_fn: Weight initialization function. Default is uniform.
+            init_scale: Multiplicative factor applied to the per-path weight std
+                when sampling the weights with a uniform distribution in
+                ``[-weight_std, weight_std]``.
             gradient_normalization: Gradient normalization method. Default is "element".
             NOTE: gradient_normalization="element" is the default in torch and haiku.
             path_normalization: Path normalization method. Default is "element"
+            key: PRNG key for initialization.
         """
-        super().__init__(name=name)
+        x_irreps = Irreps(x_irreps)
+        if y_irreps is None:
+            y_irreps = Irreps("1x0e")
+        else:
+            y_irreps = Irreps(y_irreps)
+        output_irreps = Irreps(output_irreps)
 
-        if not isinstance(output_irreps, e3nn.Irreps):
-            output_irreps = e3nn.Irreps(output_irreps)
-        self.output_irreps = output_irreps
+        # the actual input to the internal linear layer is tensor_product(x, y)
+        tp_irreps = e3nn.tensor_product(x_irreps, y_irreps)
 
-        self._linear = e3nn.haiku.Linear(
-            self.output_irreps,
-            get_parameter=init_fn,
-            biases=(biases and "0e" in self.output_irreps),
-            gradient_normalization=gradient_normalization,
-            path_normalization=path_normalization,
-        )
-
-    def _check_input(
-        self, x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None
-    ) -> Tuple[e3nn.IrrepsArray, e3nn.IrrepsArray]:
-        if not y:
-            y = e3nn.IrrepsArray("1x0e", jnp.ones((1, 1), dtype=x.dtype))
-        if x.irreps.lmax == 0 and y.irreps.lmax == 0 and self.output_irreps.lmax > 0:
+        # check for unreachable outputs (warn as original code did)
+        if x_irreps.lmax == 0 and y_irreps.lmax == 0 and output_irreps.lmax > 0:
             warnings.warn(
-                f"The specified output irreps ({self.output_irreps}) are not scalars "
+                f"The specified output irreps ({output_irreps}) are not scalars "
                 "but both operands are. This can have undesired behaviour (NaN). Try "
                 "redistributing them into scalars or choose higher orders."
             )
-        miss = self.output_irreps.filter(drop=e3nn.tensor_product(x.irreps, y.irreps))
+        miss = output_irreps.filter(drop=tp_irreps)
         if len(miss) > 0:
             warnings.warn(f"Output irreps: '{miss}' are unreachable and were ignored.")
-        return x, y
+
+        lin_in_irreps, lin_out_irreps = _resolve_irreps_io(tp_irreps, output_irreps)
+        linear = FunctionalLinear(
+            lin_in_irreps,
+            lin_out_irreps,
+            biases=(biases and "0e" in lin_out_irreps),
+            gradient_normalization=gradient_normalization,
+            path_normalization=path_normalization,
+        )
+        self._linear = linear
+        self.output_irreps = lin_out_irreps
+
+        keys = jax.random.split(key, max(len(linear.instructions), 1))
+        weights = []
+        for k, ins in zip(keys, linear.instructions):
+            std = ins.weight_std * init_scale
+            weights.append(
+                jax.random.uniform(k, ins.path_shape, minval=-std, maxval=std)
+            )
+        self.weights = weights
 
     def __call__(
-        self, x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None
-    ) -> e3nn.IrrepsArray:
+        self, x: IrrepsArray, y: Optional[IrrepsArray] = None
+    ) -> IrrepsArray:
         """Applies an O(3) equivariant linear parametrized tensor product layer.
 
         Args:
@@ -122,21 +145,18 @@ class O3TensorProduct(hk.Module):
         Returns:
             The output to the weighted tensor product (IrrepsArray).
         """
-        x, y = self._check_input(x, y)
-        # tensor product + linear
-        tp = self._linear(e3nn.tensor_product(x, y))
-        return tp
+        if y is None:
+            y = e3nn.IrrepsArray("1x0e", jnp.ones((1, 1), dtype=x.dtype))
+        tp = e3nn.tensor_product(x, y)
+        tp = tp.remove_zero_chunks().regroup()
+
+        f = lambda arr: self._linear(self.weights, arr)
+        for _ in range(tp.ndim - 1):
+            f = e3nn.utils.vmap(f)
+        return f(tp)
 
 
-def O3TensorProductGate(
-    output_irreps: e3nn.Irreps,
-    *,
-    biases: bool = True,
-    scalar_activation: Optional[Callable] = None,
-    gate_activation: Optional[Callable] = None,
-    name: Optional[str] = None,
-    init_fn: Optional[Callable] = None,
-) -> Callable:
+class O3TensorProductGate(eqx.Module):
     r"""Non-linear (gated) O(3) equivariant linear tensor product layer.
 
     It applies a linear tensor product of representations to the input(s) and then
@@ -145,43 +165,62 @@ def O3TensorProductGate(
     The input representation is lifted to have gating scalars.
 
     Args:
+        x_irreps: Irreps of the left input ``x``.
         output_irreps: Output representation
+        y_irreps: Irreps of the right input ``y``.
         biases: Add biases
         scalar_activation: Activation function for scalars
         gate_activation: Activation function for higher order
-        name: Name of the linear layer params
-
-    Returns:
-        Function that applies the gated tensor product layer.
+        key: PRNG key for initialization.
     """
-    if not isinstance(output_irreps, e3nn.Irreps):
-        output_irreps = e3nn.Irreps(output_irreps)
 
-    # lift output with gating scalars
-    gate_irreps = e3nn.Irreps(
-        f"{output_irreps.num_irreps - output_irreps.count('0e')}x0e"
-    )
-    tensor_product = O3TensorProduct(
-        (gate_irreps + output_irreps).regroup(),
-        biases=biases,
-        name=name,
-        init_fn=init_fn,
-    )
-    if not scalar_activation:
-        scalar_activation = jax.nn.silu
-    if not gate_activation:
-        gate_activation = jax.nn.sigmoid
+    tp: O3TensorProduct
+    scalar_activation: Callable = eqx.field(static=True)
+    gate_activation: Callable = eqx.field(static=True)
 
-    def _gated_tensor_product(
-        x: e3nn.IrrepsArray, y: Optional[e3nn.IrrepsArray] = None, **kwargs
-    ) -> e3nn.IrrepsArray:
-        tp = tensor_product(x, y, **kwargs)
-        return e3nn.gate(tp, even_act=scalar_activation, odd_gate_act=gate_activation)
+    def __init__(
+        self,
+        x_irreps: Irreps,
+        output_irreps: Irreps,
+        y_irreps: Optional[Irreps] = None,
+        *,
+        biases: bool = True,
+        scalar_activation: Optional[Callable] = None,
+        gate_activation: Optional[Callable] = None,
+        init_scale: float = 1.0,
+        key,
+    ):
+        output_irreps = Irreps(output_irreps)
+        gate_irreps = Irreps(
+            f"{output_irreps.num_irreps - output_irreps.count('0e')}x0e"
+        )
+        self.tp = O3TensorProduct(
+            x_irreps,
+            (gate_irreps + output_irreps).regroup(),
+            y_irreps=y_irreps,
+            biases=biases,
+            init_scale=init_scale,
+            key=key,
+        )
+        if scalar_activation is None:
+            scalar_activation = jax.nn.silu
+        if gate_activation is None:
+            gate_activation = jax.nn.sigmoid
+        self.scalar_activation = scalar_activation
+        self.gate_activation = gate_activation
 
-    return _gated_tensor_product
+    def __call__(
+        self, x: IrrepsArray, y: Optional[IrrepsArray] = None
+    ) -> IrrepsArray:
+        tp = self.tp(x, y)
+        return e3nn.gate(
+            tp,
+            even_act=self.scalar_activation,
+            odd_gate_act=self.gate_activation,
+        )
 
 
-def O3Embedding(embed_irreps: Irreps, embed_edges: bool = True) -> Callable:
+class O3Embedding(eqx.Module):
     """Linear steerable embedding.
 
     Embeds the graph nodes in the representation space :param embed_irreps:.
@@ -189,154 +228,207 @@ def O3Embedding(embed_irreps: Irreps, embed_edges: bool = True) -> Callable:
     Args:
         embed_irreps: Output representation
         embed_edges: If true also embed edges/message passing features
-
-    Returns:
-        Function to embed graph nodes (and optionally edges)
     """
 
-    def _embedding(
-        st_graph: SteerableGraphsTuple,
-    ) -> SteerableGraphsTuple:
-        graph = st_graph.graph
-        nodes = O3TensorProduct(
+    node_embed: O3TensorProduct
+    msg_embed: Optional[O3TensorProduct]
+    embed_edges: bool = eqx.field(static=True)
+
+    def __init__(
+        self,
+        node_in_irreps: Irreps,
+        node_attr_irreps: Irreps,
+        edge_in_irreps: Optional[Irreps],
+        edge_attr_irreps: Optional[Irreps],
+        embed_irreps: Irreps,
+        embed_edges: bool = True,
+        *,
+        key,
+    ):
+        self.embed_edges = embed_edges
+        k_nodes, k_msg = jax.random.split(key)
+        self.node_embed = O3TensorProduct(
+            node_in_irreps,
             embed_irreps,
-            name="embedding_nodes",
-        )(graph.nodes, st_graph.node_attributes)
-        st_graph = st_graph._replace(graph=graph._replace(nodes=nodes))
-
-        # NOTE edge embedding is not in the original paper but can get good results
+            y_irreps=node_attr_irreps,
+            key=k_nodes,
+        )
         if embed_edges:
-            additional_message_features = O3TensorProduct(
-                embed_irreps, name="embedding_msg_features"
+            assert edge_in_irreps is not None and edge_attr_irreps is not None
+            self.msg_embed = O3TensorProduct(
+                edge_in_irreps,
+                embed_irreps,
+                y_irreps=edge_attr_irreps,
+                key=k_msg,
             )
-            (st_graph.additional_message_features, st_graph.edge_attributes)
-            st_graph = st_graph._replace(
-                additional_message_features=additional_message_features
-            )
+        else:
+            self.msg_embed = None
 
+    def __call__(self, st_graph: SteerableGraphsTuple) -> SteerableGraphsTuple:
+        graph = st_graph.graph
+        nodes = self.node_embed(graph.nodes, st_graph.node_attributes)
+        st_graph = st_graph._replace(graph=graph._replace(nodes=nodes))
+        if self.embed_edges:
+            amf = self.msg_embed(
+                st_graph.additional_message_features, st_graph.edge_attributes
+            )
+            st_graph = st_graph._replace(additional_message_features=amf)
         return st_graph
 
-    return _embedding
 
-
-def O3Decoder(
-    latent_irreps: Irreps,
-    output_irreps: Irreps,
-    n_blocks: int = 1,
-):
+class O3Decoder(eqx.Module):
     """Steerable decoder.
 
     Args:
         latent_irreps: Representation from the previous block
         output_irreps: Output representation
         n_blocks: Number of tensor product blocks in the decoder
-
-    Returns:
-        Decoded latent feature space to output space.
     """
 
-    def _decoder(st_graph: SteerableGraphsTuple):
-        nodes = st_graph.graph.nodes
-        for i in range(n_blocks):
-            nodes = O3TensorProductGate(latent_irreps, name=f"readout_{i}")(
-                nodes, st_graph.node_attributes
-            )
+    readout_blocks: List[O3TensorProductGate]
+    output_block: O3TensorProduct
 
-        return O3TensorProduct(output_irreps, name="output")(
-            nodes, st_graph.node_attributes
+    def __init__(
+        self,
+        latent_irreps: Irreps,
+        node_attr_irreps: Irreps,
+        output_irreps: Irreps,
+        n_blocks: int = 1,
+        *,
+        key,
+    ):
+        keys = jax.random.split(key, n_blocks + 1)
+        self.readout_blocks = [
+            O3TensorProductGate(
+                latent_irreps,
+                latent_irreps,
+                y_irreps=node_attr_irreps,
+                key=keys[i],
+            )
+            for i in range(n_blocks)
+        ]
+        self.output_block = O3TensorProduct(
+            latent_irreps,
+            output_irreps,
+            y_irreps=node_attr_irreps,
+            key=keys[-1],
         )
 
-    return _decoder
+    def __call__(self, st_graph: SteerableGraphsTuple) -> IrrepsArray:
+        nodes = st_graph.graph.nodes
+        for block in self.readout_blocks:
+            nodes = block(nodes, st_graph.node_attributes)
+        return self.output_block(nodes, st_graph.node_attributes)
 
 
-class SEGNNLayer(hk.Module):
+class SEGNNLayer(eqx.Module):
     """
     Steerable E(3) equivariant layer.
 
     Applies a message passing step (GN) with equivariant message and update functions.
     """
 
+    msg_blocks: List[O3TensorProductGate]
+    update_gate_blocks: List[O3TensorProductGate]
+    update_final: O3TensorProduct
+    output_irreps: Irreps = eqx.field(static=True)
+    n_blocks: int = eqx.field(static=True)
+    aggregate_fn: Callable = eqx.field(static=True)
+
     def __init__(
         self,
+        msg_in_irreps: Irreps,
+        node_in_irreps: Irreps,
+        edge_attr_irreps: Irreps,
+        node_attr_irreps: Irreps,
         output_irreps: Irreps,
-        layer_idx: int,
         n_blocks: int = 2,
-        norm: Optional[str] = None,
-        aggregate_fn: Optional[Callable] = jraph.segment_sum,
+        aggregate_fn: Callable = jraph.segment_sum,
+        *,
+        key,
     ):
         """
         Initialize the layer.
 
         Args:
+            msg_in_irreps: Irreps of the pre-message concatenation
+                ``[h_i, h_j, additional_message_features]`` at the layer input.
+            node_in_irreps: Irreps of the node features at the layer input.
+            edge_attr_irreps: Irreps of the steerable edge attributes.
+            node_attr_irreps: Irreps of the steerable node attributes.
             output_irreps: Layer output representation
-            layer_idx: Numbering of the layer
             n_blocks: Number of tensor product n_blocks in the layer
-            norm: Normalization type. Either be None, 'instance' or 'batch'
             aggregate_fn: Message aggregation function. Defaults to sum.
+            key: PRNG key for initialization.
         """
-        super().__init__(f"layer_{layer_idx}")
-        assert norm in ["batch", "instance", "none", None], f"Unknown norm '{norm}'"
-        self._output_irreps = output_irreps
-        self._n_blocks = n_blocks
-        self._norm = norm
-        self._aggregate_fn = aggregate_fn
+        self.output_irreps = Irreps(output_irreps)
+        self.n_blocks = n_blocks
+        self.aggregate_fn = aggregate_fn
+
+        output_irreps_clean = Irreps(output_irreps)
+
+        key_m, key_u = jax.random.split(key, 2)
+        keys_m = jax.random.split(key_m, n_blocks)
+        self.msg_blocks = []
+        cur_irreps = Irreps(msg_in_irreps)
+        for i in range(n_blocks):
+            block = O3TensorProductGate(
+                cur_irreps,
+                output_irreps_clean,
+                y_irreps=edge_attr_irreps,
+                key=keys_m[i],
+            )
+            self.msg_blocks.append(block)
+            # after gate the irreps collapse back to ``output_irreps``
+            cur_irreps = output_irreps_clean
+
+        keys_u = jax.random.split(key_u, n_blocks)
+        self.update_gate_blocks = []
+        # update takes [nodes, msg] concatenated -> node_in_irreps + output_irreps
+        cur_irreps = (Irreps(node_in_irreps) + output_irreps_clean).regroup()
+        for i in range(n_blocks - 1):
+            block = O3TensorProductGate(
+                cur_irreps,
+                output_irreps_clean,
+                y_irreps=node_attr_irreps,
+                key=keys_u[i],
+            )
+            self.update_gate_blocks.append(block)
+            cur_irreps = output_irreps_clean
+        self.update_final = O3TensorProduct(
+            cur_irreps,
+            output_irreps_clean,
+            y_irreps=node_attr_irreps,
+            key=keys_u[-1],
+        )
 
     def _message(
         self,
-        edge_attribute: IrrepsArray,
-        additional_message_features: IrrepsArray,
-        edge_features: Any,
         incoming: IrrepsArray,
         outgoing: IrrepsArray,
-        globals_: Any,
+        additional_message_features: Optional[IrrepsArray],
+        edge_attribute: IrrepsArray,
     ) -> IrrepsArray:
         """Steerable equivariant message function."""
-        _ = globals_
-        _ = edge_features
-        # create messages
         msg = e3nn.concatenate([incoming, outgoing], axis=-1)
         if additional_message_features is not None:
             msg = e3nn.concatenate([msg, additional_message_features], axis=-1)
-        # message mlp (phi_m in the paper) steered by edge attributeibutes
-        for i in range(self._n_blocks):
-            msg = O3TensorProductGate(self._output_irreps, name=f"tp_{i}")(
-                msg, edge_attribute
-            )
-        # NOTE: original implementation only applied batch norm to messages
-        if self._norm == "batch":
-            msg = e3nn.haiku.BatchNorm(irreps=self._output_irreps)(msg)
+        for block in self.msg_blocks:
+            msg = block(msg, edge_attribute)
         return msg
 
     def _update(
         self,
-        node_attribute: IrrepsArray,
         nodes: IrrepsArray,
-        senders: Any,
-        msg: IrrepsArray,
-        globals_: Any,
+        msg_sum: IrrepsArray,
+        node_attribute: IrrepsArray,
     ) -> IrrepsArray:
         """Steerable equivariant update function."""
-        _ = senders
-        _ = globals_
-        x = e3nn.concatenate([nodes, msg], axis=-1)
-        # update mlp (phi_f in the paper) steered by node attributeibutes
-        for i in range(self._n_blocks - 1):
-            x = O3TensorProductGate(self._output_irreps, name=f"tp_{i}")(
-                x, node_attribute
-            )
-        # last update layer without activation
-        update = O3TensorProduct(self._output_irreps, name=f"tp_{self._n_blocks - 1}")(
-            x, node_attribute
-        )
-        # residual connection
-        nodes += update
-        # message norm
-        if self._norm in ["batch", "instance"]:
-            nodes = e3nn.haiku.BatchNorm(
-                irreps=self._output_irreps,
-                instance=(self._norm == "instance"),
-            )(nodes)
-        return nodes
+        x = e3nn.concatenate([nodes, msg_sum], axis=-1)
+        for block in self.update_gate_blocks:
+            x = block(x, node_attribute)
+        update = self.update_final(x, node_attribute)
+        return nodes + update
 
     def __call__(self, st_graph: SteerableGraphsTuple) -> SteerableGraphsTuple:
         """Perform a message passing step.
@@ -347,23 +439,27 @@ class SEGNNLayer(hk.Module):
         Returns:
             The updated graph
         """
-        # NOTE node_attributes, edge_attributes and additional_message_features
-        #  are never updated within the message passing layers
-        return st_graph._replace(
-            graph=jraph.GraphNetwork(
-                update_node_fn=Partial(self._update, st_graph.node_attributes),
-                update_edge_fn=Partial(
-                    self._message,
-                    st_graph.edge_attributes,
-                    st_graph.additional_message_features,
-                ),
-                aggregate_edges_for_nodes_fn=self._aggregate_fn,
-            )(st_graph.graph)
+        graph = st_graph.graph
+        n_nodes = graph.nodes.shape[0]
+
+        incoming = tree_map(lambda a: a[graph.senders], graph.nodes)
+        outgoing = tree_map(lambda a: a[graph.receivers], graph.nodes)
+        msg = self._message(
+            incoming,
+            outgoing,
+            st_graph.additional_message_features,
+            st_graph.edge_attributes,
         )
+        # aggregate messages to receivers; apply segment_sum per chunk
+        msg_sum = tree_map(
+            lambda a: self.aggregate_fn(a, graph.receivers, n_nodes), msg
+        )
+        new_nodes = self._update(graph.nodes, msg_sum, st_graph.node_attributes)
+        return st_graph._replace(graph=graph._replace(nodes=new_nodes))
 
 
 def weight_balanced_irreps(
-    scalar_units: int, irreps_right: Irreps, lmax: int = None
+    scalar_units: int, irreps_right: Irreps, lmax: Optional[int] = None
 ) -> Irreps:
     """
     Determine left irreps so that the tensor product with irreps_right has at least
@@ -441,6 +537,22 @@ class SEGNN(BaseModel):
 
     """
 
+    embedding: O3Embedding
+    layers: List[SEGNNLayer]
+    decoder: O3Decoder
+
+    attribute_irreps: Irreps = eqx.field(static=True)
+    hidden_irreps: Irreps = eqx.field(static=True)
+    output_irreps: Irreps = eqx.field(static=True)
+    node_features_irreps: Irreps = eqx.field(static=True)
+    edge_features_irreps: Irreps = eqx.field(static=True)
+    num_mp_steps: int = eqx.field(static=True)
+    blocks_per_step: int = eqx.field(static=True)
+    embed_msg_features: bool = eqx.field(static=True)
+    velocity_aggregate: str = eqx.field(static=True)
+    n_vels: int = eqx.field(static=True)
+    homogeneous_particles: bool = eqx.field(static=True)
+
     def __init__(
         self,
         node_features_irreps: Irreps,
@@ -453,9 +565,10 @@ class SEGNN(BaseModel):
         n_vels: int,
         velocity_aggregate: str = "avg",
         homogeneous_particles: bool = True,
-        norm: Optional[str] = None,
         blocks_per_step: int = 2,
         embed_msg_features: bool = False,
+        *,
+        key,
     ):
         """
         Initialize the network.
@@ -471,95 +584,116 @@ class SEGNN(BaseModel):
             n_vels: Number of velocities in the history.
             velocity_aggregate: Velocity sequence aggregation method.
             homogeneous_particles: If all particles are of homogeneous type.
-            norm: Normalization type. Either None, 'instance' or 'batch'
             blocks_per_step: Number of tensor product blocks in each message passing
             embed_msg_features: Set to true to also embed edges/message passing features
+            key: PRNG key for initialization.
         """
-        super().__init__()
-
-        # network
-        self._attribute_irreps = Irreps.spherical_harmonics(lmax_attributes)
-        self._hidden_irreps = weight_balanced_irreps(
-            scalar_units, self._attribute_irreps, lmax_hidden
+        self.attribute_irreps = Irreps.spherical_harmonics(lmax_attributes)
+        self.hidden_irreps = weight_balanced_irreps(
+            scalar_units, self.attribute_irreps, lmax_hidden
         )
-        self._output_irreps = output_irreps
-        self._num_mp_steps = num_mp_steps
-        self._embed_msg_features = embed_msg_features
-        self._norm = norm
-        self._blocks_per_step = blocks_per_step
+        self.output_irreps = Irreps(output_irreps)
+        self.node_features_irreps = Irreps(node_features_irreps)
+        self.edge_features_irreps = Irreps(edge_features_irreps)
+        self.num_mp_steps = num_mp_steps
+        self.blocks_per_step = blocks_per_step
+        self.embed_msg_features = embed_msg_features
 
-        self._embedding = O3Embedding(
-            self._hidden_irreps,
-            embed_edges=self._embed_msg_features,
-        )
-
-        self._decoder = O3Decoder(
-            latent_irreps=self._hidden_irreps,
-            output_irreps=output_irreps,
-            n_blocks=self._blocks_per_step,
-        )
-
-        # transform
         assert velocity_aggregate in [
             "avg",
             "last",
         ], "Invalid velocity aggregate. Must be one of 'avg', 'sum' or 'last'."
-        self._node_features_irreps = node_features_irreps
-        self._edge_features_irreps = edge_features_irreps
-        self._velocity_aggregate = velocity_aggregate
-        self._n_vels = n_vels
-        self._homogeneous_particles = homogeneous_particles
+        self.velocity_aggregate = velocity_aggregate
+        self.n_vels = n_vels
+        self.homogeneous_particles = homogeneous_particles
+
+        keys = jax.random.split(key, 2 + num_mp_steps)
+        self.embedding = O3Embedding(
+            node_in_irreps=self.node_features_irreps,
+            node_attr_irreps=self.attribute_irreps,
+            edge_in_irreps=self.edge_features_irreps if embed_msg_features else None,
+            edge_attr_irreps=self.attribute_irreps if embed_msg_features else None,
+            embed_irreps=self.hidden_irreps,
+            embed_edges=embed_msg_features,
+            key=keys[0],
+        )
+
+        # message passing layers
+        self.layers = []
+        # input to message block: [h_i, h_j, msg_features] concat
+        msg_feat_irreps = (
+            self.hidden_irreps if embed_msg_features else self.edge_features_irreps
+        )
+        msg_in_irreps = (
+            (self.hidden_irreps + self.hidden_irreps + msg_feat_irreps)
+            .regroup()
+        )
+        for i in range(num_mp_steps):
+            self.layers.append(
+                SEGNNLayer(
+                    msg_in_irreps=msg_in_irreps,
+                    node_in_irreps=self.hidden_irreps,
+                    edge_attr_irreps=self.attribute_irreps,
+                    node_attr_irreps=self.attribute_irreps,
+                    output_irreps=self.hidden_irreps,
+                    n_blocks=blocks_per_step,
+                    key=keys[1 + i],
+                )
+            )
+
+        self.decoder = O3Decoder(
+            latent_irreps=self.hidden_irreps,
+            node_attr_irreps=self.attribute_irreps,
+            output_irreps=self.output_irreps,
+            n_blocks=blocks_per_step,
+            key=keys[-1],
+        )
 
     def _transform(
         self, features: Dict[str, jnp.ndarray], particle_type: jnp.ndarray
     ) -> Tuple[SteerableGraphsTuple, int]:
         """Convert physical features to SteerableGraphsTuple for segnn."""
-        dim = features["vel_hist"].shape[1] // self._n_vels
+        dim = features["vel_hist"].shape[1] // self.n_vels
         assert (
             dim == 3 or dim == 2
         ), "The velocity history should be of shape (n_nodes, n_vels * 3)."
 
         n_nodes = features["vel_hist"].shape[0]
-
-        features["vel_hist"] = features["vel_hist"].reshape(n_nodes, self._n_vels, dim)
-
+        features["vel_hist"] = features["vel_hist"].reshape(n_nodes, self.n_vels, dim)
         if dim == 2:
-            # add zeros for z component for E(3) equivariance
             features = features_2d_to_3d(features)
 
-        if self._n_vels == 1:
+        if self.n_vels == 1:
             vel = jnp.squeeze(features["vel_hist"])
         else:
-            if self._velocity_aggregate == "avg":
+            if self.velocity_aggregate == "avg":
                 vel = jnp.mean(features["vel_hist"], 1)
-            if self._velocity_aggregate == "last":
+            if self.velocity_aggregate == "last":
                 vel = features["vel_hist"][:, -1, :]
 
         rel_pos = features["rel_disp"]
         edge_attributes = e3nn.spherical_harmonics(
-            self._attribute_irreps, rel_pos, normalize=True, normalization="integral"
+            self.attribute_irreps, rel_pos, normalize=True, normalization="integral"
         )
         vel_embedding = e3nn.spherical_harmonics(
-            self._attribute_irreps, vel, normalize=True, normalization="integral"
+            self.attribute_irreps, vel, normalize=True, normalization="integral"
         )
-        # scatter edge attributes to nodes (density)
         scattered_edges = tree_map(
             lambda e: jraph.segment_mean(e, features["receivers"], n_nodes),
             edge_attributes,
         )
-        # node attributes as velocities + edge "density". Scalar default to 1.0
         node_attributes = e3nn.IrrepsArray(
             vel_embedding.irreps,
             (vel_embedding + scattered_edges).array.at[:, 0].set(1.0),
         )
 
-        node_features = [features["vel_hist"].reshape(n_nodes, self._n_vels * 3)]
+        node_features = [features["vel_hist"].reshape(n_nodes, self.n_vels * 3)]
         node_features += [
             features[k] for k in ["vel_mag", "bound", "force"] if k in features
         ]
         node_features = jnp.concatenate(node_features, axis=-1)
 
-        if not self._homogeneous_particles:
+        if not self.homogeneous_particles:
             particles = jax.nn.one_hot(particle_type, NodeType.SIZE)
             node_features = jnp.concatenate([node_features, particles], axis=-1)
 
@@ -567,7 +701,7 @@ class SEGNN(BaseModel):
         edge_features = jnp.concatenate(edge_features, axis=-1)
 
         feature_graph = jraph.GraphsTuple(
-            nodes=IrrepsArray(self._node_features_irreps, node_features),
+            nodes=IrrepsArray(self.node_features_irreps, node_features),
             edges=None,
             senders=features["senders"],
             receivers=features["receivers"],
@@ -580,10 +714,9 @@ class SEGNN(BaseModel):
             node_attributes=node_attributes,
             edge_attributes=edge_attributes,
             additional_message_features=IrrepsArray(
-                self._edge_features_irreps, edge_features
+                self.edge_features_irreps, edge_features
             ),
         )
-
         return st_graph, dim
 
     def _postprocess(self, nodes: IrrepsArray, dim: int) -> Dict[str, jnp.ndarray]:
@@ -595,16 +728,9 @@ class SEGNN(BaseModel):
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
     ) -> Dict[str, jnp.ndarray]:
-        # feature transformation
         st_graph, dim = self._transform(*sample)
-        # node (and edge) embedding
-        st_graph = self._embedding(st_graph)
-        # message passing
-        for n in range(self._num_mp_steps):
-            st_graph = SEGNNLayer(
-                self._hidden_irreps, n, n_blocks=self._blocks_per_step, norm=self._norm
-            )(st_graph)
-        # readout
-        nodes = self._decoder(st_graph)
-        out = self._postprocess(nodes, dim)
-        return out
+        st_graph = self.embedding(st_graph)
+        for layer in self.layers:
+            st_graph = layer(st_graph)
+        nodes = self.decoder(st_graph)
+        return self._postprocess(nodes, dim)

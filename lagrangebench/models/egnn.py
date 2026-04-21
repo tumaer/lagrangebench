@@ -7,13 +7,12 @@ Original implementation: https://github.com/vgsatorras/egnn
 Standalone implementation + validation: https://github.com/gerkone/egnn-jax
 """
 
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
-import haiku as hk
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import jraph
-from jax.tree_util import Partial
 from jax_sph.jax_md import space
 
 from lagrangebench.utils import NodeType
@@ -22,188 +21,266 @@ from .base import BaseModel
 from .utils import LinearXav, MLPXav
 
 
-class EGNNLayer(hk.Module):
+def _segment_sum(messages, indices, num_segments):
+    return jraph.segment_sum(messages, indices, num_segments)
+
+
+class _PosCorrectionMLP(eqx.Module):
+    """Per-edge coord-correction MLP: blocks hidden Linear layers then a scalar head.
+
+    The final layer's init variance is scaled by ``dt`` (UniformScaling(dt) in haiku).
+    """
+
+    hidden: List[LinearXav]
+    head: LinearXav
+    activation: Callable = eqx.field(static=True)
+    use_tanh: bool = eqx.field(static=True)
+
+    def __init__(
+        self,
+        in_size: int,
+        hidden_size: int,
+        blocks: int,
+        activation: Callable,
+        dt: float,
+        use_tanh: bool,
+        *,
+        key,
+    ):
+        keys = jax.random.split(key, blocks + 1)
+        sizes = [in_size] + [hidden_size] * blocks
+        self.hidden = [
+            LinearXav(sizes[i], sizes[i + 1], key=keys[i]) for i in range(blocks)
+        ]
+        self.head = LinearXav(
+            hidden_size,
+            1,
+            with_bias=False,
+            gain=dt,
+            init="uniform_scaling",
+            key=keys[-1],
+        )
+        self.activation = activation
+        self.use_tanh = use_tanh
+
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        for layer in self.hidden:
+            x = layer(x)
+        x = self.activation(x)
+        x = self.head(x)
+        if self.use_tanh:
+            x = jax.nn.tanh(x)
+        return x
+
+
+class _VelCorrectionMLP(eqx.Module):
+    hidden: List[LinearXav]
+    head: LinearXav
+    activation: Callable = eqx.field(static=True)
+
+    def __init__(
+        self,
+        in_size: int,
+        hidden_size: int,
+        blocks: int,
+        activation: Callable,
+        dt: float,
+        *,
+        key,
+    ):
+        keys = jax.random.split(key, blocks + 1)
+        sizes = [in_size] + [hidden_size] * blocks
+        self.hidden = [
+            LinearXav(sizes[i], sizes[i + 1], key=keys[i]) for i in range(blocks)
+        ]
+        self.head = LinearXav(
+            hidden_size,
+            1,
+            with_bias=False,
+            gain=dt,
+            init="uniform_scaling",
+            key=keys[-1],
+        )
+        self.activation = activation
+
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        for layer in self.hidden:
+            x = layer(x)
+        x = self.activation(x)
+        return self.head(x)
+
+
+class _AttentionMLP(eqx.Module):
+    linear: LinearXav
+
+    def __init__(self, in_size: int, hidden_size: int, *, key):
+        self.linear = LinearXav(in_size, hidden_size, key=key)
+
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        return jax.nn.sigmoid(self.linear(x))
+
+
+class EGNNLayer(eqx.Module):
     r"""E(n)-equivariant EGNN layer.
 
     Applies a message passing step where the positions are corrected with the velocities
     and a learnable correction term :math:`\psi_x(\mathbf{h}_i^{(t+1)})`:
     """
 
+    edge_mlp: MLPXav
+    node_mlp: MLPXav
+    pos_mlp: _PosCorrectionMLP
+    vel_mlp: _VelCorrectionMLP
+    attention_mlp: Optional[_AttentionMLP]
+
+    displacement_fn: Callable = eqx.field(static=True)
+    shift_fn: Callable = eqx.field(static=True)
+    residual: bool = eqx.field(static=True)
+    normalize: bool = eqx.field(static=True)
+    pos_aggregate_fn: Callable = eqx.field(static=True)
+    msg_aggregate_fn: Callable = eqx.field(static=True)
+    eps: float = eqx.field(static=True)
+
     def __init__(
         self,
-        layer_num: int,
         hidden_size: int,
         output_size: int,
-        displacement_fn: space.DisplacementFn,
-        shift_fn: space.ShiftFn,
+        displacement_fn: Callable,
+        shift_fn: Callable,
+        edge_in_size: int,
+        node_in_size: int,
+        has_edge_attr: bool,
+        has_node_attr: bool,
         blocks: int = 1,
         act_fn: Callable = jax.nn.silu,
-        pos_aggregate_fn: Optional[Callable] = jraph.segment_sum,
-        msg_aggregate_fn: Optional[Callable] = jraph.segment_sum,
         residual: bool = True,
         attention: bool = False,
         normalize: bool = False,
         tanh: bool = False,
         dt: float = 0.001,
         eps: float = 1e-8,
+        pos_aggregate_fn: Callable = _segment_sum,
+        msg_aggregate_fn: Callable = _segment_sum,
+        *,
+        key,
     ):
         """Initialize the layer.
 
         Args:
-            layer_num: layer number
             hidden_size: hidden size
             output_size: output size
             displacement_fn: Displacement function for the acceleration computation.
             shift_fn: Shift function for updating positions
+            edge_in_size: Size of ``edge_attr`` features fed into the edge MLP.
+            node_in_size: Size of the scalar node features fed into the edge MLP.
+            has_edge_attr: Whether an ``edge_attr`` tensor is concatenated to the
+                edge input (``rel_dist`` in practice).
+            has_node_attr: Whether a ``node_attr`` tensor is concatenated to the
+                node input.
             blocks: number of blocks in the node and edge MLPs
             act_fn: activation function
-            pos_aggregate_fn: position aggregation function
-            msg_aggregate_fn: message aggregation function
             residual: whether to use residual connections
             attention: whether to use attention
             normalize: whether to normalize the coordinates
             tanh: whether to use tanh in the position update
             dt: position update step size
             eps: small number to avoid division by zero
+            pos_aggregate_fn: position aggregation function
+            msg_aggregate_fn: message aggregation function
+            key: PRNG key for initialization.
         """
-        super().__init__(f"layer_{layer_num}")
-
-        self._displacement_fn = displacement_fn
-        self._shift_fn = shift_fn
+        self.displacement_fn = displacement_fn
+        self.shift_fn = shift_fn
+        self.residual = residual
+        self.normalize = normalize
         self.pos_aggregate_fn = pos_aggregate_fn
         self.msg_aggregate_fn = msg_aggregate_fn
-        self._residual = residual
-        self._normalize = normalize
-        self._eps = eps
+        self.eps = eps
 
-        # message network
-        self._edge_mlp = MLPXav(
-            [hidden_size] * blocks + [hidden_size],
+        k_e, k_n, k_p, k_v, k_a = jax.random.split(key, 5)
+
+        # edge mlp: in = 2 * nodes + radial + (edge_attr)
+        edge_mlp_in = 2 * node_in_size + 1 + (edge_in_size if has_edge_attr else 0)
+        self.edge_mlp = MLPXav(
+            input_size=edge_mlp_in,
+            output_sizes=[hidden_size] * blocks + [hidden_size],
             activation=act_fn,
             activate_final=True,
+            key=k_e,
         )
-
-        # update network
-        self._node_mlp = MLPXav(
-            [hidden_size] * blocks + [output_size],
+        # node mlp: in = node + msg + (node_attr)
+        node_mlp_in = node_in_size + hidden_size + (1 if has_node_attr else 0)
+        self.node_mlp = MLPXav(
+            input_size=node_mlp_in,
+            output_sizes=[hidden_size] * blocks + [output_size],
             activation=act_fn,
             activate_final=False,
+            key=k_n,
+        )
+        self.pos_mlp = _PosCorrectionMLP(
+            in_size=hidden_size,
+            hidden_size=hidden_size,
+            blocks=blocks,
+            activation=act_fn,
+            dt=dt,
+            use_tanh=tanh,
+            key=k_p,
+        )
+        self.vel_mlp = _VelCorrectionMLP(
+            in_size=output_size,
+            hidden_size=hidden_size,
+            blocks=blocks,
+            activation=act_fn,
+            dt=dt,
+            key=k_v,
+        )
+        self.attention_mlp = (
+            _AttentionMLP(hidden_size, hidden_size, key=k_a) if attention else None
         )
 
-        # position update network
-        net = [LinearXav(hidden_size)] * blocks
-        # NOTE: from https://github.com/vgsatorras/egnn/blob/main/models/gcl.py#L254
-        net += [
-            act_fn,
-            LinearXav(1, with_bias=False, w_init=hk.initializers.UniformScaling(dt)),
-        ]
-        if tanh:
-            net.append(jax.nn.tanh)
-        self._pos_correction_mlp = hk.Sequential(net)
-
-        # velocity integrator network
-        net = [LinearXav(hidden_size)] * blocks
-        net += [
-            act_fn,
-            LinearXav(1, with_bias=False, w_init=hk.initializers.UniformScaling(dt)),
-        ]
-        self._vel_correction_mlp = hk.Sequential(net)
-
-        # attention
-        self._attention_mlp = None
-        if attention:
-            self._attention_mlp = hk.Sequential(
-                [LinearXav(hidden_size), jax.nn.sigmoid]
-            )
-
-    def _pos_update(
-        self,
-        pos: jnp.ndarray,
-        graph: jraph.GraphsTuple,
-        coord_diff: jnp.ndarray,
-    ) -> jnp.ndarray:
-        trans = coord_diff * self._pos_correction_mlp(graph.edges)
-        return self.pos_aggregate_fn(trans, graph.senders, num_segments=pos.shape[0])
-
-    def _message(
-        self,
-        radial: jnp.ndarray,
-        edge_attribute: jnp.ndarray,
-        edge_features: Any,
-        incoming: jnp.ndarray,
-        outgoing: jnp.ndarray,
-        globals_: Any,
-    ) -> jnp.ndarray:
-        _ = edge_features
-        _ = globals_
-        msg = jnp.concatenate([incoming, outgoing, radial], axis=-1)
-        if edge_attribute is not None:
-            msg = jnp.concatenate([msg, edge_attribute], axis=-1)
-        msg = self._edge_mlp(msg)
-        if self._attention_mlp:
-            att = self._attention_mlp(msg)
-            msg = msg * att
-        return msg
-
-    def _update(
-        self,
-        node_attribute: jnp.ndarray,
-        nodes: jnp.ndarray,
-        senders: Any,
-        msg: jnp.ndarray,
-        globals_: Any,
-    ) -> jnp.ndarray:
-        _ = senders
-        _ = globals_
-        x = jnp.concatenate([nodes, msg], axis=-1)
-        if node_attribute is not None:
-            x = jnp.concatenate([x, node_attribute], axis=-1)
-        x = self._node_mlp(x)
-        if self._residual:
-            x = nodes + x
-        return x
-
     def _coord2radial(
-        self, graph: jraph.GraphsTuple, coord: jnp.array
-    ) -> Tuple[jnp.array, jnp.array]:
-        coord_diff = self._displacement_fn(coord[graph.senders], coord[graph.receivers])
+        self, senders: jnp.ndarray, receivers: jnp.ndarray, coord: jnp.ndarray
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        coord_diff = self.displacement_fn(coord[senders], coord[receivers])
         radial = jnp.sum(coord_diff**2, 1)[:, jnp.newaxis]
-        if self._normalize:
+        if self.normalize:
             norm = jnp.sqrt(radial)
-            coord_diff = coord_diff / (norm + self._eps)
+            coord_diff = coord_diff / (norm + self.eps)
         return radial, coord_diff
 
     def __call__(
         self,
-        graph: jraph.GraphsTuple,
+        nodes: jnp.ndarray,
+        senders: jnp.ndarray,
+        receivers: jnp.ndarray,
         pos: jnp.ndarray,
         vel: jnp.ndarray,
-        edge_attribute: Optional[jnp.ndarray] = None,
-        node_attribute: Optional[jnp.ndarray] = None,
-    ) -> Tuple[jraph.GraphsTuple, jnp.ndarray]:
-        """
-        Apply EGNN layer.
+        edge_attr: Optional[jnp.ndarray] = None,
+        node_attr: Optional[jnp.ndarray] = None,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        radial, coord_diff = self._coord2radial(senders, receivers, pos)
 
-        Args:
-            graph: Graph from previous step
-            pos: Node position, updated separately
-            vel: Node velocity
-            edge_attribute: Edge attribute (optional)
-            node_attribute: Node attribute (optional)
-        Returns:
-            Updated graph, node position
-        """
-        radial, coord_diff = self._coord2radial(graph, pos)
-        graph = jraph.GraphNetwork(
-            update_edge_fn=Partial(self._message, radial, edge_attribute),
-            update_node_fn=Partial(self._update, node_attribute),
-            aggregate_edges_for_nodes_fn=self.msg_aggregate_fn,
-        )(graph)
-        # update position
-        pos = self._shift_fn(pos, self._pos_update(pos, graph, coord_diff))
-        # integrate velocity
-        pos = self._shift_fn(pos, self._vel_correction_mlp(graph.nodes) * vel)
-        return graph, pos
+        msg_inputs = [nodes[senders], nodes[receivers], radial]
+        if edge_attr is not None:
+            msg_inputs.append(edge_attr)
+        msg = self.edge_mlp(jnp.concatenate(msg_inputs, axis=-1))
+        if self.attention_mlp is not None:
+            msg = msg * self.attention_mlp(msg)
+
+        aggr = self.msg_aggregate_fn(msg, receivers, nodes.shape[0])
+        node_inputs = [nodes, aggr]
+        if node_attr is not None:
+            node_inputs.append(node_attr)
+        new_nodes = self.node_mlp(jnp.concatenate(node_inputs, axis=-1))
+        if self.residual:
+            new_nodes = nodes + new_nodes
+
+        trans = coord_diff * self.pos_mlp(msg)
+        pos_delta = self.pos_aggregate_fn(trans, senders, num_segments=pos.shape[0])
+        pos = self.shift_fn(pos, pos_delta)
+        pos = self.shift_fn(pos, self.vel_mlp(new_nodes) * vel)
+
+        return new_nodes, pos
 
 
 class EGNN(BaseModel):
@@ -247,15 +324,27 @@ class EGNN(BaseModel):
     - we apply a simple integrator after the last layer to get the acceleration.
     """
 
+    node_embed: LinearXav
+    layers: List[EGNNLayer]
+
+    output_size: int = eqx.field(static=True)
+    num_mp_steps: int = eqx.field(static=True)
+    n_vels: int = eqx.field(static=True)
+    homogeneous_particles: bool = eqx.field(static=True)
+    vel_mean: jnp.ndarray
+    vel_std: jnp.ndarray
+    displacement_fn: Callable = eqx.field(static=True)
+    shift_fn: Callable = eqx.field(static=True)
+
     def __init__(
         self,
         hidden_size: int,
         output_size: int,
         dt: float,
         n_vels: int,
-        displacement_fn: space.DisplacementFn,
-        shift_fn: space.ShiftFn,
-        normalization_stats: Optional[Dict[str, jnp.ndarray]] = None,
+        displacement_fn: Callable,
+        shift_fn: Callable,
+        normalization_stats: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
         act_fn: Callable = jax.nn.silu,
         num_mp_steps: int = 4,
         homogeneous_particles: bool = True,
@@ -263,6 +352,8 @@ class EGNN(BaseModel):
         attention: bool = False,
         normalize: bool = False,
         tanh: bool = False,
+        *,
+        key,
     ):
         r"""
         Initialize the network.
@@ -287,114 +378,119 @@ class EGNN(BaseModel):
             tanh: Sets a tanh activation function at the output of ``\phi_x(m_{ij})``.
                 It bounds the output of ``\phi_x(m_{ij})`` which definitely improves in
                 stability but it may decrease in accuracy. Not used in the paper.
+            key: PRNG key for initialization.
         """
-        super().__init__()
-        # network
-        self._hidden_size = hidden_size
-        self._output_size = output_size
-        self._act_fn = act_fn
-        self._num_mp_steps = num_mp_steps
-        self._residual = residual
-        self._attention = attention
-        self._normalize = normalize
-        self._tanh = tanh
+        self.output_size = output_size
+        self.num_mp_steps = num_mp_steps
+        self.n_vels = n_vels
+        self.homogeneous_particles = homogeneous_particles
+        self.displacement_fn = displacement_fn
+        self.shift_fn = shift_fn
 
-        # integrator
-        self._dt = dt / self._num_mp_steps
-        self._displacement_fn = displacement_fn
-        self._shift_fn = shift_fn
         if normalization_stats is None:
             normalization_stats = {
-                "velocity": {"mean": 0.0, "std": 1.0},
-                "acceleration": {"mean": 0.0, "std": 1.0},
+                "velocity": {"mean": jnp.array(0.0), "std": jnp.array(1.0)},
+                "acceleration": {"mean": jnp.array(0.0), "std": jnp.array(1.0)},
             }
-        self._vel_stats = normalization_stats["velocity"]
-        self._acc_stats = normalization_stats["acceleration"]
+        self.vel_mean = jnp.asarray(normalization_stats["velocity"]["mean"])
+        self.vel_std = jnp.asarray(normalization_stats["velocity"]["std"])
 
-        # transform
-        self._n_vels = n_vels
-        self._homogeneous_particles = homogeneous_particles
+        # node scalar features: one magnitude per historical velocity
+        node_scalar_size = n_vels
+        if not homogeneous_particles:
+            node_scalar_size += NodeType.SIZE
+
+        keys = jax.random.split(key, num_mp_steps + 1)
+        self.node_embed = LinearXav(node_scalar_size, hidden_size, key=keys[0])
+
+        dt_per_step = dt / num_mp_steps
+        self.layers = [
+            EGNNLayer(
+                hidden_size=hidden_size,
+                output_size=hidden_size,
+                displacement_fn=displacement_fn,
+                shift_fn=shift_fn,
+                edge_in_size=1,
+                node_in_size=hidden_size,
+                has_edge_attr=True,  # rel_dist
+                has_node_attr=False,
+                act_fn=act_fn,
+                residual=residual,
+                attention=attention,
+                normalize=normalize,
+                tanh=tanh,
+                dt=dt_per_step,
+                key=keys[i + 1],
+            )
+            for i in range(num_mp_steps)
+        ]
 
     def _transform(
         self, features: Dict[str, jnp.ndarray], particle_type: jnp.ndarray
-    ) -> Tuple[jraph.GraphsTuple, Dict[str, jnp.ndarray]]:
-        props = {}
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, Optional[jnp.ndarray], Optional[jnp.ndarray]]:
         n_nodes = features["vel_hist"].shape[0]
+        vel = jnp.reshape(features["vel_hist"], (n_nodes, self.n_vels, -1))
+        pos = features["abs_pos"][:, -1]
+        edge_attr = features["rel_dist"]
 
-        props["vel"] = jnp.reshape(features["vel_hist"], (n_nodes, self._n_vels, -1))
-
-        # most recent position
-        props["pos"] = features["abs_pos"][:, -1]
-        # relative distances between particles
-        props["edge_attr"] = features["rel_dist"]
-        # force magnitude as node attributes
-        props["node_attr"] = None
+        node_attr = None
         if "force" in features:
-            props["node_attr"] = jnp.sqrt(
+            node_attr = jnp.sqrt(
                 jnp.sum(features["force"] ** 2, axis=-1, keepdims=True)
             )
 
-        # velocity magnitudes as node features
         node_features = jnp.concatenate(
             [
-                jnp.sqrt(jnp.sum(props["vel"][:, i, :] ** 2, axis=-1, keepdims=True))
-                for i in range(self._n_vels)
+                jnp.sqrt(jnp.sum(vel[:, i, :] ** 2, axis=-1, keepdims=True))
+                for i in range(self.n_vels)
             ],
             axis=-1,
         )
-        if not self._homogeneous_particles:
+        if not self.homogeneous_particles:
             particles = jax.nn.one_hot(particle_type, NodeType.SIZE)
             node_features = jnp.concatenate([node_features, particles], axis=-1)
 
-        graph = jraph.GraphsTuple(
-            nodes=node_features,
-            edges=None,
-            senders=features["senders"],
-            receivers=features["receivers"],
-            n_node=jnp.array([n_nodes]),
-            n_edge=jnp.array([len(features["senders"])]),
-            globals=None,
+        return (
+            node_features,
+            vel,
+            pos,
+            features["senders"],
+            features["receivers"],
+            edge_attr,
+            node_attr,
         )
-
-        return graph, props
-
-    def _postprocess(
-        self, next_pos: jnp.ndarray, props: Dict[str, jnp.ndarray]
-    ) -> Dict[str, jnp.ndarray]:
-        prev_vel = props["vel"][:, -1, :]
-        prev_pos = props["pos"]
-        # first order finite difference
-        next_vel = self._displacement_fn(next_pos, prev_pos)
-        acc = next_vel - prev_vel
-        return {"pos": next_pos, "vel": next_vel, "acc": acc}
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
     ) -> Dict[str, jnp.ndarray]:
-        graph, props = self._transform(*sample)
-        # input node embedding
-        h = LinearXav(self._hidden_size, name="scalar_emb")(graph.nodes)
-        graph = graph._replace(nodes=h)
-        prev_vel = props["vel"][:, -1, :]
-        # egnn works with unnormalized velocities
-        prev_vel = prev_vel * self._vel_stats["std"] + self._vel_stats["mean"]
-        # message passing
-        next_pos = props["pos"].copy()
-        for n in range(self._num_mp_steps):
-            graph, next_pos = EGNNLayer(
-                layer_num=n,
-                hidden_size=self._hidden_size,
-                output_size=self._hidden_size,
-                displacement_fn=self._displacement_fn,
-                shift_fn=self._shift_fn,
-                act_fn=self._act_fn,
-                residual=self._residual,
-                attention=self._attention,
-                normalize=self._normalize,
-                dt=self._dt,
-                tanh=self._tanh,
-            )(graph, next_pos, prev_vel, props["edge_attr"], props["node_attr"])
+        features, particle_type = sample
+        (
+            nodes,
+            vel_hist,
+            pos,
+            senders,
+            receivers,
+            edge_attr,
+            node_attr,
+        ) = self._transform(features, particle_type)
 
-        # position finite differencing to get acceleration
-        out = self._postprocess(next_pos, props)
-        return out
+        prev_vel_norm = vel_hist[:, -1, :]
+        # EGNN works with unnormalized velocities
+        prev_vel = prev_vel_norm * self.vel_std + self.vel_mean
+
+        h = self.node_embed(nodes)
+        next_pos = pos
+        for layer in self.layers:
+            h, next_pos = layer(
+                nodes=h,
+                senders=senders,
+                receivers=receivers,
+                pos=next_pos,
+                vel=prev_vel,
+                edge_attr=edge_attr,
+                node_attr=node_attr,
+            )
+
+        next_vel = self.displacement_fn(next_pos, pos)
+        acc = next_vel - prev_vel
+        return {"pos": next_pos, "vel": next_vel, "acc": acc}

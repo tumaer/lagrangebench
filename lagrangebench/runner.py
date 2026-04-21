@@ -1,16 +1,15 @@
 import os
 import os.path as osp
 from datetime import datetime
-from typing import Callable, Dict, Optional, Tuple, Type, Union
+from typing import Dict, Optional, Tuple, Union
 
-import haiku as hk
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-import jmp
 import numpy as np
 from e3nn_jax import Irreps
 from jax import config
-from jax_sph.jax_md import space
+from jax_md import space
 from omegaconf import DictConfig, OmegaConf
 
 from lagrangebench import Trainer, infer, models
@@ -18,7 +17,11 @@ from lagrangebench.case_setup import case_builder
 from lagrangebench.data import H5Dataset
 from lagrangebench.defaults import check_cfg
 from lagrangebench.evaluate import averaged_metrics
-from lagrangebench.models.utils import node_irreps
+from lagrangebench.models.utils import (
+    edge_feature_size,
+    node_feature_size,
+    node_irreps,
+)
 from lagrangebench.utils import NodeType
 
 
@@ -57,19 +60,13 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
     _, particle_type = data_train[0]
 
     # setup model from configs
-    model, MODEL = setup_model(
+    model = setup_model(
         cfg,
         metadata=metadata,
         homogeneous_particles=particle_type.max() == particle_type.min(),
         has_external_force=data_train.external_force_fn is not None,
         normalization_stats=case.normalization_stats,
     )
-    model = hk.without_apply_rng(hk.transform_with_state(model))
-
-    # mixed precision training based on this reference:
-    # https://github.com/deepmind/dm-haiku/blob/main/examples/imagenet/train.py
-    policy = jmp.get_policy("params=float32,compute=float32,output=float32")
-    hk.mixed_precision.set_policy(MODEL, policy)
 
     if mode == "train" or mode == "all":
         print("Start training...")
@@ -102,7 +99,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             seed=cfg.seed,
         )
 
-        _, _, _ = trainer.train(
+        model, _ = trainer.train(
             step_max=cfg.train.step_max,
             load_ckp=load_ckp,
             store_ckp=store_ckp,
@@ -116,7 +113,7 @@ def train_or_infer(cfg: Union[Dict, DictConfig]):
             model_dir = load_ckp
         if mode == "all":
             model_dir = os.path.join(store_ckp, "best")
-            assert osp.isfile(os.path.join(model_dir, "params_tree.pkl"))
+            assert osp.isfile(os.path.join(model_dir, "model.eqx"))
 
             cfg.eval.rollout_dir = model_dir.replace("ckp", "rollout")
             os.makedirs(cfg.eval.rollout_dir, exist_ok=True)
@@ -195,27 +192,34 @@ def setup_model(
     homogeneous_particles: bool = False,
     has_external_force: bool = False,
     normalization_stats: Optional[Dict] = None,
-) -> Tuple[Callable, Type]:
+) -> eqx.Module:
     """Setup model based on cfg."""
     model_name = cfg.model.name.lower()
     input_seq_length = cfg.model.input_seq_length
     magnitude_features = cfg.model.magnitude_features
+    key = jax.random.PRNGKey(cfg.seed)
 
     if model_name == "gns":
-
-        def model_fn(x):
-            return models.GNS(
-                particle_dimension=metadata["dim"],
-                latent_size=cfg.model.latent_dim,
-                blocks_per_step=cfg.model.num_mlp_layers,
-                num_mp_steps=cfg.model.num_mp_steps,
-                num_particle_types=NodeType.SIZE,
-                particle_type_embedding_size=16,
-            )(x)
-
-        MODEL = models.GNS
+        n_in = node_feature_size(
+            metadata,
+            input_seq_length,
+            has_external_force=has_external_force,
+            has_magnitudes=magnitude_features,
+            has_homogeneous_particles=homogeneous_particles,
+        )
+        e_in = edge_feature_size(metadata)
+        model = models.GNS(
+            particle_dimension=metadata["dim"],
+            latent_size=cfg.model.latent_dim,
+            blocks_per_step=cfg.model.num_mlp_layers,
+            num_mp_steps=cfg.model.num_mp_steps,
+            num_particle_types=NodeType.SIZE,
+            particle_type_embedding_size=16,
+            node_in_size=n_in,
+            edge_in_size=e_in,
+            key=key,
+        )
     elif model_name == "segnn":
-        # Hx1o vel, Hx0e vel, 2x1o boundary, 9x0e type
         node_feature_irreps = node_irreps(
             metadata,
             input_seq_length,
@@ -223,70 +227,79 @@ def setup_model(
             magnitude_features,
             homogeneous_particles,
         )
-        # 1o displacement, 0e distance
         edge_feature_irreps = Irreps("1x1o + 1x0e")
-
-        def model_fn(x):
-            return models.SEGNN(
-                node_features_irreps=node_feature_irreps,
-                edge_features_irreps=edge_feature_irreps,
-                scalar_units=cfg.model.latent_dim,
-                lmax_hidden=cfg.model.lmax_hidden,
-                lmax_attributes=cfg.model.lmax_attributes,
-                output_irreps=Irreps("1x1o"),
-                num_mp_steps=cfg.model.num_mp_steps,
-                n_vels=cfg.model.input_seq_length - 1,
-                velocity_aggregate=cfg.model.velocity_aggregate,
-                homogeneous_particles=homogeneous_particles,
-                blocks_per_step=cfg.model.num_mlp_layers,
-                norm=cfg.model.segnn_norm,
-            )(x)
-
-        MODEL = models.SEGNN
+        model = models.SEGNN(
+            node_features_irreps=node_feature_irreps,
+            edge_features_irreps=edge_feature_irreps,
+            scalar_units=cfg.model.latent_dim,
+            lmax_hidden=cfg.model.lmax_hidden,
+            lmax_attributes=cfg.model.lmax_attributes,
+            output_irreps=Irreps("1x1o"),
+            num_mp_steps=cfg.model.num_mp_steps,
+            n_vels=input_seq_length - 1,
+            velocity_aggregate=cfg.model.velocity_aggregate,
+            homogeneous_particles=homogeneous_particles,
+            blocks_per_step=cfg.model.num_mlp_layers,
+            key=key,
+        )
     elif model_name == "egnn":
         box = cfg.box
         if jnp.array(metadata["periodic_boundary_conditions"]).any():
             displacement_fn, shift_fn = space.periodic(jnp.array(box))
         else:
             displacement_fn, shift_fn = space.free()
-
-        displacement_fn = jax.vmap(displacement_fn, in_axes=(0, 0))
-        shift_fn = jax.vmap(shift_fn, in_axes=(0, 0))
-
-        def model_fn(x):
-            return models.EGNN(
-                hidden_size=cfg.model.latent_dim,
-                output_size=1,
-                dt=metadata["dt"] * metadata["write_every"],
-                displacement_fn=displacement_fn,
-                shift_fn=shift_fn,
-                normalization_stats=normalization_stats,
-                num_mp_steps=cfg.model.num_mp_steps,
-                n_vels=input_seq_length - 1,
-                residual=True,
-            )(x)
-
-        MODEL = models.EGNN
+        model = models.EGNN(
+            hidden_size=cfg.model.latent_dim,
+            output_size=1,
+            dt=metadata["dt"] * metadata["write_every"],
+            displacement_fn=displacement_fn,
+            shift_fn=shift_fn,
+            normalization_stats=normalization_stats,
+            num_mp_steps=cfg.model.num_mp_steps,
+            n_vels=input_seq_length - 1,
+            homogeneous_particles=homogeneous_particles,
+            residual=True,
+            key=key,
+        )
     elif model_name == "painn":
         assert magnitude_features, "PaiNN requires magnitudes"
         radius = metadata["default_connectivity_radius"] * 1.5
-
-        def model_fn(x):
-            return models.PaiNN(
-                hidden_size=cfg.model.latent_dim,
-                output_size=1,
-                n_vels=input_seq_length - 1,
-                radial_basis_fn=models.painn.gaussian_rbf(20, radius, trainable=True),
-                cutoff_fn=models.painn.cosine_cutoff(radius),
-                num_mp_steps=cfg.model.num_mp_steps,
-            )(x)
-
-        MODEL = models.PaiNN
+        n_rbf = 20
+        # scalar input: vel_mag (input_seq_length - 1) + optional one-hot types
+        s_in_size = (input_seq_length - 1) + (
+            0 if homogeneous_particles else NodeType.SIZE
+        )
+        # vector input: traj (n_vels) + optional force (1) + optional bound (2)
+        n_vels = input_seq_length - 1
+        v_in_channels = n_vels
+        if has_external_force:
+            v_in_channels += 1
+        if not any(metadata["periodic_boundary_conditions"]):
+            v_in_channels += 2
+        model = models.PaiNN(
+            hidden_size=cfg.model.latent_dim,
+            output_size=1,
+            n_vels=n_vels,
+            radial_basis_fn=models.painn.gaussian_rbf(n_rbf, radius, trainable=True),
+            cutoff_fn=models.painn.cosine_cutoff(radius),
+            num_mp_steps=cfg.model.num_mp_steps,
+            n_rbf=n_rbf,
+            s_in_size=s_in_size,
+            v_in_channels=v_in_channels,
+            homogeneous_particles=homogeneous_particles,
+            key=key,
+        )
     elif model_name == "linear":
+        # input = vel_hist + vel_mag + bound + force + particle_type[:, None]
+        n_in = node_feature_size(
+            metadata,
+            input_seq_length,
+            has_external_force=has_external_force,
+            has_magnitudes=magnitude_features,
+            has_homogeneous_particles=homogeneous_particles,
+        ) + 1
+        model = models.Linear(in_features=n_in, dim_out=metadata["dim"], key=key)
+    else:
+        raise ValueError(f"Unknown model: {model_name}")
 
-        def model_fn(x):
-            return models.Linear(dim_out=metadata["dim"])(x)
-
-        MODEL = models.Linear
-
-    return model_fn, MODEL
+    return model

@@ -1,6 +1,9 @@
-extends: configs/ldc_3d/base.yaml
+# @package _global_
+defaults:
+  - base
+  - _self_
 
-model: 
+model:
   name: gns
   num_mp_steps: 10
   latent_dim: 128

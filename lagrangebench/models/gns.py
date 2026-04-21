@@ -1,36 +1,76 @@
-"""
-Graph Network-based Simulator.
-GNS model and feature transform.
+"""Graph Network-based Simulator (Equinox).
+
+Reference: Sanchez-Gonzalez et al. (https://arxiv.org/abs/2002.09405).
 """
 
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 
-import haiku as hk
+import equinox as eqx
+import jax
 import jax.numpy as jnp
 import jraph
 
 from lagrangebench.utils import NodeType
 
 from .base import BaseModel
-from .utils import build_mlp
+from .utils import Embedding, MLPBlock, build_mlp
+
+
+class _MPStep(eqx.Module):
+    """One Graph Network block: edge update, node update, residual."""
+
+    edge_mlp: MLPBlock
+    node_mlp: MLPBlock
+
+    def __init__(self, latent_size: int, blocks_per_step: int, *, key):
+        k_e, k_n = jax.random.split(key)
+        self.edge_mlp = build_mlp(
+            input_size=3 * latent_size,
+            latent_size=latent_size,
+            output_size=latent_size,
+            num_hidden_layers=blocks_per_step,
+            is_layer_norm=True,
+            key=k_e,
+        )
+        self.node_mlp = build_mlp(
+            input_size=2 * latent_size,
+            latent_size=latent_size,
+            output_size=latent_size,
+            num_hidden_layers=blocks_per_step,
+            is_layer_norm=True,
+            key=k_n,
+        )
+
+    def __call__(
+        self,
+        nodes: jnp.ndarray,
+        edges: jnp.ndarray,
+        senders: jnp.ndarray,
+        receivers: jnp.ndarray,
+    ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        msg_in = jnp.concatenate(
+            [nodes[senders], nodes[receivers], edges], axis=-1
+        )
+        new_edges = self.edge_mlp(msg_in)
+        aggr = jraph.segment_sum(new_edges, receivers, nodes.shape[0])
+        node_in = jnp.concatenate([nodes, aggr], axis=-1)
+        new_nodes = self.node_mlp(node_in)
+        return nodes + new_nodes, edges + new_edges
 
 
 class GNS(BaseModel):
     r"""Graph Network-based Simulator by
     `Sanchez-Gonzalez et al. <https://arxiv.org/abs/2002.09405>`_.
-
-    GNS is the simples graph neural network applied to particle dynamics. It is built on
-    the usual Graph Network architecture, with an encoder, a processor, and a decoder.
-
-    .. math::
-        \begin{align}
-            \mathbf{m}_{ij}^{(t+1)} &= \phi \left(
-                \mathbf{m}_{ij}^{(t)}, \mathbf{h}_i^{(t)}, \mathbf{h}_j^{(t)} \right) \\
-            \mathbf{h}_i^{(t+1)} &= \psi \left(
-                \mathbf{h}_i^{(t)}, \sum_{j \in \mathcal{N}(i)} \mathbf{m}_{ij}^{(t+1)}
-                \right) \\
-        \end{align}
     """
+
+    node_encoder: MLPBlock
+    edge_encoder: MLPBlock
+    mp_steps: List[_MPStep]
+    decoder: MLPBlock
+    embedding: Embedding
+    output_size: int = eqx.field(static=True)
+    num_mp_steps: int = eqx.field(static=True)
+    num_particle_types: int = eqx.field(static=True)
 
     def __init__(
         self,
@@ -39,133 +79,92 @@ class GNS(BaseModel):
         blocks_per_step: int,
         num_mp_steps: int,
         particle_type_embedding_size: int,
+        node_in_size: int,
+        edge_in_size: int,
         num_particle_types: int = NodeType.SIZE,
+        *,
+        key,
     ):
         """Initialize the model.
 
         Args:
-            particle_dimension: Space dimensionality (e.g. 2 or 3).
+            particle_dimension: Space dimensionality (2 or 3).
             latent_size: Size of the latent representations.
-            blocks_per_step: Number of MLP layers per block.
+            blocks_per_step: Number of MLP hidden layers per GN block.
             num_mp_steps: Number of message passing steps.
-            particle_type_embedding_size: Size of the particle type embedding.
-            num_particle_types: Max number of particle types.
+            particle_type_embedding_size: Size of the particle-type embedding.
+            node_in_size: Size of scalar node features produced by
+                ``case.preprocess`` (sum of vel_hist, vel_mag, bound, force dims).
+            edge_in_size: Size of edge features produced by ``case.preprocess``
+                (``rel_disp`` + ``rel_dist``).
+            num_particle_types: Max number of particle types; embedding is skipped
+                when ``num_particle_types <= 1``.
+            key: PRNG key for initialization.
         """
-        super().__init__()
-        self._output_size = particle_dimension
-        self._latent_size = latent_size
-        self._blocks_per_step = blocks_per_step
-        self._mp_steps = num_mp_steps
-        self._num_particle_types = num_particle_types
+        self.output_size = particle_dimension
+        self.num_mp_steps = num_mp_steps
+        self.num_particle_types = num_particle_types
 
-        self._embedding = hk.Embed(
-            num_particle_types, particle_type_embedding_size
-        )  # (9, 16)
-
-    def _encoder(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
-        """MLP graph encoder."""
-        node_latents = build_mlp(
-            self._latent_size, self._latent_size, self._blocks_per_step
-        )(graph.nodes)
-        edge_latents = build_mlp(
-            self._latent_size, self._latent_size, self._blocks_per_step
-        )(graph.edges)
-        return jraph.GraphsTuple(
-            nodes=node_latents,
-            edges=edge_latents,
-            globals=graph.globals,
-            receivers=graph.receivers,
-            senders=graph.senders,
-            n_node=jnp.asarray([node_latents.shape[0]]),
-            n_edge=jnp.asarray([edge_latents.shape[0]]),
+        k_emb, k_nenc, k_eenc, k_dec, *k_mp = jax.random.split(key, 4 + num_mp_steps)
+        self.embedding = Embedding(
+            num_particle_types, particle_type_embedding_size, key=k_emb
         )
 
-    def _processor(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
-        """Sequence of Graph Network blocks."""
-
-        def update_edge_features(
-            edge_features,
-            sender_node_features,
-            receiver_node_features,
-            _,  # globals_
-        ):
-            update_fn = build_mlp(
-                self._latent_size, self._latent_size, self._blocks_per_step
-            )
-            # Calculate sender node features from edge features
-            return update_fn(
-                jnp.concatenate(
-                    [sender_node_features, receiver_node_features, edge_features],
-                    axis=-1,
-                )
-            )
-
-        def update_node_features(
-            node_features,
-            _,  # aggr_sender_edge_features,
-            aggr_receiver_edge_features,
-            __,  # globals_,
-        ):
-            update_fn = build_mlp(
-                self._latent_size, self._latent_size, self._blocks_per_step
-            )
-            features = [node_features, aggr_receiver_edge_features]
-            return update_fn(jnp.concatenate(features, axis=-1))
-
-        # Perform iterative message passing by stacking Graph Network blocks
-        for _ in range(self._mp_steps):
-            _graph = jraph.GraphNetwork(
-                update_edge_fn=update_edge_features, update_node_fn=update_node_features
-            )(graph)
-            graph = graph._replace(
-                nodes=_graph.nodes + graph.nodes, edges=_graph.edges + graph.edges
-            )
-
-        return graph
-
-    def _decoder(self, graph: jraph.GraphsTuple):
-        """MLP graph node decoder."""
-        return build_mlp(
-            self._latent_size,
-            self._output_size,
-            self._blocks_per_step,
+        embed_size = particle_type_embedding_size if num_particle_types > 1 else 0
+        self.node_encoder = build_mlp(
+            input_size=node_in_size + embed_size,
+            latent_size=latent_size,
+            output_size=latent_size,
+            num_hidden_layers=blocks_per_step,
+            is_layer_norm=True,
+            key=k_nenc,
+        )
+        self.edge_encoder = build_mlp(
+            input_size=edge_in_size,
+            latent_size=latent_size,
+            output_size=latent_size,
+            num_hidden_layers=blocks_per_step,
+            is_layer_norm=True,
+            key=k_eenc,
+        )
+        self.mp_steps = [
+            _MPStep(latent_size, blocks_per_step, key=k) for k in k_mp
+        ]
+        self.decoder = build_mlp(
+            input_size=latent_size,
+            latent_size=latent_size,
+            output_size=particle_dimension,
+            num_hidden_layers=blocks_per_step,
             is_layer_norm=False,
-        )(graph.nodes)
+            key=k_dec,
+        )
 
     def _transform(
-        self, features: Dict[str, jnp.ndarray], particle_type: jnp.ndarray
-    ) -> jraph.GraphsTuple:
-        """Convert physical features to jraph.GraphsTuple for gns."""
-        n_total_points = features["vel_hist"].shape[0]
+        self, features: Dict[str, jnp.ndarray]
+    ) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         node_features = [
             features[k]
             for k in ["vel_hist", "vel_mag", "bound", "force"]
             if k in features
         ]
-        edge_features = [features[k] for k in ["rel_disp", "rel_dist"] if k in features]
-
-        graph = jraph.GraphsTuple(
-            nodes=jnp.concatenate(node_features, axis=-1),
-            edges=jnp.concatenate(edge_features, axis=-1),
-            receivers=features["receivers"],
-            senders=features["senders"],
-            n_node=jnp.array([n_total_points]),
-            n_edge=jnp.array([len(features["senders"])]),
-            globals=None,
-        )
-
-        return graph, particle_type
+        edge_features = [
+            features[k] for k in ["rel_disp", "rel_dist"] if k in features
+        ]
+        nodes = jnp.concatenate(node_features, axis=-1)
+        edges = jnp.concatenate(edge_features, axis=-1)
+        return nodes, edges, features["senders"], features["receivers"]
 
     def __call__(
         self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
     ) -> Dict[str, jnp.ndarray]:
-        graph, particle_type = self._transform(*sample)
+        features, particle_type = sample
+        nodes, edges, senders, receivers = self._transform(features)
 
-        if self._num_particle_types > 1:
-            particle_type_embeddings = self._embedding(particle_type)
-            new_node_features = jnp.concatenate(
-                [graph.nodes, particle_type_embeddings], axis=-1
-            )
-            graph = graph._replace(nodes=new_node_features)
-        acc = self._decoder(self._processor(self._encoder(graph)))
-        return {"acc": acc}
+        if self.num_particle_types > 1:
+            nodes = jnp.concatenate([nodes, self.embedding(particle_type)], axis=-1)
+
+        nodes = self.node_encoder(nodes)
+        edges = self.edge_encoder(edges)
+        for step in self.mp_steps:
+            nodes, edges = step(nodes, edges, senders, receivers)
+        return {"acc": self.decoder(nodes)}

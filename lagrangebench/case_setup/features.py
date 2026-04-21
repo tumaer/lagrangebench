@@ -123,6 +123,6 @@ def physical_feature_builder(
         )
         features["rel_dist"] = normalized_relative_distances[:, None]
 
-        return jax.tree_map(lambda f: f, features)
+        return jax.tree.map(lambda f: f, features)
 
     return feature_transform

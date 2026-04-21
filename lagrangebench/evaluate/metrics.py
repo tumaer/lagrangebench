@@ -160,20 +160,30 @@ class MetricsComputer:
         return jnp.sum(frame**2)  # * dx ** 3
 
     def _sinkhorn_ott(self, pred: jnp.ndarray, target: jnp.ndarray) -> float:
-        # pairwise distances as cost
+        # pairwise distances as cost. Newer ott-jax releases contain an internal
+        # ``jax.lax.cond`` whose branches disagree on dtype when the inputs are
+        # float64 (x64 mode); cast to float32 to dodge that and keep the metric
+        # usable across ott versions.
+        pred = pred.astype(jnp.float32)
+        target = target.astype(jnp.float32)
         loss_matrix_xy = self._distance_matrix(pred, target)
         loss_matrix_xx = self._distance_matrix(pred, pred)
         loss_matrix_yy = self._distance_matrix(target, target)
-        return sinkhorn_divergence(
+        # Newer ott-jax returns ``Tuple[divergence, SinkhornDivergenceOutput]``;
+        # unpack the divergence scalar directly.
+        div, _ = sinkhorn_divergence(
             Geometry,
             loss_matrix_xy,
             loss_matrix_xx,
             loss_matrix_yy,
             # uniform weights
-            a=jnp.ones((pred.shape[0],)) / pred.shape[0],
-            b=jnp.ones((target.shape[0],)) / target.shape[0],
-            sinkhorn_kwargs={"threshold": 1e-4},
-        ).divergence
+            a=jnp.ones((pred.shape[0],), dtype=jnp.float32) / pred.shape[0],
+            b=jnp.ones((target.shape[0],), dtype=jnp.float32) / target.shape[0],
+            # ``sinkhorn_kwargs`` was dropped from ``Geometry.__init__`` in newer
+            # ott-jax releases; forward the tolerance via ``solve_kwargs`` instead.
+            solve_kwargs={"threshold": 1e-4},
+        )
+        return div
 
     def _sinkhorn_pot(self, pred: jnp.ndarray, target: jnp.ndarray):
         """Jax-compatible POT implementation of Sinkorn."""

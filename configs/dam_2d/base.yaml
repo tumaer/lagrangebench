@@ -1,4 +1,7 @@
-extends: LAGRANGEBENCH_DEFAULTS
+# @package _global_
+defaults:
+  - /lagrangebench_defaults
+  - _self_
 
 dataset:
   src: datasets/2D_DAM_5740_20kevery100
