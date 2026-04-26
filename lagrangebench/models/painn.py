@@ -8,16 +8,16 @@ Original implementation: https://github.com/atomistic-machine-learning/schnetpac
 Standalone implementation + validation: https://github.com/gerkone/painn-jax
 """
 
-from typing import Callable, Dict, NamedTuple, Tuple
+from typing import Callable, Dict, List, NamedTuple, Optional, Tuple
 
-import haiku as hk
+import equinox as eqx
 import jax
 import jax.numpy as jnp
-import jax.tree_util as tree
 import jraph
 
 from lagrangebench.utils import NodeType
 
+from .base import BaseModel
 from .utils import LinearXav
 
 
@@ -32,54 +32,63 @@ ReadoutFn = Callable[[jraph.GraphsTuple], Tuple[jnp.ndarray, jnp.ndarray]]
 ReadoutBuilderFn = Callable[..., ReadoutFn]
 
 
-class GatedEquivariantBlock(hk.Module):
+class GatedEquivariantBlock(eqx.Module):
     """Gated equivariant block (restricted to vectorial features).
 
     .. image:: https://i.imgur.com/EMlg2Qi.png
     """
 
+    vector_mix_net: LinearXav
+    gate_lin1: LinearXav
+    gate_lin2: LinearXav
+    activation: Callable = eqx.field(static=True)
+    scalar_activation: Optional[Callable] = eqx.field(static=True)
+    scalar_out_channels: int = eqx.field(static=True)
+    vector_out_channels: int = eqx.field(static=True)
+    eps: float = eqx.field(static=True)
+
     def __init__(
         self,
+        s_in_size: int,
+        v_in_channels: int,
         hidden_size: int,
         scalar_out_channels: int,
         vector_out_channels: int,
         activation: Callable = jax.nn.silu,
-        scalar_activation: Callable = None,
+        scalar_activation: Optional[Callable] = None,
         eps: float = 1e-8,
-        name: str = "gated_equivariant_block",
+        *,
+        key,
     ):
         """Initialize the layer.
 
         Args:
+            s_in_size: Input scalar feature size.
+            v_in_channels: Input vector feature channels.
             hidden_size: Number of hidden channels.
             scalar_out_channels: Number of scalar output channels.
             vector_out_channels: Number of vector output channels.
             activation: Gate activation function.
             scalar_activation: Activation function for the scalar output.
             eps: Constant added in norm to prevent derivation instabilities.
-            name: Name of the module.
-
+            key: PRNG key for initialization.
         """
-        super().__init__(name)
-
         assert scalar_out_channels > 0 and vector_out_channels > 0
-        self._scalar_out_channels = scalar_out_channels
-        self._vector_out_channels = vector_out_channels
-        self._eps = eps
+        self.scalar_out_channels = scalar_out_channels
+        self.vector_out_channels = vector_out_channels
+        self.eps = eps
 
+        k_v, k_g1, k_g2 = jax.random.split(key, 3)
         self.vector_mix_net = LinearXav(
-            2 * vector_out_channels,
-            with_bias=False,
-            name="vector_mix_net",
+            v_in_channels, 2 * vector_out_channels, with_bias=False, key=k_v
         )
-        self.gate_block = hk.Sequential(
-            [
-                LinearXav(hidden_size),
-                activation,
-                LinearXav(scalar_out_channels + vector_out_channels),
-            ],
-            name="scalar_gate_net",
+        self.gate_lin1 = LinearXav(
+            s_in_size + vector_out_channels, hidden_size, key=k_g1
         )
+        self.gate_lin2 = LinearXav(
+            hidden_size, scalar_out_channels + vector_out_channels, key=k_g2
+        )
+        self.activation = activation
         self.scalar_activation = scalar_activation
 
     def __call__(
@@ -87,29 +96,23 @@ class GatedEquivariantBlock(hk.Module):
     ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         v_l, v_r = jnp.split(self.vector_mix_net(v), 2, axis=-1)
 
-        v_r_norm = jnp.sqrt(jnp.sum(v_r**2, axis=-2) + self._eps)
+        v_r_norm = jnp.sqrt(jnp.sum(v_r**2, axis=-2) + self.eps)
         gating_scalars = jnp.concatenate([s, v_r_norm], axis=-1)
-        s, _, v_gate = jnp.split(
-            self.gate_block(gating_scalars),
-            [self._scalar_out_channels, self._vector_out_channels],
+        gate_out = self.gate_lin2(self.activation(self.gate_lin1(gating_scalars)))
+        s_new, _, v_gate = jnp.split(
+            gate_out,
+            [self.scalar_out_channels, self.vector_out_channels],
             axis=-1,
         )
         # scale the vectors by the gating scalars
-        v = v_l * v_gate[:, jnp.newaxis]
+        v_new = v_l * v_gate[:, jnp.newaxis]
 
-        if self.scalar_activation:
-            s = self.scalar_activation(s)
+        if self.scalar_activation is not None:
+            s_new = self.scalar_activation(s_new)
+        return s_new, v_new
 
-        return s, v
 
-
-def gaussian_rbf(
-    n_rbf: int,
-    cutoff: float,
-    start: float = 0.0,
-    centered: bool = False,
-    trainable: bool = False,
-) -> Callable[[jnp.ndarray], Callable]:
+class GaussianRBF(eqx.Module):
     r"""Gaussian radial basis functions.
 
     Args:
@@ -118,35 +121,58 @@ def gaussian_rbf(
         start: center of first Gaussian function, :math:`\mu_0`.
         trainable: If True, widths and offset of Gaussian functions learnable.
     """
-    if centered:
-        widths = jnp.linspace(start, cutoff, n_rbf)
-        offset = jnp.zeros_like(widths)
-    else:
-        offset = jnp.linspace(start, cutoff, n_rbf)
-        width = jnp.abs(cutoff - start) / n_rbf * jnp.ones_like(offset)
 
-    if trainable:
-        widths = hk.get_parameter(
-            "widths", width.shape, width.dtype, init=lambda *_: width
-        )
-        offsets = hk.get_parameter(
-            "offset", offset.shape, offset.dtype, init=lambda *_: offset
-        )
-    else:
-        hk.set_state("widths", jnp.array([width]))
-        hk.set_state("offsets", jnp.array([offset]))
-        widths = hk.get_state("widths")
-        offsets = hk.get_state("offsets")
+    widths: jnp.ndarray
+    offsets: jnp.ndarray
+    trainable: bool = eqx.field(static=True)
 
-    def _rbf(x: jnp.ndarray) -> jnp.ndarray:
+    def __init__(
+        self,
+        n_rbf: int,
+        cutoff: float,
+        start: float = 0.0,
+        centered: bool = False,
+        trainable: bool = False,
+    ):
+        if centered:
+            widths = jnp.linspace(start, cutoff, n_rbf)
+            offsets = jnp.zeros_like(widths)
+        else:
+            offsets = jnp.linspace(start, cutoff, n_rbf)
+            widths = jnp.abs(cutoff - start) / n_rbf * jnp.ones_like(offsets)
+        self.widths = widths
+        self.offsets = offsets
+        self.trainable = trainable
+
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        widths = self.widths if self.trainable else jax.lax.stop_gradient(self.widths)
+        offsets = (
+            self.offsets if self.trainable else jax.lax.stop_gradient(self.offsets)
+        )
         coeff = -0.5 / jnp.power(widths, 2)
         diff = x[..., jnp.newaxis] - offsets
         return jnp.exp(coeff * jnp.power(diff, 2))
 
-    return _rbf
+
+def gaussian_rbf(
+    n_rbf: int,
+    cutoff: float,
+    start: float = 0.0,
+    centered: bool = False,
+    trainable: bool = False,
+) -> GaussianRBF:
+    r"""Gaussian radial basis functions.
+
+    Args:
+        n_rbf: total number of Gaussian functions, :math:`N_g`.
+        cutoff: center of last Gaussian function, :math:`\mu_{N_g}`
+        start: center of first Gaussian function, :math:`\mu_0`.
+        trainable: If True, widths and offset of Gaussian functions learnable.
+    """
+    return GaussianRBF(n_rbf, cutoff, start=start, centered=centered, trainable=trainable)
 
 
-def cosine_cutoff(cutoff: float) -> Callable[[jnp.ndarray], Callable]:
+class CosineCutoff(eqx.Module):
     r"""Behler-style cosine cutoff.
 
     .. math::
@@ -159,78 +185,142 @@ def cosine_cutoff(cutoff: float) -> Callable[[jnp.ndarray], Callable]:
     Args:
         cutoff (float): cutoff radius.
     """
-    hk.set_state("cutoff", cutoff)
-    cutoff = hk.get_state("cutoff")
 
-    def _cutoff(x: jnp.ndarray) -> jnp.ndarray:
-        # Compute values of cutoff function
-        cuts = 0.5 * (jnp.cos(x * jnp.pi / cutoff) + 1.0)
-        # Remove contributions beyond the cutoff radius
-        mask = jnp.array(x < cutoff, dtype=jnp.float32)
+    cutoff: float = eqx.field(static=True)
+
+    def __init__(self, cutoff: float):
+        self.cutoff = cutoff
+
+    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
+        cuts = 0.5 * (jnp.cos(x * jnp.pi / self.cutoff) + 1.0)
+        mask = jnp.array(x < self.cutoff, dtype=jnp.float32)
         return cuts * mask
 
-    return _cutoff
+
+def cosine_cutoff(cutoff: float) -> CosineCutoff:
+    r"""Behler-style cosine cutoff.
+
+    Args:
+        cutoff (float): cutoff radius.
+    """
+    return CosineCutoff(cutoff)
+
+
+class _PaiNNReadout(eqx.Module):
+    """PaiNN readout block."""
+
+    blocks: List[GatedEquivariantBlock]
+
+    def __init__(
+        self,
+        hidden_size: int,
+        in_channels: int,
+        out_channels: int,
+        activation: Callable,
+        blocks: int,
+        eps: float,
+        *,
+        key,
+    ):
+        keys = jax.random.split(key, blocks)
+        modules = []
+        s_in = in_channels
+        v_in = in_channels
+        ith_hidden_size = hidden_size
+        for i in range(blocks - 1):
+            ith_hidden_size = hidden_size // 2 ** (i + 1)
+            modules.append(
+                GatedEquivariantBlock(
+                    s_in_size=s_in,
+                    v_in_channels=v_in,
+                    hidden_size=ith_hidden_size * 2,
+                    scalar_out_channels=ith_hidden_size,
+                    vector_out_channels=ith_hidden_size,
+                    activation=activation,
+                    eps=eps,
+                    key=keys[i],
+                )
+            )
+            s_in = ith_hidden_size
+            v_in = ith_hidden_size
+        modules.append(
+            GatedEquivariantBlock(
+                s_in_size=s_in,
+                v_in_channels=v_in,
+                hidden_size=ith_hidden_size,
+                scalar_out_channels=out_channels,
+                vector_out_channels=out_channels,
+                activation=activation,
+                eps=eps,
+                key=keys[-1],
+            )
+        )
+        self.blocks = modules
+
+    def __call__(self, graph: jraph.GraphsTuple) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        s, v = graph.nodes
+        s = jnp.squeeze(s)
+        for block in self.blocks:
+            s, v = block(s, v)
+        return jnp.squeeze(s), jnp.squeeze(v)
 
 
 def PaiNNReadout(
     hidden_size: int,
+    in_channels: int,
     out_channels: int = 1,
     activation: Callable = jax.nn.silu,
     blocks: int = 2,
     eps: float = 1e-8,
-) -> ReadoutFn:
+    *,
+    key,
+) -> _PaiNNReadout:
     """
     PaiNN readout block.
 
     Args:
         hidden_size: Number of hidden channels.
-        scalar_out_channels: Number of scalar/vector output channels.
+        in_channels: Input scalar/vector channels from the last interaction block.
+        out_channels: Number of scalar/vector output channels.
         activation: Activation function.
         blocks: Number of readout blocks.
+        eps: Small constant for norm stability.
+        key: PRNG key for initialization.
 
     Returns:
-        Configured readout function.
+        Configured readout module.
     """
-
-    def _readout(graph: jraph.GraphsTuple) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        s, v = graph.nodes
-        s = jnp.squeeze(s)
-        for i in range(blocks - 1):
-            ith_hidden_size = hidden_size // 2 ** (i + 1)
-            s, v = GatedEquivariantBlock(
-                hidden_size=ith_hidden_size * 2,
-                scalar_out_channels=ith_hidden_size,
-                vector_out_channels=ith_hidden_size,
-                activation=activation,
-                eps=eps,
-                name=f"readout_block_{i}",
-            )(s, v)
-
-        s, v = GatedEquivariantBlock(
-            hidden_size=ith_hidden_size,
-            scalar_out_channels=out_channels,
-            vector_out_channels=out_channels,
-            activation=activation,
-            eps=eps,
-            name="readout_block_out",
-        )(s, v)
-
-        return jnp.squeeze(s), jnp.squeeze(v)
-
-    return _readout
+    return _PaiNNReadout(
+        hidden_size=hidden_size,
+        in_channels=in_channels,
+        out_channels=out_channels,
+        activation=activation,
+        blocks=blocks,
+        eps=eps,
+        key=key,
+    )
 
 
-class PaiNNLayer(hk.Module):
+class PaiNNLayer(eqx.Module):
     """PaiNN interaction block."""
+
+    interaction_block_lin: List[LinearXav]
+    mixing_block_lin: List[LinearXav]
+    vector_mixing_block: LinearXav
+    activation: Callable = eqx.field(static=True)
+    aggregate_fn: Callable = eqx.field(static=True)
+    hidden_size: int = eqx.field(static=True)
+    eps: float = eqx.field(static=True)
 
     def __init__(
         self,
         hidden_size: int,
-        layer_num: int,
         activation: Callable = jax.nn.silu,
         blocks: int = 2,
         aggregate_fn: Callable = jraph.segment_sum,
         eps: float = 1e-8,
+        *,
+        key,
     ):
         """
         Initialize the PaiNN layer, made up of an interaction block and a mixing block.
@@ -238,36 +328,56 @@ class PaiNNLayer(hk.Module):
         Args:
             hidden_size: Number of node features.
             activation: Activation function.
-            layer_num: Numbering of the layer.
             blocks: Number of layers in the context networks.
             aggregate_fn: Function to aggregate the neighbors.
             eps: Constant added in norm to prevent derivation instabilities.
+            key: PRNG key for initialization.
         """
-        super().__init__(f"layer_{layer_num}")
-        self._hidden_size = hidden_size
-        self._eps = eps
-        self._aggregate_fn = aggregate_fn
+        self.hidden_size = hidden_size
+        self.eps = eps
+        self.aggregate_fn = aggregate_fn
+        self.activation = activation
 
-        # inter-particle context net
-        self.interaction_block = hk.Sequential(
-            [LinearXav(hidden_size), activation] * (blocks - 1)
-            + [LinearXav(3 * hidden_size)],
-            name="interaction_block",
-        )
+        k_i, k_m, k_v = jax.random.split(key, 3)
+        k_i_layers = jax.random.split(k_i, blocks)
+        k_m_layers = jax.random.split(k_m, blocks)
 
-        # intra-particle context net
-        self.mixing_block = hk.Sequential(
-            [LinearXav(hidden_size), activation] * (blocks - 1)
-            + [LinearXav(3 * hidden_size)],
-            name="mixing_block",
-        )
+        # inter-particle context net (interaction_block)
+        ib_layers = []
+        for i in range(blocks - 1):
+            ib_layers.append(LinearXav(hidden_size, hidden_size, key=k_i_layers[i]))
+        ib_layers.append(LinearXav(hidden_size, 3 * hidden_size, key=k_i_layers[-1]))
+        self.interaction_block_lin = ib_layers
+
+        # intra-particle context net (mixing_block)
+        mb_layers = []
+        # mixing input: [s (hidden), v_norm (hidden)] concat = 2 * hidden
+        mb_layers.append(LinearXav(2 * hidden_size, hidden_size, key=k_m_layers[0]))
+        for i in range(1, blocks - 1):
+            mb_layers.append(LinearXav(hidden_size, hidden_size, key=k_m_layers[i]))
+        mb_layers.append(LinearXav(hidden_size, 3 * hidden_size, key=k_m_layers[-1]))
+        self.mixing_block_lin = mb_layers
 
         # vector channel mix
         self.vector_mixing_block = LinearXav(
-            2 * hidden_size,
-            with_bias=False,
-            name="vector_mixing_block",
+            hidden_size, 2 * hidden_size, with_bias=False, key=k_v
         )
+
+    def _interaction(self, s: jnp.ndarray) -> jnp.ndarray:
+        x = s
+        for i, layer in enumerate(self.interaction_block_lin):
+            x = layer(x)
+            if i < len(self.interaction_block_lin) - 1:
+                x = self.activation(x)
+        return x
+
+    def _mixing(self, ts: jnp.ndarray) -> jnp.ndarray:
+        x = ts
+        for i, layer in enumerate(self.mixing_block_lin):
+            x = layer(x)
+            if i < len(self.mixing_block_lin) - 1:
+                x = self.activation(x)
+        return x
 
     def _message(
         self,
@@ -291,21 +401,18 @@ class PaiNNLayer(hk.Module):
         Returns:
             Aggregated messages after interaction.
         """
-        x = self.interaction_block(s)
-
+        x = self._interaction(s)
         xj = x[receivers]
         vj = v[receivers]
 
         ds, dv1, dv2 = jnp.split(Wij * xj, 3, axis=-1)
-        n_nodes = tree.tree_leaves(s)[0].shape[0]
+        n_nodes = s.shape[0]
         dv = dv1 * dir_ij[..., jnp.newaxis] + dv2 * vj
-        # aggregate scalars and vectors
-        ds = self._aggregate_fn(ds, senders, n_nodes)
-        dv = self._aggregate_fn(dv, senders, n_nodes)
+        ds = self.aggregate_fn(ds, senders, n_nodes)
+        dv = self.aggregate_fn(dv, senders, n_nodes)
 
         s = s + jnp.clip(ds, -1e2, 1e2)
         v = v + jnp.clip(dv, -1e2, 1e2)
-
         return s, v
 
     def _update(
@@ -321,10 +428,10 @@ class PaiNNLayer(hk.Module):
             Node features after update.
         """
         v_l, v_r = jnp.split(self.vector_mixing_block(v), 2, axis=-1)
-        v_norm = jnp.sqrt(jnp.sum(v_r**2, axis=-2, keepdims=True) + self._eps)
+        v_norm = jnp.sqrt(jnp.sum(v_r**2, axis=-2, keepdims=True) + self.eps)
 
         ts = jnp.concatenate([s, v_norm], axis=-1)
-        ds, dv, dsv = jnp.split(self.mixing_block(ts), 3, axis=-1)
+        ds, dv, dsv = jnp.split(self._mixing(ts), 3, axis=-1)
         dv = v_l * dv
         dsv = dsv * jnp.sum(v_r * v_l, axis=1, keepdims=True)
 
@@ -352,7 +459,7 @@ class PaiNNLayer(hk.Module):
         return graph._replace(nodes=NodeFeatures(s=s, v=v))
 
 
-class PaiNN(hk.Module):
+class PaiNN(BaseModel):
     r"""Polarizable interaction Neural Network by
     `Schütt et al. <https://proceedings.mlr.press/v139/schutt21a.html>`_.
 
@@ -364,19 +471,41 @@ class PaiNN(hk.Module):
 
     """
 
+    scalar_emb: LinearXav
+    vector_emb: LinearXav
+    filter_net: LinearXav
+    layers: List[PaiNNLayer]
+    readout: _PaiNNReadout
+    radial_basis_fn: eqx.Module
+    cutoff_fn: Optional[eqx.Module]
+
+    hidden_size: int = eqx.field(static=True)
+    output_size: int = eqx.field(static=True)
+    num_mp_steps: int = eqx.field(static=True)
+    n_vels: int = eqx.field(static=True)
+    homogeneous_particles: bool = eqx.field(static=True)
+    shared_filters: bool = eqx.field(static=True)
+    shared_interactions: bool = eqx.field(static=True)
+    eps: float = eqx.field(static=True)
+
     def __init__(
         self,
         hidden_size: int,
         output_size: int,
         num_mp_steps: int,
-        radial_basis_fn: Callable,
-        cutoff_fn: Callable,
+        radial_basis_fn: eqx.Module,
+        cutoff_fn: Optional[eqx.Module],
         n_vels: int,
+        n_rbf: int,
+        s_in_size: int,
+        v_in_channels: int,
         homogeneous_particles: bool = True,
         activation: Callable = jax.nn.silu,
         shared_interactions: bool = False,
         shared_filters: bool = False,
         eps: float = 1e-8,
+        *,
+        key,
     ):
         """Initialize the model.
 
@@ -387,66 +516,71 @@ class PaiNN(hk.Module):
             radial_basis_fn: Expands inter-particle distances in a basis set.
             cutoff_fn: Cutoff function.
             n_vels: Number of historical velocities.
+            n_rbf: Number of radial basis functions (input size of ``filter_net``).
+            s_in_size: Size of the input scalar features (vel_mag + optional
+                particle-type one-hot).
+            v_in_channels: Number of input vector channels (trajectory + force +
+                bound depending on the dataset).
             homogeneous_particles: If all particles are of homogeneous type.
             activation: Activation function.
             shared_interactions: If True, share the weights across interaction blocks.
             shared_filters: If True, share the weights across filter networks.
             eps: Constant added in norm to prevent derivation instabilities.
+            key: PRNG key for initialization.
         """
-        super().__init__("painn")
-
         assert radial_basis_fn is not None, "A radial_basis_fn must be provided"
 
-        self._n_vels = n_vels
-        self._homogeneous_particles = homogeneous_particles
-        self._hidden_size = hidden_size
-        self._num_mp_steps = num_mp_steps
-        self._eps = eps
-        self._shared_filters = shared_filters
-        self._shared_interactions = shared_interactions
-
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.num_mp_steps = num_mp_steps
+        self.n_vels = n_vels
+        self.homogeneous_particles = homogeneous_particles
+        self.shared_filters = shared_filters
+        self.shared_interactions = shared_interactions
+        self.eps = eps
         self.radial_basis_fn = radial_basis_fn
         self.cutoff_fn = cutoff_fn
 
-        self.scalar_emb = LinearXav(self._hidden_size, name="scalar_embedding")
-        # mix vector channels (only used if vector features are present in input)
+        k_s, k_v, k_f, k_l, k_r = jax.random.split(key, 5)
+        self.scalar_emb = LinearXav(s_in_size, hidden_size, key=k_s)
         self.vector_emb = LinearXav(
-            self._hidden_size, with_bias=False, name="vector_embedding"
+            v_in_channels, hidden_size, with_bias=False, key=k_v
         )
+        filter_out = (
+            3 * hidden_size if shared_filters else num_mp_steps * 3 * hidden_size
+        )
+        self.filter_net = LinearXav(n_rbf, filter_out, key=k_f)
 
-        if shared_filters:
-            self.filter_net = LinearXav(3 * self._hidden_size, name="filter_net")
-        else:
-            self.filter_net = LinearXav(
-                self._num_mp_steps * 3 * self._hidden_size, name="filter_net"
-            )
-
-        if self._shared_interactions:
-            self.layers = [
-                PaiNNLayer(self._hidden_size, 0, activation, eps=eps)
-            ] * self._num_mp_steps
+        keys_layers = jax.random.split(k_l, num_mp_steps)
+        if shared_interactions:
+            layer0 = PaiNNLayer(hidden_size, activation=activation, eps=eps, key=keys_layers[0])
+            self.layers = [layer0] * num_mp_steps
         else:
             self.layers = [
-                PaiNNLayer(self._hidden_size, i, activation, eps=eps)
-                for i in range(self._num_mp_steps)
+                PaiNNLayer(hidden_size, activation=activation, eps=eps, key=keys_layers[i])
+                for i in range(num_mp_steps)
             ]
 
-        self._readout = PaiNNReadout(self._hidden_size, out_channels=output_size)
+        self.readout = _PaiNNReadout(
+            hidden_size=hidden_size,
+            in_channels=hidden_size,
+            out_channels=output_size,
+            activation=activation,
+            blocks=2,
+            eps=eps,
+            key=k_r,
+        )
 
-    def _embed(self, graph: jraph.GraphsTuple) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def _embed(self, graph: jraph.GraphsTuple) -> jraph.GraphsTuple:
         """Embed the input nodes."""
-        # embeds scalar features
         s = jnp.asarray(graph.nodes.s, dtype=jnp.float32)
         if len(s.shape) == 1:
             s = s[:, jnp.newaxis]
         s = self.scalar_emb(s)[:, jnp.newaxis]
-
-        # embeds vector features
         v = self.vector_emb(graph.nodes.v)
-
         return graph._replace(nodes=NodeFeatures(s=s, v=v))
 
-    def _get_filters(self, norm_ij: jnp.ndarray) -> jnp.ndarray:
+    def _get_filters(self, norm_ij: jnp.ndarray) -> List[jnp.ndarray]:
         r"""Compute the rotationally invariant filters :math:`W_s`.
 
         .. math::
@@ -455,13 +589,11 @@ class PaiNN(hk.Module):
         phi_ij = self.radial_basis_fn(norm_ij)
         if self.cutoff_fn is not None:
             norm_ij = self.cutoff_fn(norm_ij)
-        # compute filters
         filters = self.filter_net(phi_ij) * norm_ij[:, jnp.newaxis]
-        # split into layer-wise filters
-        if self._shared_filters:
-            filter_list = [filters] * self._num_mp_steps
+        if self.shared_filters:
+            filter_list = [filters] * self.num_mp_steps
         else:
-            filter_list = jnp.split(filters, self._num_mp_steps, axis=-1)
+            filter_list = jnp.split(filters, self.num_mp_steps, axis=-1)
         return filter_list
 
     def _transform(
@@ -469,19 +601,17 @@ class PaiNN(hk.Module):
     ) -> jraph.GraphsTuple:
         n_nodes = particle_type.shape[0]
 
-        # node features
         node_scalars = []
         node_vectors = []
-        traj = jnp.reshape(features["vel_hist"], (n_nodes, self._n_vels, -1))
+        traj = jnp.reshape(features["vel_hist"], (n_nodes, self.n_vels, -1))
         node_vectors.append(traj.transpose(0, 2, 1))
         if "force" in features:
             node_vectors.append(features["force"][..., jnp.newaxis])
         if "bound" in features:
             bounds = jnp.reshape(features["bound"], (n_nodes, 2, -1))
             node_vectors.append(bounds.transpose(0, 2, 1))
-        # velocity magnitudes as node feature
         node_scalars.append(features["vel_mag"])
-        if not self._homogeneous_particles:
+        if not self.homogeneous_particles:
             particles = jax.nn.one_hot(particle_type, NodeType.SIZE)
             node_scalars.append(particles)
 
@@ -503,20 +633,16 @@ class PaiNN(hk.Module):
     ) -> Dict[str, jnp.ndarray]:
         graph = self._transform(*sample)
         # compute atom and pair features
-        norm_ij = jnp.sqrt(jnp.sum(graph.edges**2, axis=1, keepdims=True) + self._eps)
+        norm_ij = jnp.sqrt(jnp.sum(graph.edges**2, axis=1, keepdims=True) + self.eps)
         # edge directions
-        dir_ij = graph.edges / (norm_ij + self._eps)
+        dir_ij = graph.edges / (norm_ij + self.eps)
         graph = graph._replace(edges=dir_ij)
 
-        # compute filters (r_ij track in message block from the paper)
         filter_list = self._get_filters(norm_ij)
 
-        # embeds node scalar features (and vector, if present)
         graph = self._embed(graph)
-
-        # message passing
         for n, layer in enumerate(self.layers):
             graph = layer(graph, filter_list[n])
 
-        _, v = self._readout(graph)
+        _, v = self.readout(graph)
         return {"acc": v}

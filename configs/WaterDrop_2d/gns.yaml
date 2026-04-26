@@ -1,9 +1,12 @@
-extends: LAGRANGEBENCH_DEFAULTS
+# @package _global_
+defaults:
+  - /lagrangebench_defaults
+  - _self_
 
 dataset:
   src: /tmp/datasets/WaterDrop
 
-model: 
+model:
   name: gns
   num_mp_steps: 10
   latent_dim: 128

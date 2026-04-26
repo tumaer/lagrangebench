@@ -1,17 +1,15 @@
 import unittest
 from functools import partial
+from typing import Dict, Tuple
 
-import haiku as hk
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-from jax import config as jax_config
-from jax import jit, vmap
+from jax import vmap
 from jax_sph.jax_md import space
 from omegaconf import OmegaConf
 from torch.utils.data import DataLoader
-
-jax_config.update("jax_enable_x64", True)
 
 from lagrangebench.case_setup import case_builder
 from lagrangebench.data import H5Dataset
@@ -19,6 +17,32 @@ from lagrangebench.data.utils import get_dataset_stats, numpy_collate
 from lagrangebench.evaluate import MetricsComputer
 from lagrangebench.evaluate.rollout import _eval_batched_rollout, _forward_eval
 from lagrangebench.utils import broadcast_from_batch
+
+
+class _CheatingModel(eqx.Module):
+    """Test-only model that replays pre-computed acceleration targets.
+
+    Tracks the rollout step with a ``jnp.ndarray`` counter. The rollout loop
+    calls ``.advance()`` between steps to increment it.
+    """
+
+    target: jnp.ndarray
+    counter: jnp.ndarray
+
+    def __init__(self, target: jnp.ndarray, start: int):
+        self.target = target
+        self.counter = jnp.asarray(start, dtype=jnp.int32)
+
+    def __call__(
+        self, sample: Tuple[Dict[str, jnp.ndarray], jnp.ndarray]
+    ) -> Dict[str, jnp.ndarray]:
+        acc = jax.lax.dynamic_index_in_dim(
+            self.target, self.counter, axis=1, keepdims=False
+        )
+        return {"acc": acc}
+
+    def advance(self) -> "_CheatingModel":
+        return eqx.tree_at(lambda m: m.counter, self, self.counter + 1)
 
 
 class TestInferBuilder(unittest.TestCase):
@@ -76,7 +100,7 @@ class TestInferBuilder(unittest.TestCase):
 
         # get one validation trajectory from the debug dataset
         traj_batch_i = next(iter(self.loader_valid))
-        traj_batch_i = jax.tree_map(lambda x: jnp.array(x), traj_batch_i)
+        traj_batch_i = jax.tree.map(lambda x: jnp.array(x), traj_batch_i)
         # remove batch dimension
         self.assertTrue(traj_batch_i[0].shape[0] == 1, "We test only batch size 1")
         traj_i = broadcast_from_batch(traj_batch_i, index=0)
@@ -89,44 +113,15 @@ class TestInferBuilder(unittest.TestCase):
         stats = self.normalization_stats["acceleration"]
         accs = (accs - stats["mean"]) / stats["std"]
 
-        class CheatingModel(hk.Module):
-            def __init__(self, target, start):
-                super().__init__()
-                self.target = target
-                self.start = start
-
-            def __call__(self, x):
-                i = hk.get_state(
-                    "counter",
-                    shape=[],
-                    dtype=jnp.int32,
-                    init=hk.initializers.Constant(self.start),
-                )
-                hk.set_state("counter", i + 1)
-                return {"acc": self.target[:, i]}
-
-        def setup_model(target, start):
-            def model(x):
-                return CheatingModel(target, start)(x)
-
-            model = hk.without_apply_rng(hk.transform_with_state(model))
-            params, state = model.init(None, None)
-            model_apply = model.apply
-            model_apply = jit(model_apply)
-            return params, state, model_apply
-
-        params, state, model_apply = setup_model(accs, 0)
-
         # proof that the above "model" works
-        out, state = model_apply(params, state, None)
+        model0 = _CheatingModel(accs, start=0)
+        out = model0((None, None))
         pred_acc = stats["mean"] + out["acc"] * stats["std"]
         pred_pos = self.shift_fn(positions[:, isl - 1], vels[:, isl - 2] + pred_acc)
         pred_pos = jnp.asarray(pred_pos, dtype=jnp.float32)
         target_pos = positions[:, isl]
-
         assert jnp.isclose(pred_pos, target_pos, atol=1e-7).all(), "Wrong setup"
 
-        params, state, model_apply = setup_model(accs, isl - 2)
         _, neighbors = self.case.allocate_eval((positions[:, :isl], traj_i[1]))
 
         metrics_computer = MetricsComputer(
@@ -138,21 +133,20 @@ class TestInferBuilder(unittest.TestCase):
 
         forward_eval = partial(
             _forward_eval,
-            model_apply=model_apply,
             case_integrate=self.case.integrate,
         )
-        forward_eval_vmap = vmap(forward_eval, in_axes=(None, None, 0, 0, 0))
+        forward_eval_vmap = eqx.filter_vmap(forward_eval, in_axes=(None, 0, 0, 0))
         preprocess_eval_vmap = vmap(self.case.preprocess_eval, in_axes=(0, 0))
         metrics_computer_vmap = vmap(metrics_computer, in_axes=(0, 0))
 
         for n_extrap_steps in [0, 5, 10]:
             with self.subTest(n_extrap_steps):
+                model = _CheatingModel(accs, start=isl - 2)
                 example_rollout_batch, metrics_batch, neighbors = _eval_batched_rollout(
                     forward_eval_vmap=forward_eval_vmap,
                     preprocess_eval_vmap=preprocess_eval_vmap,
                     case=self.case,
-                    params=params,
-                    state=state,
+                    model=model,
                     traj_batch_i=traj_batch_i,
                     neighbors=neighbors,
                     metrics_computer_vmap=metrics_computer_vmap,

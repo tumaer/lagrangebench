@@ -1,7 +1,7 @@
 from .case_setup.case import case_builder
 from .data import DAM2D, LDC2D, LDC3D, RPF2D, RPF3D, TGV2D, TGV3D, H5Dataset
 from .evaluate import infer
-from .models import EGNN, GNS, SEGNN, PaiNN
+from .models import EGNN, GNS, SEGNN, Linear, PaiNN
 from .train.trainer import Trainer
 
 __all__ = [
@@ -13,6 +13,7 @@ __all__ = [
     "EGNN",
     "SEGNN",
     "PaiNN",
+    "Linear",
     "data",
     "H5Dataset",
     "TGV2D",

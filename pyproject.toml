@@ -24,9 +24,9 @@ classifiers = [
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Scientific/Engineering :: Physics",
     "Topic :: Scientific/Engineering :: Hydrology",
@@ -35,26 +35,25 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.9,<=3.11"
+python = ">=3.10"
 cloudpickle = ">=2.2.1"
 h5py = ">=3.9.0"
 PyYAML = ">=6.0"
 numpy = ">=1.24.4"
 wandb = ">=0.15.11"
 pyvista = ">=0.42.2"
-jax = {version = "0.4.29", extras = ["cpu"]}
-jaxlib = "0.4.29"
-dm-haiku = ">=0.0.10"
-e3nn-jax = "0.20.3"
-jmp = ">=0.0.4"
-jraph = "0.0.6.dev0"
-optax = "0.1.7"
+jax = ">=0.6.0"
+jaxlib = ">=0.6.0"
+equinox = ">=0.11.0"
+e3nn-jax = ">=0.21.0"
+jraph = ">=0.0.6.dev0"
+optax = ">=0.2.0"
 ott-jax = ">=0.4.2"
 matscipy = ">=0.8.0"
-torch = {version = "2.3.1+cpu", source = "torchcpu"}
+torch = ">=2.3.0"
 wget = ">=3.2"
 omegaconf = ">=2.3.0"
-jax-sph = ">=0.0.3"
+jax-sph = {git = "https://github.com/tumaer/jax-sph.git"}
 
 [tool.poetry.group.dev.dependencies]
 # mypy = ">=1.8.0" - consider in the future
@@ -68,11 +67,6 @@ ipykernel = ">=6.25.1"
 sphinx = "7.2.6"
 sphinx-rtd-theme = "1.3.0"
 toml = ">=0.10.2"
-
-[[tool.poetry.source]]
-name = "torchcpu"
-url = "https://download.pytorch.org/whl/cpu"
-priority = "explicit"
 
 [tool.ruff]
 exclude = [

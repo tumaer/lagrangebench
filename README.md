@@ -86,7 +86,7 @@ Although the current [`jax-metal==0.0.5` library](https://pypi.org/project/jax-m
 A general tutorial is provided in the example notebook "Training GNS on the 2D Taylor Green Vortex" under `./notebooks/tutorial.ipynb` on the [LagrangeBench repository](https://github.com/tumaer/lagrangebench). The notebook covers the basics of LagrangeBench, such as loading a dataset, setting up a case, training a model from scratch and evaluating its performance.
 
 ### Running in a local clone (`main.py`)
-Alternatively, experiments can also be set up with `main.py`, based on extensive YAML config files and cli arguments (check [`configs/`](configs/)). By default, the arguments have priority as 1) passed cli arguments, 2) YAML config and 3) [`defaults.py`](lagrangebench/defaults.py) (`lagrangebench` defaults).
+Alternatively, experiments can also be set up with `main.py`, based on Hydra-composed YAML config files and cli arguments (check [`configs/`](configs/)). Each preset is a small YAML file whose `defaults:` list pulls in either the dataset-level `base.yaml` or the global defaults registered from [`defaults.py`](lagrangebench/defaults.py). CLI overrides use the standard Hydra `key=value` syntax and have priority over everything.
 
 When loading a saved model with `load_ckp` the config from the checkpoint is automatically loaded and training is restarted. For more details check the [`runner.py`](lagrangebench/runner.py) file.
 
@@ -94,7 +94,7 @@ When loading a saved model with `load_ckp` the config from the checkpoint is aut
 
 For example, to start a _GNS_ run from scratch on the RPF 2D dataset use
 ```
-python main.py config=configs/rpf_2d/gns.yaml
+python main.py --config-path configs/rpf_2d --config-name gns
 ```
 Some model presets can be found in `./configs/`.
 
@@ -103,16 +103,18 @@ If `mode=all` is provided, then training (`mode=train`) and subsequent inference
 
 **Restart training**
 
-To restart training from the last checkpoint in `load_ckp` use
+To restart training from the last checkpoint in `load_ckp` point Hydra at the checkpoint's saved `config.yaml`:
 ```
-python main.py load_ckp=ckp/gns_rpf2d_yyyymmdd-hhmmss
+python main.py --config-path ckp/gns_rpf2d_yyyymmdd-hhmmss --config-name config load_ckp=ckp/gns_rpf2d_yyyymmdd-hhmmss
 ```
 
 **Inference**
 
-To evaluate a trained model from `load_ckp` on the test split (`test=True`) use
+To evaluate a trained model from `load_ckp` on the test split (`eval.test=True`) use
 ```
-python main.py load_ckp=ckp/gns_rpf2d_yyyymmdd-hhmmss/best rollout_dir=rollout/gns_rpf2d_yyyymmdd-hhmmss/best mode=infer test=True
+python main.py --config-path ckp/gns_rpf2d_yyyymmdd-hhmmss/best --config-name config \
+    load_ckp=ckp/gns_rpf2d_yyyymmdd-hhmmss/best \
+    mode=infer eval.test=True eval.rollout_dir=rollout/gns_rpf2d_yyyymmdd-hhmmss/best
 ```
 
 If the default `eval.infer.out_type=pkl` is active, then the generated trajectories and a `metricsYYYY_MM_DD_HH_MM_SS.pkl` file will be written to `eval.rollout_dir`. The metrics file contains all `eval.infer.metrics` properties for each generated rollout.
@@ -162,7 +164,8 @@ gdown 19TO4PaFGcryXOFFKs93IniuPZKEcaJ37
 # unzip the downloaded file `gns_tgv2d.zip`
 python -c "import shutil; shutil.unpack_archive('gns_tgv2d.zip', 'gns_tgv2d')"
 # evaluate the model on the test split
-python main.py gpu=$GPU_ID mode=infer eval.test=True load_ckp=gns_tgv2d/best
+python main.py --config-path gns_tgv2d/best --config-name config \
+    gpu=$GPU_ID mode=infer eval.test=True load_ckp=gns_tgv2d/best
 ```
 
 ## Directory structure
